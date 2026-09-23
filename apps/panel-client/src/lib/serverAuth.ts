@@ -4,6 +4,7 @@ import {
   invokeServerFunction,
   type ServerFunctionOptions,
 } from './serverFunctionRpc'
+import { isDemoMode } from './demo'
 
 export type AuthStatus = {
   needsSetup: boolean
@@ -64,6 +65,7 @@ export const getCurrentUser = createServerFn({
 )
 
 export async function getAuthStatusWithFallback(): Promise<AuthStatus> {
+  if (isDemoMode()) return { needsSetup: false, authEnabled: false }
   try {
     return parseAuthStatus(await getAuthStatus())
   } catch {

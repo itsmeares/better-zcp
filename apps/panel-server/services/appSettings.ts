@@ -1,4 +1,3 @@
-import fs from "fs";
 import net from "net";
 import { getSetting, setSetting } from "../database/init.ts";
 import {
@@ -12,8 +11,6 @@ import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("AppSettings");
 
-const AUTO_EXPORT_MAX_PER_PLAYER_MIN = 1;
-const AUTO_EXPORT_MAX_PER_PLAYER_MAX = 50;
 const MOD_RESTART_DELAY_MIN = 0;
 const MOD_RESTART_DELAY_MAX = 30;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
@@ -52,29 +49,19 @@ const VALID_SETTINGS_KEYS = [
   "reconnectInterval",
   "autoStartServer",
   "panelPort",
-  "httpsEnabled",
-  "httpsPort",
-  "httpsKeyPath",
-  "httpsCertPath",
   "corsAllowedOrigins",
   "corsAllowAll",
   "corsAllowPrivateNetworks",
   "corsDebug",
   "panelBridgeAutoUpdate",
-  "autoExportOnLogin",
-  "autoExportMaxPerPlayer",
   "enablePublicIpLookup",
   "workshopCollectionId",
   "lanIpAddress",
 ] as const;
 
 const FEATURE_GATED_FIELDS: Record<string, string> = {
-  httpsCertPath: "httpsEnabled",
-  httpsKeyPath: "httpsEnabled",
-  httpsPort: "httpsEnabled",
   modRestartDelay: "modAutoRestart",
   serverAutoUpdateWarningMinutes: "serverAutoUpdate",
-  autoExportMaxPerPlayer: "autoExportOnLogin",
   reconnectInterval: "autoReconnect",
 };
 
@@ -88,13 +75,11 @@ const BOOLEAN_SETTINGS = new Set([
   "corsAllowPrivateNetworks",
   "corsDebug",
   "panelBridgeAutoUpdate",
-  "autoExportOnLogin",
   "enablePublicIpLookup",
   "modAutoRestart",
   "serverAutoUpdate",
   "darkMode",
   "autoReconnect",
-  "httpsEnabled",
   "autoStartServer",
 ]);
 
@@ -331,66 +316,6 @@ export async function saveAppSettings(
       );
     }
 
-    if ((key === "httpsCertPath" || key === "httpsKeyPath") && value !== "") {
-      if (typeof value !== "string") {
-        invalid(
-          `${key} must be a string`,
-          ErrorCode.CONFIG_HTTPS_PATH_NOT_STRING,
-          sanitizeErrorParams({ field: key }),
-        );
-      }
-      let stat;
-      try {
-        stat = fs.statSync(value as string);
-      } catch {
-        invalid(
-          `${key} does not point to a file that exists: ${value}`,
-          ErrorCode.CONFIG_HTTPS_PATH_NOT_FOUND,
-          sanitizeErrorParams({ field: key, value }),
-        );
-      }
-      if (!stat.isFile()) {
-        invalid(
-          `${key} must be a file, not a directory: ${value}`,
-          ErrorCode.CONFIG_HTTPS_PATH_NOT_A_FILE,
-          sanitizeErrorParams({ field: key, value }),
-        );
-      }
-      try {
-        fs.accessSync(value as string, fs.constants.R_OK);
-      } catch {
-        invalid(
-          `${key} exists but is not readable by the panel: ${value}`,
-          ErrorCode.CONFIG_HTTPS_PATH_NOT_READABLE,
-          sanitizeErrorParams({ field: key, value }),
-        );
-      }
-    }
-
-    if (key === "httpsPort") {
-      const check = requireIntInRange(
-        value,
-        BIND_PORT_MIN,
-        BIND_PORT_MAX,
-        "HTTPS port",
-      );
-      if (!check.ok) {
-        invalid(
-          check.message,
-          ErrorCode.CONFIG_INVALID_NUMERIC_FIELD,
-          sanitizeErrorParams({ message: check.message }),
-        );
-      }
-      const panelPort = await getSetting("panelPort");
-      if (panelPort && check.value === Number(panelPort)) {
-        invalid(
-          `HTTPS port cannot be the same as the panel's HTTP port (${panelPort})`,
-          ErrorCode.CONFIG_HTTPS_PORT_MATCHES_PANEL_PORT,
-          sanitizeErrorParams({ panelPort }),
-        );
-      }
-    }
-
     if (key === "panelPort") {
       const check = requireIntInRange(
         value,
@@ -405,14 +330,6 @@ export async function saveAppSettings(
           sanitizeErrorParams({ message: check.message }),
         );
       }
-      const httpsPort = await getSetting("httpsPort");
-      if (httpsPort && check.value === Number(httpsPort)) {
-        invalid(
-          `panelPort cannot be the same as the panel's HTTPS port (${httpsPort})`,
-          ErrorCode.CONFIG_PANEL_PORT_MATCHES_HTTPS_PORT,
-          sanitizeErrorParams({ httpsPort }),
-        );
-      }
     }
 
     const integerFields: Array<[string, number, number, string]> = [
@@ -420,12 +337,6 @@ export async function saveAppSettings(
       ["serverPort", BIND_PORT_MIN, GAME_PORT_MAX, "Game port"],
       ["minMemory", MEMORY_GB_MIN, MIN_MEMORY_GB_MAX, "Minimum memory (GB)"],
       ["maxMemory", MEMORY_GB_MIN, MAX_MEMORY_GB_MAX, "Maximum memory (GB)"],
-      [
-        "autoExportMaxPerPlayer",
-        AUTO_EXPORT_MAX_PER_PLAYER_MIN,
-        AUTO_EXPORT_MAX_PER_PLAYER_MAX,
-        "Auto-export copies kept",
-      ],
     ];
     const integerField = integerFields.find(([field]) => field === key);
     if (integerField) {

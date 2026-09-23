@@ -537,15 +537,7 @@ describe('RconService', () => {
     });
   });
 
-  describe('releaseSafehouse', () => {
-    it('refuses honestly instead of sending a command the real server always rejects over RCON', async () => {
-      const liveRcon = new RconService();
-      const executeSpy = vi.spyOn(liveRcon, 'execute');
 
-      await expect(liveRcon.releaseSafehouse()).rejects.toThrow(/only be done from in-game/i);
-      expect(executeSpy).not.toHaveBeenCalled();
-    });
-  });
 
   describe('kickPlayer reason', () => {
     it('sends -r "<reason>" -- KickUserCommand.class carries the same -r AltCommandArgs flag as BanUserCommand in the real B42 jar', async () => {

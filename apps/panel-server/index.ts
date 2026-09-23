@@ -3,10 +3,8 @@ import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
 import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
 import { createServer } from "http";
-import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
-import type { Server as HttpsServer } from "https";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
@@ -30,12 +28,6 @@ type AnyRecord = Record<string, any>;
 type PlayerRecord = AnyRecord & { name: string };
 type SwapSnapshot = { total: number; used: number };
 type AuthenticatedSocket = Socket & { user?: AnyRecord };
-type HttpsServerOptions = {
-  httpsEnabled: unknown;
-  httpsPort: string | number;
-  customKeyPath?: string;
-  customCertPath?: string;
-};
 type CorsBlockedOrigin = {
   id: string;
   origin: string;
@@ -100,7 +92,6 @@ export {
   handlePanelUpdateDownload,
   handlePanelUpdateStatus,
 } from "./http/panelUpdateHandlers.ts";
-import { loadOrCreateCerts } from "./utils/certs.ts";
 import { resolvePanelPort } from "./utils/panelInfo.ts";
 import {
   autoInstallBridgeIfNeeded,
@@ -168,7 +159,7 @@ function fatalExit(label: string, err: unknown) {
 }
 
 process.on("uncaughtException", (error) => {
-  if (error && error.code === "EPIPE") return;
+  if (error && "code" in error && error.code === "EPIPE") return;
   fatalExit("Uncaught Exception", error);
 });
 
@@ -292,13 +283,7 @@ const httpServer = createServer((request, response) => {
 });
 let activePanelPort: number | null = null;
 
-let httpsServer: HttpsServer | null = null;
-
 export { resolvePanelPort } from "./utils/panelInfo.ts";
-
-export function isHttpsServerActive() {
-  return httpsServer !== null;
-}
 
 const defaultAllowedOrigins = [
   "http://localhost:5173",
@@ -420,14 +405,6 @@ function rebuildAllowedOriginsFromSettings(settings: AnyRecord = {}): void {
     addAllowedOrigin(origin);
   }
 
-  const httpsEnabled = settings.httpsEnabled === true;
-  const httpsPort = parseInt(settings.httpsPort, 10);
-  if (httpsEnabled) {
-    addAllowedOrigin(
-      `https://localhost:${Number.isNaN(httpsPort) ? 3443 : httpsPort}`,
-    );
-  }
-
   const envOrigins = process.env.CORS_ORIGINS;
   if (envOrigins) {
     const parsed = parseOriginList(envOrigins);
@@ -507,90 +484,6 @@ const io = new Server(httpServer, {
     credentials: true,
   },
 });
-
-export function setupHttpsServer({
-  httpsEnabled,
-  httpsPort,
-  customKeyPath,
-  customCertPath,
-}: HttpsServerOptions): HttpsServer | null {
-  if (!httpsEnabled) return null;
-
-  let certs = null;
-  try {
-    certs = loadOrCreateCerts(customKeyPath, customCertPath);
-  } catch (error: any) {
-    log.error(
-      `HTTPS certificate setup failed unexpectedly: ${error.message} — running HTTP only`,
-    );
-    return null;
-  }
-  if (!certs) {
-    log.warn(
-      "HTTPS enabled but certificate generation failed — running HTTP only",
-    );
-    return null;
-  }
-
-  try {
-    httpsServer = createHttpsServer(certs, (request, response) => {
-      void panelRequestHandler(request, response).catch((error: unknown) => {
-        log.error("HTTPS panel request failed:", error);
-        if (!response.headersSent) {
-          response.statusCode = 500;
-          response.end("Internal server error");
-        } else {
-          response.destroy();
-        }
-      });
-    });
-  } catch (error: any) {
-    log.error(
-      `HTTPS certificate/key content is invalid: ${error.message} — running HTTP only`,
-    );
-    httpsServer = null;
-    return null;
-  }
-  addAllowedOrigin(`https://localhost:${httpsPort}`);
-  io.attach(httpsServer, {
-    cors: {
-      origin: (origin, callback) => {
-        if (isAllowedOrigin(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error(CORS_DENY_MESSAGE));
-        }
-      },
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
-  });
-
-  httpsServer.on("error", (err) => {
-    if (err.code === "EADDRINUSE") {
-      log.error(
-        `HTTPS port ${httpsPort} is already in use. Find the offender with: ${process.platform === "win32" ? `netstat -ano | findstr :${httpsPort}` : `ss -tlnp | grep :${httpsPort}  (or: lsof -i :${httpsPort})`}`,
-      );
-    }
-    log.error(
-      `HTTPS server error: ${err.message} — HTTPS disabled, HTTP is unaffected and continues starting normally`,
-    );
-    httpsServer = null;
-  });
-
-  try {
-    httpsServer.listen(httpsPort, () => {
-      log.info(`HTTPS server listening on port ${httpsPort}`);
-    });
-  } catch (error: any) {
-    log.error(
-      `Invalid HTTPS port ${JSON.stringify(httpsPort)}: ${error.message} — HTTPS disabled, HTTP is unaffected`,
-    );
-    httpsServer = null;
-  }
-
-  return httpsServer;
-}
 
 const httpsDetected =
   process.env.HTTPS === "true" || process.env.FORCE_HSTS === "true";
@@ -828,7 +721,6 @@ rconService.on("connected", async () => {
     log.info("RCON connected - checking PanelBridge...");
     rconConnectedAt = Date.now();
     lastPlayerList = [];
-    playerBaselineReady = false;
     await tryStartPanelBridge("rcon-connected");
   } catch (err: any) {
     log.debug(`RCON-connected PanelBridge check failed: ${err.message}`);
@@ -861,16 +753,6 @@ panelBridge.on("modStatus", (status) => {
 
 panelBridge.on("configured", ({ path }) => {
   io.emit("panelBridge:configured", { bridgePath: path });
-});
-
-panelBridge.on("playerConnect", (playerName) => {
-  getSetting("autoExportOnLogin")
-    .then((autoExport) => {
-      if (autoExport === true || autoExport === "true") {
-        setTimeout(() => autoExportPlayer(playerName), 10000);
-      }
-    })
-    .catch(() => {});
 });
 
 backupService.setServerManager(serverManager);
@@ -1083,62 +965,7 @@ onLog((logEntry) => {
 
 import { getDataPaths } from "./utils/paths.ts";
 
-async function autoExportPlayer(username: string): Promise<void> {
-  try {
-    if (!panelBridge.isRunning || !panelBridge.isModConnected()) {
-      log.debug(
-        `Auto-export skipped for ${username}: PanelBridge not connected`,
-      );
-      return;
-    }
-    const result = await panelBridge.sendCommand("exportPlayerData", {
-      username,
-    });
-    if (!result || !result.success) {
-      log.warn(
-        `Auto-export failed for ${username}: ${result?.error || "unknown error"}`,
-      );
-      return;
-    }
-
-    const { dataDir } = getDataPaths();
-    const exportDir = path.join(
-      dataDir,
-      "exports",
-      username.replace(/[^a-zA-Z0-9_-]/g, "_"),
-    );
-    fs.mkdirSync(exportDir, { recursive: true });
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `${username.replace(/[^a-zA-Z0-9_-]/g, "_")}_${timestamp}.json`;
-    fs.writeFileSync(
-      path.join(exportDir, filename),
-      JSON.stringify(result.data || result, null, 2),
-    );
-
-    const maxExports = Number(await getSetting("autoExportMaxPerPlayer")) || 3;
-    const files = fs
-      .readdirSync(exportDir)
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .reverse();
-
-    if (files.length > maxExports) {
-      for (const old of files.slice(maxExports)) {
-        fs.unlinkSync(path.join(exportDir, old));
-      }
-    }
-
-    log.info(
-      `Auto-exported character data for ${username} (${files.length > maxExports ? maxExports : files.length} kept)`,
-    );
-  } catch (err: any) {
-    log.warn(`Auto-export error for ${username}: ${err.message}`);
-  }
-}
-
 let lastPlayerList: PlayerRecord[] = [];
-let playerBaselineReady = false;
 let playerPollingInterval: ReturnType<typeof setInterval> | null = null;
 let rconConnectedAt = 0;
 
@@ -1147,7 +974,6 @@ function startPlayerPolling() {
     clearInterval(playerPollingInterval);
   }
   lastPlayerList = [];
-  playerBaselineReady = false;
 
   playerPollingInterval = setInterval(async () => {
     try {
@@ -1164,8 +990,6 @@ function startPlayerPolling() {
         players?: PlayerRecord[];
       };
       if (result.success && result.players) {
-        const baselineWasReady = playerBaselineReady;
-        playerBaselineReady = true;
 
         const currentNames = result.players
           .map((p) => p.name)
@@ -1177,25 +1001,11 @@ function startPlayerPolling() {
           .join(",");
 
         if (currentNames !== lastNames) {
-          const currentSet = new Set(result.players.map((p) => p.name));
-          const lastSet = new Set(lastPlayerList.map((p) => p.name));
-          const joined = result.players.filter((p) => !lastSet.has(p.name));
-          const left = lastPlayerList.filter((p) => !currentSet.has(p.name));
-
           lastPlayerList = result.players;
           io.to("players").emit("players:update", result.players);
           log.debug(
             `Player list updated: ${result.players.length} players online`,
           );
-
-          if (baselineWasReady && !panelBridge.modStatus?.alive) {
-            const autoExport = await getSetting("autoExportOnLogin");
-            if (autoExport === true || autoExport === "true") {
-              for (const p of joined) {
-                setTimeout(() => autoExportPlayer(p.name), 10000);
-              }
-            }
-          }
         }
       }
     } catch (error: any) {
@@ -1871,13 +1681,6 @@ async function start(): Promise<void> {
     });
     let listenPort = PORT;
 
-    const httpsEnabled = await getSetting("httpsEnabled");
-    const httpsPort = (await getSetting("httpsPort")) || 3443;
-    const customKeyPath = await getSetting("httpsKeyPath");
-    const customCertPath = await getSetting("httpsCertPath");
-
-    setupHttpsServer({ httpsEnabled, httpsPort, customKeyPath, customCertPath });
-
     let listenRetries = 0;
     const maxListenRetries = 5;
     const listenWithRetry = () => {
@@ -1892,13 +1695,6 @@ async function start(): Promise<void> {
         }
         logSection("Ready");
         const urls = [{ label: "Local: ", url: `http://localhost:${boundPort}` }];
-        if (httpsServer) {
-          urls.push({
-            label: "HTTPS: ",
-            url: `https://localhost:${httpsPort}`,
-          });
-        }
-
         const localIp = await serverManager.getLocalIp();
         if (localIp !== "127.0.0.1") {
           urls.push({
@@ -2047,8 +1843,7 @@ async function start(): Promise<void> {
         }
 
         if (typeof process.pkg !== "undefined" && shouldAutoOpenBrowser()) {
-          const protocol = httpsServer ? "https" : "http";
-          const url = `${protocol}://localhost:${httpsServer ? httpsPort : boundPort}`;
+          const url = `http://localhost:${boundPort}`;
 
           if (
             process.platform !== "win32" &&
@@ -2075,14 +1870,14 @@ async function start(): Promise<void> {
     };
 
     httpServer.on("error", (err) => {
-      if (err.code === "EADDRINUSE" && listenRetries < maxListenRetries) {
+      if ("code" in err && err.code === "EADDRINUSE" && listenRetries < maxListenRetries) {
         listenRetries++;
         const delay = Math.min(1000 * listenRetries, 4000);
         log.warn(
           `Port ${PORT} busy, retrying in ${delay}ms (attempt ${listenRetries}/${maxListenRetries})...`,
         );
         setTimeout(listenWithRetry, delay);
-      } else if (err.code === "EADDRINUSE") {
+      } else if ("code" in err && err.code === "EADDRINUSE") {
         if (!process.env.PORT) {
           listenRetries = 0;
           listenPort = 0;

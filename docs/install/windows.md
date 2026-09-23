@@ -166,7 +166,7 @@ The panel controls your PZ server over RCON — it won't connect without this.
    and a password only you know — this is not the same as your in-game admin
    password.
 3. **Optional, only if you plan to use PanelBridge** (teleport, heal, god
-   mode, weather control — the RCON-can't-reach features): also add
+   mode, and item actions — the RCON-can't-reach features): also add
    ```ini
    DoLuaChecksum=false
    ```

@@ -78,42 +78,6 @@ describe('PanelBridge.lua dispatcher -- setSandboxOption invalidates getAllSandb
     expect(byId.read2.data.options.Vanilla[0].value).toBe(8);
   });
 
-  it('regression guard: the vehicle/safehouse/player trio this class was originally built for still invalidates correctly, unaffected by the merge', () => {
-    const bridge = loadPanelBridge(LUA_PATH, STUBS + `
-FakeVehicleCount = { n = 0 }
-FakeVehicleList = {}
-function FakeVehicleList:size() return FakeVehicleCount.n end
-function FakeVehicleList:get(i)
-  if i < FakeVehicleCount.n then return {} end
-  return nil
-end
-FakeCell = {}
-function FakeCell:getVehicles() return FakeVehicleList end
-FakeWorld = {}
-function FakeWorld:getCell() return FakeCell end
-getWorld = function() return FakeWorld end
-`);
-
-    enqueue(bridge, [{ id: 'vread1', action: 'getVehiclesDetailed' }], 1);
-    bridge.run('PanelBridgeModule.processCommands()');
-
-    bridge.run('FakeVehicleCount.n = 5');
-    enqueue(bridge, [{ id: 'write', action: 'setSandboxOption', args: { name: 'ZombieCount', value: 8 } }], 2);
-    bridge.run('PanelBridgeModule.processCommands()');
-
-    enqueue(bridge, [{ id: 'vread2', action: 'getVehiclesDetailed' }], 3);
-    bridge.run('PanelBridgeModule.processCommands()');
-
-    const results = bridge.getGlobal('PanelBridgeModule').pendingResults;
-    const byId = Object.fromEntries(results.map((r) => [r.id, r]));
-
-    expect(byId.vread1.success).toBe(true);
-    expect(byId.vread1.data.count).toBe(0);
-    expect(byId.write.success).toBe(true);
-    expect(byId.vread2.success).toBe(true);
-    expect(byId.vread2.data.count).toBe(5);
-  });
-
   it('refetches a read-only value after the wall clock moves backward', () => {
     const bridge = loadPanelBridge(LUA_PATH, STUBS);
 

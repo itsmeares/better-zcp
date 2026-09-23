@@ -91,6 +91,7 @@ interface ScheduledTask {
   command: string
   server_id: string | number | null
   enabled: number
+  unsupported?: boolean
   last_run: string | null
   created_at: string
 }
@@ -121,21 +122,6 @@ function getCommonCommands() {
       value: 'servermsg Server maintenance in progress',
     },
     { label: 'Check Mod Updates', value: 'checkModsNeedUpdate' },
-    {
-      label: 'Trigger Blizzard (2h)',
-      value: 'bridge:triggerBlizzard {"duration":2}',
-    },
-    {
-      label: 'Trigger Storm (1h)',
-      value: 'bridge:triggerStorm {"duration":1}',
-    },
-    {
-      label: 'Trigger Tropical Storm (1h)',
-      value: 'bridge:triggerTropicalStorm {"duration":1}',
-    },
-    { label: 'Stop All Weather', value: 'bridge:stopWeather' },
-    { label: 'Start Rain', value: 'bridge:startRain {"intensity":0.7}' },
-    { label: 'Stop Rain', value: 'bridge:stopRain' },
     { label: 'Restore Utilities', value: 'bridge:restoreUtilities' },
     { label: 'Shut Off Utilities', value: 'bridge:shutOffUtilities' },
     { label: 'Save World (PanelBridge)', value: 'bridge:saveWorld' },
@@ -1296,7 +1282,7 @@ export default function Scheduler() {
                     </code>
                     {' — e.g. '}
                     <code className="ms-1 text-foreground">
-                      {'bridge:triggerBlizzard {"durationHours":2}'}
+                      {'bridge:saveWorld'}
                     </code>
                     {
                       '. Args are optional. Only allow-listed actions run via the scheduler.'
@@ -1843,7 +1829,7 @@ export default function Scheduler() {
                   <div
                     key={task.id}
                     className={`group relative flex flex-col gap-3 p-4 rounded-lg border transition-colors sm:flex-row sm:items-center ${
-                      task.enabled
+                      task.enabled && !task.unsupported
                         ? 'bg-card border-border/60 hover:border-primary/40'
                         : 'bg-muted/30 border-border/40 text-muted-foreground'
                     }`}
@@ -1853,7 +1839,7 @@ export default function Scheduler() {
                         className="shrink-0 self-stretch flex items-center"
                         aria-hidden="true"
                       >
-                        {task.enabled ? (
+                        {task.enabled && !task.unsupported ? (
                           <span className="relative inline-flex">
                             <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping motion-reduce:hidden" />
                             <span className="relative w-2 h-2 rounded-full bg-primary" />
@@ -1867,6 +1853,9 @@ export default function Scheduler() {
                           <h3 className="font-medium truncate text-foreground">
                             {task.name}
                           </h3>
+                          {task.unsupported && (
+                            <span className="text-xs text-warning">Unsupported command</span>
+                          )}
                           {getServerLabel(task.server_id) && (
                             <span
                               className="shrink-0 text-[11px] font-medium bg-primary/10 border border-primary/30 px-1.5 py-0.5 rounded text-primary truncate max-w-[140px]"
@@ -1890,6 +1879,11 @@ export default function Scheduler() {
                             {task.command}
                           </code>
                         </p>
+                        {task.unsupported && (
+                          <p className="text-xs text-warning mt-1">
+                            {'This saved task will not run. Edit its command or delete it.'}
+                          </p>
+                        )}
                         {task.last_run && (
                           <p className="text-[11px] text-muted-foreground/70 mt-1">
                             {'Last run · ' +
@@ -1905,7 +1899,7 @@ export default function Scheduler() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleRunNow(task)}
-                        disabled={loading || runningTaskId !== null}
+                        disabled={loading || runningTaskId !== null || task.unsupported}
                         // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Run task now"); disables only on transient UI state (a page-wide loading flag, or another task already running), not a permission gate -- no DisabledReason-worthy reason to lose. Triaged 2026-08-27.
                         title={'Run task now'}
                         aria-label={'Run ' + String(task.name) + ' now'}
@@ -1930,7 +1924,7 @@ export default function Scheduler() {
                       <Switch
                         checked={!!task.enabled}
                         onCheckedChange={() => handleToggleTask(task)}
-                        disabled={loading}
+                        disabled={loading || (task.unsupported && !task.enabled)}
                         aria-label={'Toggle ' + String(task.name)}
                       />
                       <AlertDialog>

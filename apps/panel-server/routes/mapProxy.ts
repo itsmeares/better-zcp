@@ -8,7 +8,6 @@ import type { Request, Response as NativeResponse } from "../http/startApiRouter
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.ts";
-import { listPersistedVehicles } from "../utils/vehiclesDb.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:MapProxy");
 const execFileAsync = promisify(execFile);
@@ -34,13 +33,6 @@ type B42Map = MapGeometry & {
 };
 type CurlResponse = { ok: boolean; status: number; text: string };
 type TopFormat = "webp" | "jpg" | "jpeg" | "png";
-type VehicleRecord = { id: number; x: number; y: number };
-type PersistedVehicleCache = {
-  key: string | null;
-  expiresAt: number;
-  vehicles: VehicleRecord[];
-};
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -589,32 +581,6 @@ router.get("/resolve", async (req, res) => {
     sqr: map.sqr,
     scale: map.scale,
   });
-});
-
-let persistedVehicleCache: PersistedVehicleCache = { key: null, expiresAt: 0, vehicles: [] };
-
-router.get("/vehicles", async (req, res) => {
-  try {
-    const activeServer = await getActiveServer();
-    if (!activeServer || !activeServer.zomboidDataPath) {
-      return res.json({ vehicles: [] });
-    }
-    const serverName = activeServer.serverName || activeServer.name;
-    if (!serverName) return res.json({ vehicles: [] });
-    const savePath = path.join(activeServer.zomboidDataPath, "Saves", "Multiplayer", serverName);
-    const cacheKey = `${savePath}`;
-    if (persistedVehicleCache.key !== cacheKey || Date.now() >= persistedVehicleCache.expiresAt) {
-      persistedVehicleCache = {
-        key: cacheKey,
-        expiresAt: Date.now() + 15000,
-        vehicles: await listPersistedVehicles(savePath),
-      };
-    }
-    res.json({ vehicles: persistedVehicleCache.vehicles });
-  } catch (err: unknown) {
-    log.warn(`Persisted vehicle lookup failed: ${errorMessage(err)}`);
-    res.json({ vehicles: [] });
-  }
 });
 
 router.get("/tiles/:level/:tile", async (req, res) => {

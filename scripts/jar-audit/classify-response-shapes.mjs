@@ -53,11 +53,6 @@ const RCON_COMMAND_CLASSES = {
   log: "LogCommand",
   stats: "StatisticsCommand",
   removezombies: "RemoveZombiesCommand",
-  // releasesafehouse deliberately NOT listed: rcon.js's releaseSafehouse()
-  // throws before ever calling execute() -- the real B42 server refuses this
-  // command from any RCON/console caller unconditionally (see rcon.js's own
-  // comment there), so the panel never actually transmits it. Including it
-  // here would classify a command this panel doesn't send.
 };
 
 const ENUMERATION_OWNERS = new Set([

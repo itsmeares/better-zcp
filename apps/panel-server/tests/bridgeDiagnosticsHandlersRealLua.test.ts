@@ -105,7 +105,7 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
 
     expect(result.ok).toBe(true);
     expect(result.data.handlers).toEqual(expect.arrayContaining([
-      'getDebugLog', 'setDayLight', 'moderationBanUser', 'getVehicleCatalog',
+      'getDebugLog', 'moderationBanUser', 'getItemCatalog',
     ]));
     expect(result.data.count).toBe(result.data.handlers.length);
   });
@@ -171,33 +171,5 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
     });
   });
 
-  it('getVehicleCatalog: builds a catalog through the Build 42 method and fails when it is unavailable', () => {
-    const neitherMethod = loadPanelBridge(LUA_PATH, `
-      ScriptManager = { instance = {} }
-    `);
-    const failResult = neitherMethod.callHandler('getVehicleCatalog', {});
-    expect(failResult.ok).toBe(false);
-    expect(failResult.err).toBe('Failed to enumerate vehicles: API not available');
 
-    const withVehicles = loadPanelBridge(LUA_PATH, `
-      ${luaJavaList('__VEHICLES', `{
-        {
-          getFullName = function() return "Base.PickUpTruck" end,
-          getName = function() return "PickUpTruck" end,
-          getMass = function() return 1500 end,
-          getPassengerCount = function(self) return 4 end,
-        },
-      }`)}
-      ScriptManager = { instance = { getAllVehicleScripts = function() return __VEHICLES end } }
-    `);
-    const result = withVehicles.callHandler('getVehicleCatalog', {});
-    expect(result.ok).toBe(true);
-    expect(result.data.count).toBe(1);
-    expect(result.data.vehicles[0]).toEqual({
-      id: 'Base.PickUpTruck',
-      name: 'PickUpTruck',
-      mass: 1500,
-      seats: 4,
-    });
-  });
 });

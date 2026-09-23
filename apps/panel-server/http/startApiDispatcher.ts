@@ -46,7 +46,6 @@ const routeModules: RouteModule[] = [
   { base: "/api/players", load: loadRouteModule("../routes/players.ts") },
   { base: "/api/mods", load: loadRouteModule("../routes/mods.ts") },
   { base: "/api/server-files", load: loadRouteModule("../routes/serverFiles.ts") },
-  { base: "/api/chunks", load: loadRouteModule("../routes/chunks.ts") },
   { base: "/api/debug", load: loadRouteModule("../routes/debug.ts") },
   { base: "/api/backup", load: loadRouteModule("../routes/backup.ts") },
   { base: "/api/map", load: loadRouteModule("../routes/mapProxy.ts") },

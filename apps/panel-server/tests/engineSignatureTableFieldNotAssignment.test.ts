@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import fs from "fs";
-import path from "path";
 import { resolveAllCallSites } from "../../../scripts/lib/engine-signature-core.mjs";
 
 
@@ -65,43 +63,5 @@ end
     expect(callSites.some((s) => s.receiverExpr === "cell")).toBe(false);
   });
 
-  it("PanelBridge.lua: the fix changes skip counts on the real file (more sites resolved), same ABSENT set as the current baseline", () => {
-    const luaPath = path.join(
-      process.cwd(),
-      "integrations", "panelbridge",
-      "PanelBridge",
-      "media",
-      "lua",
-      "server",
-      "PanelBridge.lua",
-    );
-    const manifestPath = path.join(process.cwd(), "scripts", "engine-signatures.manifest.json");
-    const rawSrc = fs.readFileSync(luaPath, "utf-8");
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
-    function classProvider(className, methodName) {
-      const info = manifest.classes[className];
-      if (!info) return null;
-      const sigs = info.methods[methodName];
-      if (!sigs || sigs.length === 0) return { exists: false };
-      return { exists: true, returnClass: sigs[0].returnClass, elementClass: sigs[0].elementClass };
-    }
-
-    const { callSites } = resolveAllCallSites(rawSrc, classProvider);
-    const resolved = callSites.filter((s) => s.resolved);
-    const absent = resolved.filter((s) => s.methodInfo && s.methodInfo.exists === false);
-
-    const baselinePath = path.join(process.cwd(), "scripts", "engine-signatures.baseline.json");
-    const baseline = JSON.parse(fs.readFileSync(baselinePath, "utf-8"));
-    const absentKeys = new Set(absent.map((f) => `${f.receiverType}#${f.methodName}`));
-    const knownStale = new Set(["zombie.characters.IsoPlayer#setGodMode"]);
-    for (const entry of baseline.entries) {
-      const key = `${entry.class}#${entry.method}`;
-      if (knownStale.has(key)) continue;
-      expect(
-        absentKeys.has(key),
-        `baseline entry ${key} must still be found ABSENT by the fixed resolver`,
-      ).toBe(true);
-    }
-  });
 });

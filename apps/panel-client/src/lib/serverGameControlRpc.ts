@@ -192,87 +192,6 @@ export const sendServerMessage = createServerFn({ method: 'POST' })
     }),
   )
 
-export const startRain = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.startRain, 'startRain', { data, context }),
-  )
-
-export const stopRain = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.stopRain, 'stopRain', { data, context }),
-  )
-
-export const startStorm = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.startStorm, 'startStorm', { data, context }),
-  )
-
-export const stopWeather = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.stopWeather, 'stopWeather', { data, context }),
-  )
-
-export const triggerChopper = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.triggerChopper, 'triggerChopper', {
-      data,
-      context,
-    }),
-  )
-
-export const triggerGunshot = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.triggerGunshot, 'triggerGunshot', {
-      data,
-      context,
-    }),
-  )
-
-export const triggerLightning = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.triggerLightning, 'triggerLightning', {
-      data,
-      context,
-    }),
-  )
-
-export const triggerThunder = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.triggerThunder, 'triggerThunder', {
-      data,
-      context,
-    }),
-  )
-
-export const createHorde = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.createHorde, 'createHorde', { data, context }),
-  )
-
-export const alarm = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.alarm, 'alarm', { data, context }),
-  )
-
-export const removeZombies = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.removeZombies, 'removeZombies', {
-      data,
-      context,
-    }),
-  )
-
 export const reloadLua = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
@@ -289,15 +208,6 @@ export const setServerStats = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
     invoke(serverImplementation.setServerStats, 'setServerStats', {
-      data,
-      context,
-    }),
-  )
-
-export const releaseSafehouse = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.releaseSafehouse, 'releaseSafehouse', {
       data,
       context,
     }),
@@ -405,24 +315,6 @@ export const addPlayerXp = createServerFn({ method: 'POST' })
     invoke(serverImplementation.addPlayerXp, 'addPlayerXp', { data, context }),
   )
 
-export const addPlayerVehicle = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.addPlayerVehicle, 'addPlayerVehicle', {
-      data,
-      context,
-    }),
-  )
-
-export const addPlayerVehicleAt = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.addPlayerVehicleAt, 'addPlayerVehicleAt', {
-      data,
-      context,
-    }),
-  )
-
 export const setGodMode = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
@@ -442,15 +334,6 @@ export const setNoclip = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
     invoke(serverImplementation.setNoclip, 'setNoclip', { data, context }),
-  )
-
-export const getPlayerVehicles = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.getPlayerVehicles, 'getPlayerVehicles', {
-      data,
-      context,
-    }),
   )
 
 export const getPlayerPerks = createServerFn({ method: 'GET' })

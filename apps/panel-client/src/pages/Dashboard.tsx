@@ -388,7 +388,6 @@ function ConnLine({
 export default function Dashboard() {
   const [players, setPlayers] = useState<Player[]>([])
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
-  const [zombieCount, setZombieCount] = useState<number | null>(null)
   const [worldMap, setWorldMap] = useState<string | null>(null)
   const [playerActivity, setPlayerActivity] = useState<PlayerActivity[]>([])
   const [performanceHistory, setPerformanceHistory] = useState<
@@ -664,23 +663,13 @@ export default function Dashboard() {
       setBridgeStatus(null)
     }
   }, [])
-  const fetchWorldZombieStats = useCallback(async () => {
-    const [zc, ws] = await Promise.allSettled([
-      panelBridgeApi.getZombieCount(),
-      panelBridgeApi.getWorldStats(),
-    ])
-    setZombieCount(
-      zc.status === 'fulfilled' &&
-        zc.value?.success &&
-        typeof zc.value.data?.zombieCount === 'number'
-        ? zc.value.data.zombieCount
-        : null,
-    )
-    setWorldMap(
-      ws.status === 'fulfilled' && ws.value?.success && ws.value.data?.map
-        ? ws.value.data.map
-        : null,
-    )
+  const fetchWorldStats = useCallback(async () => {
+    try {
+      const result = await panelBridgeApi.getWorldStats()
+      setWorldMap(result.success && result.data?.map ? result.data.map : null)
+    } catch {
+      setWorldMap(null)
+    }
   }, [])
   const fetchPlayerActivity = useCallback(async () => {
     try {
@@ -953,16 +942,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!bridgeStatus?.modConnected) {
-      setZombieCount(null)
       setWorldMap(null)
       return
     }
-    fetchWorldZombieStats()
+    fetchWorldStats()
     const interval = setInterval(() => {
-      if (document.visibilityState !== 'hidden') fetchWorldZombieStats()
+      if (document.visibilityState !== 'hidden') fetchWorldStats()
     }, 10000)
     return () => clearInterval(interval)
-  }, [bridgeStatus?.modConnected, fetchWorldZombieStats])
+  }, [bridgeStatus?.modConnected, fetchWorldStats])
 
   useEffect(() => {
     if (initialLoading || showPerformanceCharts) return
@@ -1401,22 +1389,6 @@ export default function Dashboard() {
       label: 'Players',
       state: online ? String(players.length) : 'offline',
       tone: !online ? 'bad' : players.length > 0 ? 'good' : 'default',
-    },
-    {
-      id: 'zombies',
-      to: '/events',
-      icon: Skull,
-      label: 'Zombies',
-      state: bridgeStatus?.modConnected
-        ? zombieCount !== null
-          ? String(zombieCount)
-          : 'pending'
-        : 'offline',
-      tone: !bridgeStatus?.modConnected
-        ? 'default'
-        : zombieCount !== null
-          ? 'good'
-          : 'default',
     },
     {
       id: 'console',

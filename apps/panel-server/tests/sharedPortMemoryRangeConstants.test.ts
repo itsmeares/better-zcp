@@ -79,6 +79,6 @@ describe("requireIntInRange call sites use named constants, not hand-typed liter
     const source = fs.readFileSync(SERVER_JS, "utf8");
     expect((source.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(10);
     const appSettingsSource = fs.readFileSync(APP_SETTINGS_TS, "utf8");
-    expect((appSettingsSource.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(6);
+    expect((appSettingsSource.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(5);
   });
 });

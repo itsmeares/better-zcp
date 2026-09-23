@@ -118,14 +118,6 @@ function validNumber(value: unknown, min = -Infinity, max = Infinity): boolean {
   return Number.isFinite(number) && number >= min && number <= max
 }
 
-function optionalEventUsername(data: AnyRecord): string | undefined {
-  const username = data.username
-  if (username && (typeof username !== 'string' || username.length > 64)) {
-    invalid('Invalid username', 'EVENTS_INVALID_USERNAME')
-  }
-  return username || undefined
-}
-
 function legacyIntegerOrDefault(
   value: unknown,
   min: number,
@@ -614,42 +606,6 @@ export const sendServerMessage = createControlAction((runtime, data) => {
     return runtime.rconService.serverMessage(message.replace(/[\r\n]/g, ' '))
 })
 
-export const startRain = createControlAction((runtime, data) =>
-  runtime.rconService.startRain(data.intensity),
-)
-export const stopRain = createControlAction((runtime) =>
-  runtime.rconService.stopRain(),
-)
-export const startStorm = createControlAction((runtime, data) =>
-  runtime.rconService.startStorm(data.duration),
-)
-export const stopWeather = createControlAction((runtime) =>
-  runtime.rconService.stopWeather(),
-)
-export const triggerChopper = createControlAction((runtime) =>
-  runtime.rconService.triggerChopper(),
-)
-export const triggerGunshot = createControlAction((runtime) =>
-  runtime.rconService.triggerGunshot(),
-)
-export const triggerLightning = createControlAction((runtime, data) =>
-    runtime.rconService.triggerLightning(optionalEventUsername(data)),
-)
-export const triggerThunder = createControlAction((runtime, data) =>
-    runtime.rconService.triggerThunder(optionalEventUsername(data)),
-)
-export const createHorde = createControlAction((runtime, data) =>
-    runtime.rconService.createHorde(
-      legacyIntegerOrDefault(data.count, 1, 500, 50),
-      optionalEventUsername(data),
-    ),
-)
-export const alarm = createControlAction((runtime) =>
-  runtime.rconService.alarm(),
-)
-export const removeZombies = createControlAction((runtime) =>
-  runtime.rconService.removeZombies(),
-)
 export const reloadLua = createControlAction((runtime, data) => {
     const filename = requiredString(
       data,
@@ -744,10 +700,6 @@ export const setServerStats = createControlAction((runtime, data) => {
       : null
     return runtime.rconService.setStats(normalizedMode, period)
 })
-export const releaseSafehouse = createControlAction((runtime) =>
-  runtime.rconService.releaseSafehouse(),
-)
-
 export const getPlayers = createControlRead(async () => {
   const runtime = await panelRuntime()
   const result = await runtime.rconService.getPlayers()
@@ -1122,47 +1074,6 @@ export const addPlayerXp = createControlAction(async (runtime, data) => {
     return result
 })
 
-export const addPlayerVehicle = createControlAction(async (runtime, data) => {
-    const vehicle = requiredString(
-      data,
-      'vehicle',
-      'Vehicle is required',
-      'PLAYERS_VEHICLE_REQUIRED',
-    )
-    if (!/^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/.test(vehicle))
-      invalid('Invalid vehicle ID format', 'PLAYERS_INVALID_VEHICLE_ID')
-    if (data.username && !validUsername(data.username))
-      invalid('Invalid username format', 'PLAYERS_INVALID_USERNAME')
-    const result = await runtime.rconService.addVehicle(vehicle, data.username)
-    if (data.username && result?.success)
-      await logPlayerAction(data.username, 'add_vehicle', vehicle)
-    return result
-})
-
-export const addPlayerVehicleAt = createControlAction(async (runtime, data) => {
-    const vehicle = requiredString(
-      data,
-      'vehicle',
-      'Vehicle is required',
-      'PLAYERS_VEHICLE_REQUIRED',
-    )
-    if (!/^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/.test(vehicle))
-      invalid('Invalid vehicle ID format', 'PLAYERS_INVALID_VEHICLE_ID')
-    const z = data.z ?? 0
-    if (
-      !validNumber(data.x, 0, 24000) ||
-      !validNumber(data.y, 0, 24000) ||
-      !validNumber(z, 0, 8)
-    )
-      invalid('Invalid map coordinates', 'PLAYERS_INVALID_MAP_COORDINATES')
-    return runtime.rconService.addVehicleAt(
-      vehicle,
-      Number(data.x),
-      Number(data.y),
-      Number(z),
-    )
-})
-
 async function setPlayerMode(
   runtime: AnyRecord,
   method: 'setGodMode' | 'setInvisible' | 'setNoclip',
@@ -1221,11 +1132,6 @@ function playerModeAction(
 export const setGodMode = playerModeAction('setGodMode', 'setGodMode')
 export const setInvisible = playerModeAction('setInvisible', 'setInvisible')
 export const setNoclip = playerModeAction('setNoclip', 'setNoclip')
-
-export const getPlayerVehicles = createControlRead(async () => {
-  const { VEHICLES } = await import('../../../panel-server/utils/commands.ts')
-  return { vehicles: VEHICLES }
-})
 
 export const getPlayerPerks = createControlRead(async () => {
   const { PERKS, PERK_CATALOG } =

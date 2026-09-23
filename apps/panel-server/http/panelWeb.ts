@@ -161,8 +161,6 @@ const STRICT_RATE_LIMIT_PATHS = [
   "/api/backup/restore",
   "/api/backup/delete-older-than",
   "/api/backup/upload",
-  "/api/chunks/delete-chunks",
-  "/api/chunks/delete-region",
   "/api/server-files/raw",
   "/api/server-files/restore",
   "/api/server-files/save-and-reload",

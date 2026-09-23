@@ -20,6 +20,7 @@ import {
   isValidIanaTimezone,
 } from '../utils/cronValidation.ts';
 import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.ts';
+import { isSchedulableCommand } from '../utils/schedulerCommands.ts';
 
 export { hasUnsupportedCronFieldCount };
 
@@ -106,7 +107,10 @@ router.put('/restart-warning', async (req, res) => {
 router.get('/tasks', async (req, res) => {
   try {
     const tasks = await getScheduledTasks();
-    res.json({ tasks });
+    res.json({ tasks: tasks.map((task) => ({
+      ...task,
+      unsupported: !isSchedulableCommand(task.command),
+    })) });
   } catch (error) {
     log.error(`Failed to get scheduled tasks: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
@@ -165,6 +169,9 @@ router.post('/tasks', async (req, res) => {
     }
     if (typeof command !== 'string' || command.length > 2000) {
       return res.status(400).json({ error: 'Invalid command (max 2000 chars)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
+    }
+    if (!isSchedulableCommand(command)) {
+      return res.status(400).json({ error: 'This PanelBridge action is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
     if (typeof cronExpression !== 'string' || cronExpression.length > 100) {
       return res.status(400).json({ error: 'Invalid cron expression format', code: ErrorCode.SCHEDULER_INVALID_CRON_FORMAT });
@@ -247,6 +254,9 @@ router.put('/tasks/:id', async (req, res) => {
     if (command !== undefined && (typeof command !== 'string' || command.length > 2000)) {
       return res.status(400).json({ error: 'Invalid command (max 2000 characters)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
+    if (command !== undefined && !isSchedulableCommand(command) && enabled !== false && enabled !== 0) {
+      return res.status(400).json({ error: 'This PanelBridge action is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
+    }
     if (
       enabled !== undefined &&
       ![true, false, 0, 1].includes(enabled)
@@ -282,6 +292,10 @@ router.put('/tasks/:id', async (req, res) => {
     const previousTask = previousTaskRecord
       ? { ...previousTaskRecord }
       : null;
+    if (normalizedEnabled === 1 && previousTask &&
+        !isSchedulableCommand(command ?? previousTask.command)) {
+      return res.status(400).json({ error: 'Edit the unsupported command before enabling this task', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
+    }
 
     const updated = await updateScheduledTask(taskId, name, cronExpression, command, normalizedEnabled, serverId);
     if (!updated) {
@@ -382,6 +396,9 @@ router.post('/tasks/:id/run', async (req, res) => {
     const task = tasks.find((candidate) => candidate.id === taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
+    }
+    if (!isSchedulableCommand(task.command)) {
+      return res.status(400).json({ error: 'Edit the unsupported command before running this task', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
 
     log.info(`POST /tasks/${taskId}/run: ${task.name}`);

@@ -34,7 +34,7 @@ import {
 } from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
-import { invalidateMapFolderScan } from "./chunks.ts";
+import { invalidateMapFolderScan } from "../utils/mapFolderScan.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {
@@ -733,111 +733,6 @@ router.post("/message", async (req, res) => {
     res.json(result);
   } catch (error: any) {
     log.error(`Failed to send message: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/weather/start-rain", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const { intensity } = req.body || {};
-    const result = await rconService.startRain(intensity);
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/weather/stop-rain", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.stopRain();
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/weather/start-storm", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const { duration } = req.body || {};
-    const result = await rconService.startStorm(duration);
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/weather/stop", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.stopWeather();
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/events/chopper", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.triggerChopper();
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/events/gunshot", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.triggerGunshot();
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/events/lightning", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const { username } = req.body || {};
-    if (username && (typeof username !== "string" || username.length > 64)) {
-      return res.status(400).json({ error: "Invalid username", code: ErrorCode.EVENTS_INVALID_USERNAME });
-    }
-    const result = await rconService.triggerLightning(username);
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/events/thunder", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const { username } = req.body || {};
-    if (username && (typeof username !== "string" || username.length > 64)) {
-      return res.status(400).json({ error: "Invalid username", code: ErrorCode.EVENTS_INVALID_USERNAME });
-    }
-    const result = await rconService.triggerThunder(username);
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/events/horde", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const { count, username } = req.body || {};
-    const safeCount = coerceIntInRange(count, 1, 500, 50);
-    if (username && (typeof username !== "string" || username.length > 64)) {
-      return res.status(400).json({ error: "Invalid username", code: ErrorCode.EVENTS_INVALID_USERNAME });
-    }
-    const result = await rconService.createHorde(safeCount, username);
-    res.json(result);
-  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -2086,30 +1981,6 @@ router.post("/configure-network", async (req, res) => {
   }
 });
 
-router.post("/alarm", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.alarm();
-    await logServerEventBestEffort("alarm");
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Failed to trigger alarm: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/removezombies", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.removeZombies();
-    await logServerEventBestEffort("removezombies");
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Failed to remove zombies: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
 router.post("/reloadlua", async (req, res) => {
   try {
     const rconService = req.app.get("rconService");
@@ -2220,17 +2091,6 @@ router.post("/stats", async (req, res) => {
     res.json(result);
   } catch (error: any) {
     log.error(`Failed to set stats: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/releasesafehouse", async (req, res) => {
-  try {
-    const rconService = req.app.get("rconService");
-    const result = await rconService.releaseSafehouse();
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Failed to release safehouse: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });

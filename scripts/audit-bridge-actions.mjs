@@ -28,58 +28,27 @@ const allowList = new Set(
 );
 
 const api = read("apps/panel-client/src/lib/api.ts");
+const clientRoot = path.join(root, "apps/panel-client/src");
+const clientSources = fs.readdirSync(clientRoot, { recursive: true })
+  .filter((name) => /\.[jt]sx?$/.test(name))
+  .map((name) => fs.readFileSync(path.join(clientRoot, name), "utf8"))
+  .join("\n");
 const apiActions = new Set(
-  [...api.matchAll(/sendCommand\(\s*"([a-zA-Z]+)"/g)].map((m) => m[1]),
+  [...clientSources.matchAll(/sendCommand\(\s*["']([a-zA-Z]+)["']/g)].map((m) => m[1]),
 );
 for (const m of api.matchAll(/apiPost\(\s*"\/panel-bridge\/command",\s*\{\s*action:\s*"([a-zA-Z]+)"/g)) {
   apiActions.add(m[1]);
 }
 
-const events = read("apps/panel-client/src/pages/Events.tsx");
-const literalEventsActions = [...events.matchAll(/sendCommand\(\s*'([a-zA-Z]+)'/g)].map((m) => m[1]);
-const eventsOps = new Set(literalEventsActions);
-
-const templateFnAnchor = "function getBridgeOperationTemplates";
-const templateFnIdx = events.indexOf(templateFnAnchor);
-let templateKeyCount = 0;
-if (templateFnIdx !== -1) {
-  const templatesBlock = events.slice(templateFnIdx);
-  const closeIdx = templatesBlock.indexOf("\n}");
-  const templatesBody = closeIdx === -1 ? templatesBlock : templatesBlock.slice(0, closeIdx);
-  for (const m of templatesBody.matchAll(/^\s+([a-zA-Z]+):\s*\{/gm)) {
-    eventsOps.add(m[1]);
-    templateKeyCount++;
-  }
-}
-
-const MIN_TEMPLATE_KEYS = 10;
-if (templateFnIdx !== -1 && templateKeyCount < MIN_TEMPLATE_KEYS) {
-  console.error(
-    `ERROR: found getBridgeOperationTemplates() but extracted only ${templateKeyCount} key(s) ` +
-    `(expected at least ${MIN_TEMPLATE_KEYS}). The extraction regex is almost certainly stale -- ` +
-    `Events.tsx's structure changed again. Fix the regex before trusting this script's output.`,
-  );
-  process.exit(1);
-}
-if (templateFnIdx === -1) {
-  console.error(
-    "ERROR: could not find getBridgeOperationTemplates() in Events.tsx at all -- " +
-    "the function was renamed, moved, or removed. Fix the anchor before trusting this script's output.",
-  );
-  process.exit(1);
-}
-
-const candidates = new Set([...apiActions, ...eventsOps]);
+const candidates = apiActions;
 const missingHandler = [...candidates].filter((a) => !luaHandlers.has(a)).sort();
 const missingAllow = [...candidates].filter((a) => !allowList.has(a)).sort();
 const allowedButUnimplemented = [...allowList]
   .filter((a) => !luaHandlers.has(a))
   .sort();
 
-console.log(`literal sendCommand('name', ...) calls in Events.tsx: ${new Set(literalEventsActions).size}`);
-console.log(`getBridgeOperationTemplates() keys found:             ${templateKeyCount}`);
-console.log(`literal sendCommand("name", ...) refs in api.ts:      ${apiActions.size}`);
-console.log(`checked actions (denominator):     ${candidates.size}  -- NOT every action Events can send; see this script's own header for the honest ceiling`);
+console.log(`literal client sendCommand refs:     ${apiActions.size}`);
+console.log(`checked actions:                   ${candidates.size}`);
 console.log(`lua handlers:                      ${luaHandlers.size}`);
 console.log(`server allow-list:                 ${allowList.size}`);
 console.log(`NO LUA HANDLER:             ${missingHandler.join(", ") || "none"}`);

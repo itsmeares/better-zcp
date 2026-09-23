@@ -9,7 +9,6 @@ import {
   Shield,
   UserPlus,
   UserMinus,
-  Car,
   Package,
   Ghost,
   Eye,
@@ -17,10 +16,6 @@ import {
   RefreshCw,
   AlertTriangle,
   Loader2,
-  Download,
-  Upload,
-  Copy,
-  Check,
   MapPin,
   Mic,
   MicOff,
@@ -90,13 +85,13 @@ import { EmptyState } from '@/components/EmptyState'
 import { HelpTip } from '@/components/HelpTip'
 import { SpawnBrowser } from '@/components/SpawnBrowser'
 import { NumberInput } from '@/components/NumberInput'
-import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
+import { playersApi, panelBridgeApi } from '@/lib/api'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { cn, copyText } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
 interface PerkChoice {
   id: string
@@ -375,7 +370,6 @@ export default function Players() {
   const [voiceBanDialogOpen, setVoiceBanDialogOpen] = useState(false)
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false)
   const [itemBrowserOpen, setItemBrowserOpen] = useState(false)
-  const [vehicleBrowserOpen, setVehicleBrowserOpen] = useState(false)
 
   const [kickReason, setKickReason] = useState('')
   const [banReason, setBanReason] = useState('')
@@ -411,40 +405,9 @@ export default function Players() {
 
   const [playerSearchFilter, setPlayerSearchFilter] = useState('')
 
-  const [characterData, setCharacterData] = useState<string>('')
-  const [importCharacterData, setImportCharacterData] = useState('')
-  const [exporting, setExporting] = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [importExportOpen, setImportExportOpen] = useState(false)
-  const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [pendingImportData, setPendingImportData] = useState<Record<
-    string,
-    unknown
-  > | null>(null)
-
   const [bridgeConnected, setBridgeConnected] = useState(false)
 
-  const [autoExportEnabled, setAutoExportEnabled] = useState(false)
-  const [savedExports, setSavedExports] = useState<
-    Array<{
-      username: string
-      filename: string
-      size: number
-      timestamp: string
-    }>
-  >([])
-
-  const copiedTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    return () => {
-      if (copiedTimeoutRef.current) {
-        clearTimeout(copiedTimeoutRef.current)
-      }
-    }
-  }, [])
 
   interface ActivityLog {
     id: number
@@ -852,23 +815,6 @@ export default function Players() {
       .catch(() => {
         if (isMounted) setBridgeConnected(false)
       })
-    configApi
-      .getAppSettings()
-      .then((response) => {
-        if (isMounted && response?.settings) {
-          setAutoExportEnabled(
-            response.settings.autoExportOnLogin === true ||
-              response.settings.autoExportOnLogin === 'true',
-          )
-        }
-      })
-      .catch(() => {})
-    playersApi
-      .getExports()
-      .then((response) => {
-        if (isMounted && response?.exports) setSavedExports(response.exports)
-      })
-      .catch(() => {})
     fetchRosterVitals()
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return
@@ -986,54 +932,6 @@ export default function Players() {
         searchInputRef.current?.focus()
       },
     )
-  }
-
-  const runCharacterImport = async (data: Record<string, unknown>) => {
-    setImporting(true)
-    try {
-      const { panelBridgeApi } = await import('@/lib/api')
-      const response = await panelBridgeApi.importCharacter(
-        selectedPlayer,
-        data,
-      )
-      const restored = response.data?.restored
-      const submittedPerks =
-        data &&
-        typeof data.perks === 'object' &&
-        data.perks !== null &&
-        Object.keys(data.perks).length > 0
-      const submittedItems =
-        Array.isArray((data as { inventory?: unknown[] })?.inventory) &&
-        (data as { inventory: unknown[] }).inventory.length > 0
-      const noneApplied =
-        (restored?.perks ?? 0) === 0 &&
-        (restored?.items ?? 0) === 0 &&
-        (submittedPerks || submittedItems)
-      toast({
-        title: noneApplied ? 'Import Applied Nothing' : 'Character Imported',
-        description: noneApplied
-          ? 'None of the submitted skills or items were applied to ' +
-            String(selectedPlayer) +
-            ". The data may not match this server's mods or item definitions."
-          : 'Applied ' +
-            String(restored?.perks ?? 0) +
-            ' skills and ' +
-            String(restored?.items ?? 0) +
-            ' items to ' +
-            String(selectedPlayer),
-      })
-      setImportCharacterData('')
-    } catch (error) {
-      toast({
-        title: 'Import Failed',
-        description: getUserErrorMessage(error, 'Failed to import character'),
-        variant: 'destructive',
-      })
-    } finally {
-      setImporting(false)
-      setImportConfirmOpen(false)
-      setPendingImportData(null)
-    }
   }
 
   const handleBan = () => {
@@ -1234,31 +1132,6 @@ export default function Players() {
       toast({
         title: 'Give item failed',
         description: getUserErrorMessage(error, 'Could not deliver the item'),
-        variant: 'destructive',
-      })
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const spawnVehicleFromBrowser = async (id: string) => {
-    setLoading(true)
-    try {
-      await playersApi.addVehicle(id, selectedPlayer || undefined)
-      const vehicle = id.replace(/^Base\./, '')
-      toast({
-        title: 'Vehicle spawned',
-        description: selectedPlayer
-          ? String(vehicle) + ' near ' + String(selectedPlayer)
-          : String(vehicle),
-        variant: 'success' as const,
-      })
-      fetchPlayers()
-    } catch (error) {
-      toast({
-        title: 'Vehicle spawn failed',
-        description: getUserErrorMessage(error, 'Could not spawn the vehicle'),
         variant: 'destructive',
       })
       throw error
@@ -2485,25 +2358,6 @@ export default function Players() {
                                 {'Remove from Whitelist'}
                               </DropdownMenuItem>
 
-                              <DropdownMenuSeparator />
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !bridgeConnected
-                                    ? 'Requires PanelBridge to be connected'
-                                    : null
-                                }
-                              >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setImportExportOpen(true)
-                                  }}
-                                  disabled={!bridgeConnected}
-                                >
-                                  <Download className="w-4 h-4 me-2" />
-                                  {'Import/Export Character'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -3634,69 +3488,6 @@ export default function Players() {
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setVehicleBrowserOpen(true)}
-                  disabled={loading}
-                  className={cn(
-                    'group w-full rounded-xl border bg-card/50 p-4 text-start',
-                    'motion-safe:transition-all duration-150',
-                    'border-border/60',
-                    !loading &&
-                      'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
-                    loading && 'opacity-60 cursor-not-allowed',
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'rounded-lg border p-2.5 shrink-0',
-                        'motion-safe:transition-colors duration-150',
-                        !loading
-                          ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
-                          : 'border-border/40 bg-muted/30 text-muted-foreground',
-                      )}
-                    >
-                      <Car className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground flex items-center gap-2">
-                        {'Spawn vehicles'}
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
-                          {'browser'}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {selectedPlayer ? (
-                          <>
-                            {
-                              'Sedans, trucks, emergency, military — spawn one after another near '
-                            }
-                            {selectedPlayer}
-                            {'.'}
-                          </>
-                        ) : (
-                          "Spawns at the caller's position — select a player to spawn vehicles near them instead."
-                        )}
-                      </p>
-                    </div>
-                    <div
-                      className={cn(
-                        'flex items-center gap-1 text-xs shrink-0',
-                        'motion-safe:transition-all duration-150',
-                        !loading
-                          ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
-                          : 'text-muted-foreground/30',
-                      )}
-                    >
-                      <span className="uppercase tracking-wider text-[10px] font-semibold">
-                        {'Browse'}
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </div>
-                  </div>
-                </button>
-
                 <div className="rounded-xl border border-border/60 bg-card/50 p-4 transition-colors">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
@@ -4499,427 +4290,11 @@ export default function Players() {
         </Card>
       </div>
 
-      <Dialog open={importExportOpen} onOpenChange={setImportExportOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Download className="w-5 h-5" />
-              {'Import/Export Character'}
-            </DialogTitle>
-            <DialogDescription>
-              {
-                "Export or restore a player's XP, perks, and skills via PanelBridge."
-              }
-            </DialogDescription>
-          </DialogHeader>
-          {!bridgeConnected && (
-            <Alert className="border-warning/40 bg-warning/10">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <AlertTitle className="text-warning">
-                {'Bridge Offline'}
-              </AlertTitle>
-              <AlertDescription>
-                <>
-                  {
-                    'Character export and import require PanelBridge to be connected. '
-                  }
-                  {'Open Bridge Setup'}
-                </>
-              </AlertDescription>
-            </Alert>
-          )}
-          <div
-            className={cn(
-              'grid grid-cols-1 md:grid-cols-2 gap-4',
-              !bridgeConnected && 'opacity-60 pointer-events-none',
-            )}
-          >
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium flex items-center gap-2">
-                <Download className="w-4 h-4" />
-                {'Export Character'}
-              </h4>
-              <p className="text-xs text-muted-foreground">
-                {'Export XP, perks, skills, and inventory'}
-              </p>
-              <Button
-                variant="outline"
-                disabled={!selectedPlayer || exporting}
-                onClick={async () => {
-                  setExporting(true)
-                  try {
-                    const { panelBridgeApi } = await import('@/lib/api')
-                    const response =
-                      await panelBridgeApi.exportCharacter(selectedPlayer)
-                    const exportData = response.data || response
-                    const jsonStr = JSON.stringify(exportData, null, 2)
-                    setCharacterData(jsonStr)
-                    toast({
-                      title: 'Character Exported',
-                      description:
-                        'Exported character data for ' + String(selectedPlayer),
-                    })
-                  } catch (error) {
-                    toast({
-                      title: 'Export Failed',
-                      description: getUserErrorMessage(
-                        error,
-                        'Failed to export character',
-                      ),
-                      variant: 'destructive',
-                    })
-                  } finally {
-                    setExporting(false)
-                  }
-                }}
-                size="sm"
-                className="w-full"
-              >
-                {exporting ? (
-                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 me-2" />
-                )}
-                {'Export ' + String(selectedPlayer || 'Player')}
-              </Button>
-
-              {characterData && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">
-                      {'Character Data'}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0"
-                      aria-label={copied ? 'Copied' : 'Copy character data'}
-                      onClick={() => {
-                        copyText(characterData)
-                        setCopied(true)
-                        if (copiedTimeoutRef.current)
-                          clearTimeout(copiedTimeoutRef.current)
-                        copiedTimeoutRef.current = setTimeout(
-                          () => setCopied(false),
-                          2000,
-                        )
-                      }}
-                    >
-                      {copied ? (
-                        <Check className="w-3 h-3" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </Button>
-                  </div>
-                  <Textarea
-                    readOnly
-                    value={characterData}
-                    className="h-32 resize-none font-mono text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      const blob = new Blob([characterData], {
-                        type: 'application/json',
-                      })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `${selectedPlayer}_character.json`
-                      a.click()
-                      URL.revokeObjectURL(url)
-                    }}
-                  >
-                    <Download className="w-4 h-4 me-2" />
-                    {'Download File'}
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                {'Import Character'}
-              </h4>
-              <p className="text-xs text-muted-foreground">
-                {'Restore XP, perks, skills, and exported inventory'}
-              </p>
-              <Textarea
-                value={importCharacterData}
-                onChange={(e) => setImportCharacterData(e.target.value)}
-                placeholder={'Paste character JSON here...'}
-                className="h-24 resize-none font-mono text-xs"
-              />
-              <div className="flex gap-2">
-                <Button
-                  disabled={
-                    importing || !selectedPlayer || !importCharacterData.trim()
-                  }
-                  onClick={() => {
-                    let data
-                    try {
-                      data = JSON.parse(importCharacterData)
-                    } catch {
-                      toast({
-                        title: 'Invalid JSON',
-                        description:
-                          'The character data is not valid JSON format',
-                        variant: 'destructive',
-                      })
-                      return
-                    }
-                    setPendingImportData(data)
-                    setImportConfirmOpen(true)
-                  }}
-                  size="sm"
-                  className="flex-1"
-                >
-                  {importing ? (
-                    <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4 me-2" />
-                  )}
-                  {'Apply'}
-                </Button>
-                <label className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <Upload className="w-4 h-4 me-1" />
-                      {'File'}
-                    </span>
-                  </Button>
-                  <input
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        if (file.size > 5 * 1024 * 1024) {
-                          toast({
-                            title: 'File Too Large',
-                            description:
-                              'Character data file must be under 5MB',
-                            variant: 'destructive',
-                          })
-                          e.target.value = ''
-                          return
-                        }
-                        const reader = new FileReader()
-                        reader.onload = (ev) => {
-                          setImportCharacterData(
-                            (ev.target?.result as string) || '',
-                          )
-                        }
-                        reader.readAsText(file)
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {'Player must be online.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="border-t border-border/40 pt-4 mt-2 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <h4 className="text-sm font-medium">
-                  {'Auto-export on login'}
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  {
-                    'Automatically save a character backup when players join the server'
-                  }
-                </p>
-              </div>
-              <Checkbox
-                id="autoExportOnLogin"
-                checked={autoExportEnabled}
-                onCheckedChange={async (checked: boolean) => {
-                  setAutoExportEnabled(checked)
-                  try {
-                    await configApi.updateAppSettings({
-                      autoExportOnLogin: checked,
-                    })
-                  } catch {
-                    setAutoExportEnabled(!checked)
-                    toast({
-                      title: 'Failed to update setting',
-                      variant: 'destructive',
-                    })
-                  }
-                }}
-              />
-            </div>
-
-            {savedExports.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium text-muted-foreground">
-                  {'Saved Exports (' + String(savedExports.length) + ')'}
-                </h4>
-                <ScrollArea className="max-h-[180px]">
-                  <div className="space-y-1">
-                    {savedExports.map((exp) => (
-                      <div
-                        key={`${exp.username}-${exp.filename}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-1.5 text-xs"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium">{exp.username}</span>
-                          <span className="text-muted-foreground ms-2">
-                            {new Date(exp.timestamp).toLocaleString('en')}
-                          </span>
-                          <span className="text-muted-foreground ms-2">
-                            {'(' +
-                              String((exp.size / 1024).toFixed(1)) +
-                              ' KB)'}
-                          </span>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            title={'Download'}
-                            aria-label={
-                              'Download ' +
-                              String(exp.username) +
-                              "'s saved export"
-                            }
-                            onClick={async () => {
-                              try {
-                                const data = await playersApi.getExport(
-                                  exp.username,
-                                  exp.filename,
-                                )
-                                const blob = new Blob(
-                                  [JSON.stringify(data, null, 2)],
-                                  { type: 'application/json' },
-                                )
-                                const url = URL.createObjectURL(blob)
-                                const a = document.createElement('a')
-                                a.href = url
-                                a.download = exp.filename
-                                a.click()
-                                URL.revokeObjectURL(url)
-                              } catch {
-                                toast({
-                                  title: 'Download failed',
-                                  variant: 'destructive',
-                                })
-                              }
-                            }}
-                          >
-                            <Download className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                            title={'Delete'}
-                            aria-label={
-                              'Delete ' +
-                              String(exp.username) +
-                              "'s saved export"
-                            }
-                            onClick={async () => {
-                              try {
-                                await playersApi.deleteExport(
-                                  exp.username,
-                                  exp.filename,
-                                )
-                                setSavedExports((prev) =>
-                                  prev.filter(
-                                    (e) =>
-                                      e.filename !== exp.filename ||
-                                      e.username !== exp.username,
-                                  ),
-                                )
-                              } catch {
-                                toast({
-                                  title: 'Delete failed',
-                                  variant: 'destructive',
-                                })
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={importConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setImportConfirmOpen(false)
-            setPendingImportData(null)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {'Overwrite ' + String(selectedPlayer) + "'s character?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {'This replaces ' +
-                String(selectedPlayer) +
-                "'s XP, perks, skills, traits, inventory, and worn items with the pasted data. " +
-                String(selectedPlayer) +
-                "'s current state is saved to Saved Exports first, so you can restore it from there if this is the wrong player or the wrong file."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={importing}>
-              {'Cancel'}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={importing}
-              onClick={(e) => {
-                e.preventDefault()
-                if (pendingImportData) runCharacterImport(pendingImportData)
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {importing ? (
-                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-              ) : null}
-              {'Yes, Overwrite Character'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <SpawnBrowser
-        mode="items"
         open={itemBrowserOpen}
         onOpenChange={setItemBrowserOpen}
         playerName={selectedPlayer}
         onSpawn={spawnItemFromBrowser}
-      />
-      <SpawnBrowser
-        mode="vehicles"
-        open={vehicleBrowserOpen}
-        onOpenChange={setVehicleBrowserOpen}
-        playerName={selectedPlayer}
-        onSpawn={spawnVehicleFromBrowser}
       />
     </div>
   )

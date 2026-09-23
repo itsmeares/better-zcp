@@ -481,7 +481,7 @@ class PanelBridge extends EventEmitter {
       this.fileWatcher = watcher;
 
       watcher.on('error', (err) => {
-        const hint = process.platform === 'linux' && (err.code === 'ENOSPC' || err.message.includes('inotify'))
+        const hint = process.platform === 'linux' && (('code' in err && err.code === 'ENOSPC') || err.message.includes('inotify'))
           ? ' Increase fs.inotify.max_user_watches: sudo sysctl -w fs.inotify.max_user_watches=524288'
           : '';
         log.warn(`File watcher error: ${err.message}${hint}`);
@@ -1286,112 +1286,11 @@ class PanelBridge extends EventEmitter {
     }
   }
 
-  async getWeather() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('getWeather', {});
-  }
-
   async getServerInfo() {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('getServerInfo', {});
-  }
-
-  async triggerBlizzard(duration: number = 1.0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerBlizzard', { duration });
-  }
-
-  async triggerTropicalStorm(duration: number = 1.0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerTropicalStorm', { duration });
-  }
-
-  async triggerStorm(duration: number = 1.0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerStorm', { duration });
-  }
-
-  async stopWeather() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('stopWeather', {});
-  }
-
-  async setSnow(enabled: boolean = true, intensity: number | null = null) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    const args: AnyRecord = { enabled };
-    if (intensity !== null) args.intensity = intensity;
-    return this.sendCommand('setSnow', args);
-  }
-
-
-  async startRain(intensity: number = 0.5) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('startRain', { intensity });
-  }
-
-  async stopRain() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('stopRain', {});
-  }
-
-  async triggerLightning(x: number | null = null, y: number | null = null, strike: boolean = true, light: boolean = true, rumble: boolean = true) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerLightning', { x, y, strike, light, rumble });
-  }
-
-  async setClimateFloat(floatId: any, value: any, enable: boolean = true) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setClimateFloat', { floatId, value, enable });
-  }
-
-  async getClimateFloats() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('getClimateFloats', {});
-  }
-
-  async resetClimateOverrides() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('resetClimateOverrides', {});
-  }
-
-  async getGameTime() {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('getGameTime', {});
-  }
-
-  async setGameTime(options = {}) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setGameTime', options);
   }
 
   async getWorldStats() {
@@ -1436,77 +1335,6 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('saveWorld', {});
   }
 
-
-  async playWorldSound(x: number, y: number, z: number = 0, radius: number = 50, volume: number = 100) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('playWorldSound', { x, y, z, radius, volume });
-  }
-
-  async playSoundNearPlayer(username: string, radius: number = 50, volume: number = 100) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('playSoundNearPlayer', { username, radius, volume });
-  }
-
-  async triggerGunshot(options = {}) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerGunshot', options);
-  }
-
-  async triggerAlarmSound(options = {}) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('triggerAlarmSound', options);
-  }
-
-  async createNoise(options = {}) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('createNoise', options);
-  }
-
-
-  async generateWeather(strength: number = 0.5, frontType: number = 0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('generateWeather', { strength, frontType });
-  }
-
-  async setTemperature(value: number = 22) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setTemperature', { value });
-  }
-
-  async setWind(value: number = 0.5) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setWind', { value });
-  }
-
-  async setFog(value: number = 0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setFog', { value });
-  }
-
-  async setClouds(value: number = 0) {
-    if (!this.isRunning) {
-      throw new Error('Bridge not running');
-    }
-    return this.sendCommand('setClouds', { value });
-  }
 
   async clearErrors() {
     if (!this.isRunning) {

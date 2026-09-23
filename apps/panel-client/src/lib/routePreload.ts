@@ -4,20 +4,17 @@ const routeLoaders: Record<string, () => Promise<unknown>> = {
   '/console': () => import('../pages/Console'),
   '/scheduler': () => import('../pages/Scheduler'),
   '/mods': () => import('../pages/Mods'),
-  '/chunks': () => import('../pages/ChunkCleaner'),
   '/settings': () => import('../pages/Settings'),
   '/server-setup': () => import('../pages/ServerSetup'),
   '/servers': () => import('../pages/Servers'),
   '/server-config': () => import('../pages/ServerConfig'),
   '/debug': () => import('../pages/Debug'),
-  '/events': () => import('../pages/Events'),
   '/world-map': () => import('../pages/WorldMap'),
   '/backups': () => import('../pages/Backups'),
 }
 
 const routeAliases: Record<string, string> = {
   '/dashboard': '/',
-  '/chunk-cleaner': '/chunks',
   '/serverconfig': '/server-config',
 }
 

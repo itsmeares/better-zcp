@@ -45,6 +45,7 @@ import {
 import {
   classifyScheduledCommand,
   isSchedulableBridgeAction,
+  isSchedulableCommand,
   parseBridgeActionName,
 } from "../utils/schedulerCommands.ts";
 export { classifyScheduledCommand } from "../utils/schedulerCommands.ts";
@@ -282,6 +283,10 @@ export class Scheduler {
   }
 
   scheduleTask(task: ScheduledTask): false | { scheduled: true; dstWarning?: string | null } {
+    if (!isSchedulableCommand(task.command)) {
+      log.warn(`Skipping unsupported scheduled command for task ${task.id} (${task.name})`);
+      return false;
+    }
     if (
       !isSupportedFiveFieldCron(task.cron_expression) ||
       isCronTooFrequent(task.cron_expression)

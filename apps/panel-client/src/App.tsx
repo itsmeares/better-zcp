@@ -54,14 +54,6 @@ const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
     variant: 'console',
     metrics: ['rcon', 'history', 'stream'],
   },
-  '/events': {
-    title: 'Events & Weather',
-    description:
-      'Preparing world controls, weather overrides, and event triggers.',
-    eyebrow: '// WORLD · CONTROL',
-    variant: 'form',
-    metrics: ['weather', 'time', 'events'],
-  },
   '/world-map': {
     title: 'World Map',
     description: 'Loading map tiles, marker tools, and player/world overlays.',
@@ -99,13 +91,6 @@ const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
     eyebrow: '// MAINTAIN · BACKUPS',
     variant: 'list',
     metrics: ['files', 'storage', 'restore'],
-  },
-  '/chunks': {
-    title: 'Map Cleanup',
-    description: 'Preparing chunk previews, safety checks, and cleanup tools.',
-    eyebrow: '// MAINTAIN · MAP DATA',
-    variant: 'map',
-    metrics: ['chunks', 'preview', 'safe'],
   },
   '/servers': {
     title: 'My Servers',

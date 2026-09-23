@@ -28,18 +28,10 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 
 <table>
 <tr>
-<td width="50%" valign="top">
-
-### 🌧️ Events & Weather
-Force-trigger blizzards, tropical storms, or rain at any intensity. Fine-grained climate sliders for fog, wind, temperature, clouds, humidity. Spawn helicopter events or lightning strikes on demand. The closest thing to PZ admin god-mode.
-
-<img src="docs/assets/screenshots/screenshot-events-v2.png" alt="Events & Weather" />
-
-</td>
-<td width="50%" valign="top">
+<td colspan="2" valign="top">
 
 ### 🗺️ Live World Map
-Real-time player positions on Knox County. Multi-floor support, layer toggles, zoom & pan. Right-click any player for instant teleport, heal, kick, or message — straight from the map. Map tiles are proxied and cached by the panel itself, which also auto-detects the current PZ map build so a new release doesn't leave you looking at a stale layout.
+Real-time player positions on Knox County. Multi-floor support, zoom and pan. Right-click any player for instant teleport, heal, kick, or message — straight from the map. Map tiles are proxied and cached by the panel itself, which also auto-detects the current PZ map build so a new release doesn't leave you looking at a stale layout.
 
 <img src="docs/assets/screenshots/screenshot-worldmap-v2.png" alt="World Map" />
 
@@ -95,7 +87,7 @@ Spin up a fresh PZ server in minutes. SteamCMD install, port config, RCON setup,
 <td width="50%" valign="top">
 
 ### 📊 Performance Telemetry
-Host RAM and CPU graphs, PZ process memory, player count history. Time-range selectable, exportable. Catch slow leaks and load spikes before players notice.
+Host RAM and CPU graphs, PZ process memory, player count history. The last 24 hours remain available for inspection. Catch slow leaks and load spikes before players notice.
 
 <img src="docs/assets/screenshots/screenshot-debug-performance.png" alt="Performance" />
 
@@ -103,25 +95,20 @@ Host RAM and CPU graphs, PZ process memory, player count history. Time-range sel
 <td width="50%" valign="top">
 
 ### 🐛 Crash Logs & Diagnostics
-Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus a Diagnostics tab that runs dozens of checks across the panel, the server, and PanelBridge — some fail with a one-click fix, others link straight to the setting that needs attention.
+Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus a Diagnostics tab that checks the panel, server, and PanelBridge and points to the setting that needs attention.
 
 <img src="docs/assets/screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
 
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top">
+<td colspan="2" valign="top">
 
 ### 💾 Backups
 Manual or scheduled world backups with configurable retention. Preview a snapshot's contents before you restore it, download the raw archive, or upload an external one back in. Restoring stops the server, takes an automatic safety backup of the current state first, then rolls the world back — with an explicit warning that it can't be undone.
 
 </td>
-<td width="50%" valign="top">
 
-### 🧹 Chunk Cleaner & Map Cleanup
-Visual map selector for reclaiming disk space from an aging save. Delete individual chunks or drag out a rectangular region, with per-save stats so you know what you're removing before you commit. Panning, selecting, and computing those stats all got noticeably faster on large saves.
-
-</td>
 </tr>
 </table>
 
@@ -158,11 +145,9 @@ Visual map selector for reclaiming disk space from an aging save. Delete individ
 - **Server config** — Full INI editor with structured and raw views. Sandbox, spawn points, mod settings — searchable and editable in-browser.
 
 ### Extend
-- **Events & weather** — Rain, storms, blizzards, climate control, time control, sound triggers, zombie management.
-- **PanelBridge** — Server-side Lua mod for actions RCON can't reach: teleport, heal, god mode, character export/import, inventory.
+- **PanelBridge** — Server-side Lua mod for actions RCON can't reach: teleport, heal, god mode, and inventory actions.
 - **Single sign-on (SSO)** — OpenID Connect login, with ready-made presets for Google, Authentik, Keycloak, Azure AD, Okta, and Auth0, or any other compliant provider entered by hand. Full discovery + PKCE + state/nonce flow, with a one-click credential test before you commit to it.
 - **Multi-server** — Manage multiple PZ servers from one panel.
-- **Chunk cleaner** — Visual map selector for reclaiming disk space from an aging save: delete individual chunks or drag out a rectangular region, with per-save stats before you commit.
 - **Auto-update** — Checks for new releases, downloads and applies them.
 
 ---
@@ -280,7 +265,7 @@ the new panel and verified the server configuration.
 
 ### PanelBridge (Optional)
 
-PanelBridge is a server-side Lua drop-in that enables features RCON can't reach — teleport, heal, weather control, character export/import, inventory editing, sound triggers.
+PanelBridge is a server-side Lua drop-in that enables features RCON can't reach — teleport, heal, god mode, and item actions.
 
 There is no client-side component. Players don't install anything. The panel copies `PanelBridge.lua` into your server's `Install/media/lua/server/` folder, then you set `DoLuaChecksum=false` in the server INI, restart the PZ server, and enable it in **Settings → PanelBridge**.
 
@@ -340,7 +325,6 @@ TRUST_PROXY=1 HTTPS=true ./start.sh
 
 `TRUST_PROXY=1` tells the panel to trust the `X-Forwarded-*` headers above for one proxy hop (IP-based rate limiting and login all key off this) — only set it if the panel is genuinely reachable exclusively through your proxy, never if port 3001 is also exposed directly. `HTTPS=true` makes the panel emit HSTS and treat the connection as secure for cookies even though it's speaking plain HTTP to nginx.
 
-If you instead terminate TLS at nginx *and* run the panel's own HTTPS listener behind it (double TLS termination — only needed if something else on the same host also talks to the panel directly over HTTPS), point `proxy_pass` at `https://127.0.0.1:<your HTTPS port>` instead and add `proxy_ssl_verify off;` if you're using the panel's self-signed certificate. The `Upgrade`/`Connection` headers above are still required either way — they're about forwarding the client's upgrade request, not about which protocol nginx uses to reach the panel.
 
 ---
 

@@ -102,22 +102,6 @@ export const getPlayerNote = createResourceRead(async (data) => {
     return { success: true, note: await getPlayerNote(playerName(data)) }
 })
 
-export const getPlayerExports = createResourceRead(async (data) => {
-    const { listPlayerExports } =
-      await import('../../../panel-server/services/playerExports.ts')
-  const username = typeof data.username === 'string' ? data.username : undefined
-    return { exports: listPlayerExports(username) }
-})
-
-export const getPlayerExport = createResourceRead(async (data) => {
-    const { getPlayerExport: readPlayerExport } =
-      await import('../../../panel-server/services/playerExports.ts')
-    return readPlayerExport(
-      String(data.username ?? ''),
-      String(data.filename ?? ''),
-    )
-})
-
 export const getPlayerStats = createResourceRead(async () => {
   const { getPlayerStats } =
     await import('../../../panel-server/database/init.ts')

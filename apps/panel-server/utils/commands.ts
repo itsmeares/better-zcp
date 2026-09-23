@@ -175,80 +175,6 @@ export const PZ_COMMANDS = {
     ],
     category: 'items'
   },
-  addvehicle: {
-    command: 'addvehicle',
-    description: 'Spawn a vehicle',
-    parameters: [
-      { name: 'vehicle', type: 'string', required: true },
-      { name: 'username', type: 'string', required: false }
-    ],
-    category: 'items'
-  },
-
-  startrain: {
-    command: 'startrain',
-    description: 'Start rain on the server',
-    parameters: [{ name: 'intensity', type: 'number', required: false }],
-    category: 'weather'
-  },
-  stoprain: {
-    command: 'stoprain',
-    description: 'Stop rain on the server',
-    parameters: [],
-    category: 'weather'
-  },
-  startstorm: {
-    command: 'startstorm',
-    description: 'Start a storm (duration in game hours)',
-    parameters: [{ name: 'duration', type: 'number', required: false }],
-    category: 'weather'
-  },
-  stopweather: {
-    command: 'stopweather',
-    description: 'Stop all weather on the server',
-    parameters: [],
-    category: 'weather'
-  },
-  chopper: {
-    command: 'chopper',
-    description: 'Trigger helicopter event on random player',
-    parameters: [],
-    category: 'events'
-  },
-  gunshot: {
-    command: 'gunshot',
-    description: 'Trigger gunshot sound on random player',
-    parameters: [],
-    category: 'events'
-  },
-  lightning: {
-    command: 'lightning',
-    description: 'Strike lightning on player',
-    parameters: [{ name: 'username', type: 'string', required: false }],
-    category: 'events'
-  },
-  thunder: {
-    command: 'thunder',
-    description: 'Thunder sound on player',
-    parameters: [{ name: 'username', type: 'string', required: false }],
-    category: 'events'
-  },
-  alarm: {
-    command: 'alarm',
-    description: 'Sound building alarm at admin position',
-    parameters: [],
-    category: 'events'
-  },
-  createhorde: {
-    command: 'createhorde',
-    description: 'Spawn a horde near a player',
-    parameters: [
-      { name: 'count', type: 'number', required: true },
-      { name: 'username', type: 'string', required: false }
-    ],
-    category: 'events'
-  },
-
   godmod: {
     command: 'godmod',
     description: 'Make player invincible',
@@ -275,13 +201,6 @@ export const PZ_COMMANDS = {
       { name: 'value', type: 'boolean', required: true }
     ],
     category: 'admin'
-  },
-
-  releasesafehouse: {
-    command: 'releasesafehouse',
-    description: 'Release a safehouse you own',
-    parameters: [],
-    category: 'safehouse'
   },
 
   reloadlua: {
@@ -311,13 +230,6 @@ export const PZ_COMMANDS = {
     category: 'advanced'
   },
 
-  removezombies: {
-    command: 'removezombies',
-    description: 'Remove zombies from the server',
-    parameters: [],
-    category: 'events'
-  },
-
   clear: {
     command: 'clear',
     description: 'Clear the server console',
@@ -325,39 +237,6 @@ export const PZ_COMMANDS = {
     category: 'server'
   }
 };
-
-export const VEHICLES = [
-  'Base.VanAmbulance',
-  'Base.CarLightsPolice',
-  'Base.PickUpTruck',
-  'Base.PickUpTruckMccoy',
-  'Base.StepVan',
-  'Base.Van',
-  'Base.CarStationWagon',
-  'Base.CarStationWagon2',
-  'Base.CarNormal',
-  'Base.CarNormal2',
-  'Base.CarNormal3',
-  'Base.CarNormal4',
-  'Base.SmallCar',
-  'Base.SmallCar02',
-  'Base.SportsCar',
-  'Base.PickUpVanMccoy',
-  'Base.OffRoad',
-  'Base.SUV',
-  'Base.Taxi',
-  'Base.CarTaxi',
-  'Base.CarLights',
-  'Base.PickUpTruckLights',
-  'Base.PickUpTruckLightsFire',
-  'Base.VanRadio',
-  'Base.VanSeats',
-  'Base.CarLightsFireDept',
-  'Base.VanSpecial',
-  'Base.VanSpiffo',
-  'Base.Trailer',
-  'Base.TrailerAdvert'
-];
 
 export const PERK_CATALOG = [
   { id: 'Aiming', label: 'Aiming', category: 'Combat - Firearms' },

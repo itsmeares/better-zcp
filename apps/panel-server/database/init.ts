@@ -110,6 +110,17 @@ const RETENTION = {
   bridge_logs: 500,
 };
 
+const PERFORMANCE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function recentPerformanceHistory(entries: any[], now = Date.now()): any[] {
+  return entries
+    .filter((entry) => {
+      const timestamp = Date.parse(entry?.timestamp);
+      return Number.isFinite(timestamp) && timestamp >= now - PERFORMANCE_WINDOW_MS && timestamp <= now;
+    })
+    .slice(-RETENTION.performance_history);
+}
+
 const WRITE_DEBOUNCE_MS = 500;
 const BACKUP_INTERVAL_MS = 6 * 3600000;
 const MAX_BACKUPS = 5;
@@ -715,11 +726,6 @@ function compactData(data: DatabaseData): DatabaseData {
     if (Array.isArray(arr) && arr.length > max) return arr.slice(0, max);
     return arr;
   };
-  const trimArrayEnd = (arr: any[], max: number) => {
-    if (Array.isArray(arr) && arr.length > max) return arr.slice(-max);
-    return arr;
-  };
-
   data.command_history = trimArray(
     data.command_history,
     RETENTION.command_history,
@@ -731,10 +737,7 @@ function compactData(data: DatabaseData): DatabaseData {
     RETENTION.schedule_history,
   );
   data.bridge_logs = trimArray(data.bridge_logs || [], RETENTION.bridge_logs);
-  data.performance_history = trimArrayEnd(
-    data.performance_history,
-    RETENTION.performance_history,
-  );
+  data.performance_history = recentPerformanceHistory(data.performance_history || []);
 
   if (Array.isArray(data.player_stats)) {
     for (const stat of data.player_stats) {
@@ -1931,12 +1934,10 @@ export async function recordPerformanceSnapshot(snapshot: AnyRecord) {
     ...snapshot,
   };
 
-  appendCapped(
-    db.data.performance_history,
+  db.data.performance_history = recentPerformanceHistory([
+    ...db.data.performance_history,
     entry,
-    RETENTION.performance_history,
-    { newest: false },
-  );
+  ]);
 
   scheduleWrite();
   return entry;
@@ -1951,7 +1952,7 @@ export async function getPerformanceHistory(limit: unknown = 60) {
     1,
     RETENTION.performance_history,
   );
-  return db.data.performance_history.slice(-safeLimit);
+  return recentPerformanceHistory(db.data.performance_history).slice(-safeLimit);
 }
 
 export async function clearPerformanceHistory() {

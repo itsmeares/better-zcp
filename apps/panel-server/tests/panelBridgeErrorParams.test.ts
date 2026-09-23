@@ -36,6 +36,24 @@ async function runHandler(routePath, method, req) {
 }
 
 describe("panelBridge.js: previously-PARTIAL error codes now carry params on the wire", () => {
+  it.each([
+    'airdrop', 'getWeather', 'getVehiclesDetailed', 'getSafehouses',
+    'exportPlayerData', 'spawnHordeNearPlayer',
+  ])('rejects removed generic command %s', async (action) => {
+    bridge.isRunning = true;
+    const sendCommand = vi.spyOn(bridge, 'sendCommand');
+    try {
+      const res = await runHandler('/command', 'post', {
+        user: { role: 'admin' }, body: { action, args: {} },
+      });
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(sendCommand).not.toHaveBeenCalled();
+    } finally {
+      sendCommand.mockRestore();
+      bridge.isRunning = false;
+    }
+  });
+
   it("returns the action-required error for a missing command body", async () => {
     const res = await runHandler("/command", "post", { body: null });
 
@@ -92,64 +110,5 @@ describe("panelBridge.js: previously-PARTIAL error codes now carry params on the
     );
   });
 
-  describe("POST /command action=airdrop", () => {
-    beforeEach(() => {
-      bridge.bridgePath = "/fake/bridge/path";
-      bridge.isRunning = true;
-    });
 
-    afterEach(() => {
-      bridge.bridgePath = null;
-      bridge.isRunning = false;
-    });
-
-    it("PANELBRIDGE_AIRDROP_INVALID_PRESET sends { presets } listing the valid set", async () => {
-      const res = await runHandler("/command", "post", {
-        body: { action: "airdrop", args: { x: 100, y: 100, preset: "not-a-real-preset" } },
-      });
-      expect(res.status).toHaveBeenCalledWith(400);
-      const body = res.json.mock.calls[0][0];
-      expect(body.code).toBe("PANELBRIDGE_AIRDROP_INVALID_PRESET");
-      expect(body.params.presets).toEqual(expect.any(String));
-      expect(body.params.presets).toContain("military");
-    });
-
-    it("PANELBRIDGE_AIRDROP_ITEM_TYPE_INVALID sends the offending, truncated { itemType }", async () => {
-      const badItemType = "not valid! ".repeat(10);
-      const res = await runHandler("/command", "post", {
-        body: {
-          action: "airdrop",
-          args: {
-            x: 100,
-            y: 100,
-            preset: "military",
-            items: [{ itemType: badItemType, count: 1 }],
-          },
-        },
-      });
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          code: "PANELBRIDGE_AIRDROP_ITEM_TYPE_INVALID",
-          params: { itemType: badItemType.slice(0, 60) },
-        }),
-      );
-    });
-  });
-
-  it("PANELBRIDGE_CHARACTER_DATA_NO_VALID_SECTION (POST /character/import) sends { sections }", async () => {
-    bridge.isRunning = true;
-    try {
-      const res = await runHandler("/character/import", "post", {
-        body: { username: "TestPlayer", data: { notARecognizedSection: true } },
-      });
-      expect(res.status).toHaveBeenCalledWith(400);
-      const body = res.json.mock.calls[0][0];
-      expect(body.code).toBe("PANELBRIDGE_CHARACTER_DATA_NO_VALID_SECTION");
-      expect(body.params.sections).toEqual(expect.any(String));
-      expect(body.params.sections).toContain("inventory");
-    } finally {
-      bridge.isRunning = false;
-    }
-  });
 });

@@ -222,14 +222,7 @@ describe("PanelBridge queue recovery", () => {
 });
 
 describe('PanelBridge vehicle compatibility', () => {
-  it('reads the vehicle list by calling get, not by testing it as a field', async () => {
-    const luaPath = path.resolve(process.cwd(), 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
-    const lua = await readFile(luaPath, 'utf8');
-    const vehicleAt = lua.match(/local function vehicleAt\(vehicles, i\)([\s\S]*?)\nend/);
 
-    expect(vehicleAt?.[1]).toContain('PanelBridge.invoke(vehicles, "get", i)');
-    expect(vehicleAt?.[1]).not.toContain('vehicles.get');
-  });
 
   it('never guards a Java method by reading it as a field', async () => {
     const luaPath = path.resolve(process.cwd(), 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
@@ -283,27 +276,6 @@ describe('PanelBridge vehicle compatibility', () => {
 
     expect(runtimeVersion).toBeDefined();
     expect(manifestVersion).toBe(runtimeVersion);
-  });
-});
-
-describe('PanelBridge climate compatibility', () => {
-  it('uses the direct Build 42 ThunderStorm event for lightning', async () => {
-    const luaPath = path.resolve(
-      process.cwd(),
-      'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua',
-    );
-    const source = await readFile(luaPath, 'utf8');
-    const start = source.indexOf('handlers.triggerLightning = function(args)');
-    const end = source.indexOf('\nlocal function applyClimateFloat', start);
-    const handler = source.slice(start, end);
-
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(handler).toContain('getThunderStorm');
-    expect(handler).toContain('triggerThunderEvent');
-    expect(handler.indexOf('triggerThunderEvent')).toBeLessThan(
-      handler.indexOf('transmitServerTriggerLightning'),
-    );
   });
 });
 
@@ -369,30 +341,5 @@ describe('PanelBridge Java capability caching', () => {
     const capabilityKey = source.match(/local function capabilityKey\(obj, methodName\)([\s\S]*?)\nend/);
 
     expect(capabilityKey?.[1]).toContain('@%x+');
-  });
-});
-
-describe('PanelBridge game-time compatibility', () => {
-  it('uses only documented Build 42 clock methods without speculative probes', async () => {
-    const source = await readFile(
-      path.resolve(import.meta.dirname, '../../../integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua'),
-      'utf8',
-    );
-    const handlerStart = source.indexOf('handlers.getGameTime = function(args)');
-    const handlerEnd = source.indexOf('\nhandlers.setGameTime = function(args)', handlerStart);
-    const handler = source.slice(handlerStart, handlerEnd);
-
-    expect(handlerStart).toBeGreaterThanOrEqual(0);
-    expect(handlerEnd).toBeGreaterThan(handlerStart);
-    expect(handler).toContain('gameTime:getTimeOfDay()');
-    expect(handler).toContain('gameTime:getWorldAgeHours()');
-    expect(handler).toContain('gameTime:getNightsSurvived()');
-    expect(handler).toContain('math.floor((timeOfDay - hour) * 60)');
-    expect(handler).not.toContain('safeGetValue(');
-    expect(handler).not.toContain('PanelBridge.invoke(');
-    expect(handler).not.toContain('getMinutes');
-    expect(handler).not.toContain('getDayOfWeek');
-    expect(handler).not.toContain('getTimeSinceApo');
-    expect(handler).not.toContain('getMoon');
   });
 });

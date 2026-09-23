@@ -50,7 +50,7 @@ for (const segment of segments) {
   }
 }
 
-const MIN_ROUTE_ACTION_PAIRS = 20;
+const MIN_ROUTE_ACTION_PAIRS = 10;
 const routeActionPairs = verified.length + problems.length;
 if (routeActionPairs < MIN_ROUTE_ACTION_PAIRS) {
   console.error(
