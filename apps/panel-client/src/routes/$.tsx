@@ -1,6 +1,6 @@
 import { createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { NotFoundRoute } from '../App'
+import { NotFoundRoute } from '../components/NotFoundRoute'
 
 function NavigateTo({ to, tab }: { to: '/' | '/settings' | '/server-config'; tab?: string }) {
   const navigate = useNavigate()

@@ -1,4 +1,4 @@
-import { ApiError } from './api'
+import { ApiError } from './ApiError'
 const GENERIC_SERVER_ERROR_STATUS_FLOOR = 500
 
 const SENTENCE_TERMINATOR_RE = /[.!?]["')\]]*$/

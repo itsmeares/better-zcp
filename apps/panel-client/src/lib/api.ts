@@ -1,4 +1,6 @@
 import { reportClientWarning } from "./client-errors";
+import { ApiError } from "./ApiError";
+export { ApiError } from "./ApiError";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import type { LifecycleState } from "./serverStatus";
@@ -153,36 +155,6 @@ import {
 } from "./serverPanelBridgeSetupRpc";
 
 const API_BASE = "/api";
-
-export class ApiError extends Error {
-  status?: number;
-  code?: string;
-  isRetryable: boolean;
-  isTimeout: boolean;
-  isNetworkError: boolean;
-  data?: unknown;
-
-  constructor(
-    message: string,
-    options?: {
-      status?: number;
-      code?: string;
-      isRetryable?: boolean;
-      isTimeout?: boolean;
-      isNetworkError?: boolean;
-      data?: unknown;
-    },
-  ) {
-    super(message);
-    this.name = "ApiError";
-    this.status = options?.status;
-    this.code = options?.code;
-    this.isRetryable = Boolean(options?.isRetryable);
-    this.isTimeout = Boolean(options?.isTimeout);
-    this.isNetworkError = Boolean(options?.isNetworkError);
-    this.data = options?.data;
-  }
-}
 
 function getAuthToken(): string | null {
   return getAccessToken();

@@ -321,7 +321,7 @@ is the first thing to check even if you didn't see that warning.
 
 Only needed if you're accessing the panel from another machine (see
 [Remote Access](../../README.md#remote-access) in the README for the
-matching `CORS_ORIGINS` step) — skip this if you're only ever opening
+public-hostname `CORS_ORIGINS` step) — skip this if you're only ever opening
 `http://localhost:3001` on the same machine the panel runs on.
 
 ```bash

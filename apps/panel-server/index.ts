@@ -2,6 +2,7 @@ import "./utils/firstRunOwnershipCheck.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
 import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
+import { normalizeOrigin, parseOriginList } from "./utils/corsOrigins.ts";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
@@ -290,9 +291,8 @@ const defaultAllowedOrigins = [
   "http://localhost:3001",
 ];
 const allowedOrigins = new Set(defaultAllowedOrigins);
+const warnedCorsOrigins = new Set<string>();
 const MAX_CORS_BLOCK_EVENTS = 50;
-const MAX_CORS_CUSTOM_ORIGINS = 100;
-const MAX_CORS_ORIGIN_LENGTH = 256;
 const CORS_DENY_MESSAGE =
   "Origin blocked by panel CORS policy. Open the panel from a local/LAN host, or for first-time reverse-proxy setup set CORS_ORIGINS=https://your-panel-host in the panel environment and restart it. After setup, this origin can be managed in Settings > Remote Access.";
 const corsState: CorsState = {
@@ -303,27 +303,6 @@ const corsState: CorsState = {
   blocked: [],
   lastLoadedAt: null,
 };
-
-function normalizeOrigin(origin: unknown): string | null {
-  if (typeof origin !== "string") return null;
-  const trimmed = origin.trim();
-  if (trimmed.length > MAX_CORS_ORIGIN_LENGTH) return null;
-  if (!trimmed) return null;
-  try {
-    return new URL(trimmed).origin;
-  } catch (_: any) {
-    return null;
-  }
-}
-
-function parseOriginList(rawOrigins: unknown): string[] {
-  if (typeof rawOrigins !== "string") return [];
-  const parsed = rawOrigins
-    .split(/[\n,;]+/)
-    .map((origin) => normalizeOrigin(origin))
-    .filter((origin): origin is string => Boolean(origin));
-  return [...new Set(parsed)].slice(0, MAX_CORS_CUSTOM_ORIGINS);
-}
 
 function isPrivateNetworkHost(host: unknown): boolean {
   if (typeof host !== "string" || !host) return false;
@@ -363,11 +342,12 @@ function isLikelyLanHostname(host: unknown): boolean {
 }
 
 function recordCorsBlock(origin: unknown, source: string): void {
+  const safeOrigin = normalizeOrigin(origin) || "invalid";
+  if (!warnedCorsOrigins.has(safeOrigin) && warnedCorsOrigins.size < MAX_CORS_BLOCK_EVENTS) {
+    warnedCorsOrigins.add(safeOrigin);
+    log.warn(`Blocked ${source} origin ${JSON.stringify(safeOrigin)}. Set CORS_ORIGINS to the exact browser origin and restart the panel.`);
+  }
   if (!corsState.debug) return;
-  const normalizedOrigin = typeof origin === "string" ? origin.trim() : "";
-  const safeOrigin = normalizedOrigin
-    ? normalizedOrigin.slice(0, MAX_CORS_ORIGIN_LENGTH)
-    : "null";
   const entry = {
     id: randomUUID(),
     origin: safeOrigin,
@@ -395,6 +375,7 @@ function addAllowedOrigin(origin: unknown): void {
 
 function rebuildAllowedOriginsFromSettings(settings: AnyRecord = {}): void {
   allowedOrigins.clear();
+  warnedCorsOrigins.clear();
   for (const origin of defaultAllowedOrigins) {
     addAllowedOrigin(origin);
   }

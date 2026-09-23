@@ -425,11 +425,10 @@ configuration. You only need `CORS_ORIGINS` when the browser reaches the
 panel through something that **isn't** a private address — a public
 hostname behind a reverse proxy, most commonly.
 
-Symptom if you skip this: the page loads, but every API call in the browser
-console fails and the panel logs `Origin blocked by panel CORS policy`. This
-is a browser-side same-origin check — it isn't about the container being
-unreachable, so `curl` from the panel host will still work fine even when a
-browser is blocked.
+Symptom if you skip this: requests from the browser can return HTTP 403 with
+`Origin blocked by panel CORS policy`; the panel logs the blocked origin.
+Requests without an `Origin` header, such as a basic `curl` health check,
+can still work.
 
 Fix it — set the **exact** origin the browser uses (scheme, host, and port
 if non-default), comma-separated if there's more than one. Once you're
@@ -437,8 +436,7 @@ logged in, you can also manage allowed origins from **Settings → Remote
 Access** instead — the environment variable exists specifically to solve the
 chicken-and-egg problem of not being able to reach Settings if CORS is
 already blocking you. **Where you set it, and how you apply it, is different
-per path** — the variable name is the same everywhere, but only Path A and
-Path C wire it up out of the box:
+per path** — the variable name is the same everywhere:
 
 - **Path A (all-in-one):** already wired. It lives in a different file —
   `<state dir>/build/ctx/.env` (default:
@@ -447,16 +445,15 @@ Path C wire it up out of the box:
   first creates it. Edit it there, then re-run the bootstrap command to
   apply the change (see [Path A's notes](#notes-specific-to-this-path)
   above).
-- **Path B (docker-compose.yml):** **not** read from `.env` — the
-  `CORS_ORIGINS` line in `docker-compose.yml`'s `environment:` block is
-  commented out and literal, not `${CORS_ORIGINS}`-interpolated, so setting
-  it in `.env` alone does nothing here. Uncomment and edit the line directly
-  in `docker-compose.yml`:
-  ```yaml
-  environment:
-    - CORS_ORIGINS=https://panel.example.com
+- **Path B (docker-compose.yml or docker-compose.install.yml):** set the
+  variable in the `.env` file beside the compose file. For example, when a
+  reverse proxy exposes the panel at its default HTTPS port:
+  ```dotenv
+  CORS_ORIGINS=https://panel.example.com
   ```
-  then apply it:
+  If the browser uses another port, include it, for example
+  `CORS_ORIGINS=https://panel.example.com:8443`. Another hostname or port
+  needs its own comma-separated entry. Then apply it:
   ```sh
   docker compose up -d
   ```
