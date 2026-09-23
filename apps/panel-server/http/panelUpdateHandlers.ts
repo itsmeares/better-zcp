@@ -159,6 +159,21 @@ export async function handlePanelUpdateDownload(
   }
 }
 
+async function savePreUpdateDataBackup(version: string): Promise<void> {
+  try {
+    const dataBackupPath = createUpdateDataBackup(
+      { ...getDataPaths(), dbPath: getDatabaseFilePath() },
+      version,
+    );
+    if (dataBackupPath) {
+      await setSetting("preUpdateDataBackupPath", dataBackupPath);
+      await flushWrites();
+    }
+  } catch {
+    // Keep the existing best-effort snapshot behavior for panel updates.
+  }
+}
+
 export async function handlePanelRestart(request: Request, response: Response): Promise<void> {
   const checker = appValue(request, "panelUpdateChecker");
   if (!checker) {
@@ -169,21 +184,6 @@ export async function handlePanelRestart(request: Request, response: Response): 
   const staged = checker.getStagedUpdate?.() || null;
   const isPackaged = typeof process.pkg !== "undefined";
   const isWindows = process.platform === "win32";
-
-  if (isPackaged && staged) {
-    try {
-      const dataBackupPath = createUpdateDataBackup(
-        { ...getDataPaths(), dbPath: getDatabaseFilePath() },
-        staged.version,
-      );
-      if (dataBackupPath) {
-        await setSetting("preUpdateDataBackupPath", dataBackupPath);
-        await flushWrites();
-      }
-    } catch {
-      // Keep the existing best-effort snapshot behavior for panel updates.
-    }
-  }
 
   if (isPackaged && isWindows && staged) {
     if (!checker.isSupervisorAvailable?.()) {
@@ -196,6 +196,7 @@ export async function handlePanelRestart(request: Request, response: Response): 
     }
     checker.isApplying = true;
     try {
+      await savePreUpdateDataBackup(staged.version);
       if (staged.version) {
         await setSetting("pendingPanelUpdate", staged.version);
         await flushWrites();
@@ -223,6 +224,7 @@ export async function handlePanelRestart(request: Request, response: Response): 
     }
     checker.isApplying = true;
     try {
+      await savePreUpdateDataBackup(staged.version);
       if (staged.version) {
         await setSetting("pendingPanelUpdate", staged.version);
         await flushWrites();
