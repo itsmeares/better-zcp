@@ -12,19 +12,12 @@ vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
 
-const { default: router } = await import("../routes/serverStatus.ts");
+const { handleActiveServerStatus } = await import("../routes/serverStatus.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
   response.status.mockReturnValue(response);
   return response;
-}
-
-function getStatusHandler() {
-  const layer = router.stack.find(
-    (entry) => entry.route?.path === "/active/status" && entry.route.methods.get,
-  );
-  return layer.route.stack[0].handle;
 }
 
 function fakeApp(overrides = {}) {
@@ -52,7 +45,7 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockResolvedValue(null);
     const response = createResponse();
 
-    await getStatusHandler()({ app: fakeApp() }, response);
+    await handleActiveServerStatus({ app: fakeApp() }, response);
 
     expect(response.status).toHaveBeenCalledWith(404);
   });
@@ -62,7 +55,7 @@ describe("GET /api/servers/active/status", () => {
     fakeBridge.bridgePath = "/data/panelbridge";
     const response = createResponse();
 
-    await getStatusHandler()(
+    await handleActiveServerStatus(
       {
         app: fakeApp({
           serverManager: {
@@ -98,7 +91,7 @@ describe("GET /api/servers/active/status", () => {
     const processScan = vi.fn(async () => ({ running: false, scanFailed: false }));
     const response = createResponse();
 
-    await getStatusHandler()(
+    await handleActiveServerStatus(
       {
         app: fakeApp({
           serverManager: { getServerProcessDetails: processScan },
@@ -132,7 +125,7 @@ describe("GET /api/servers/active/status", () => {
     const processScan = vi.fn(async () => ({ running: false, scanFailed: false }));
     const response = createResponse();
 
-    await getStatusHandler()(
+    await handleActiveServerStatus(
       {
         app: fakeApp({
           serverManager: { getServerProcessDetails: processScan },
@@ -154,7 +147,7 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
-    await getStatusHandler()(
+    await handleActiveServerStatus(
       {
         app: fakeApp({
           serverManager: {
@@ -180,7 +173,7 @@ describe("GET /api/servers/active/status", () => {
     fakeBridge.isModConnected = () => true;
     const response = createResponse();
 
-    await getStatusHandler()({ app: fakeApp() }, response);
+    await handleActiveServerStatus({ app: fakeApp() }, response);
 
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ bridge: expect.objectContaining({ status: "active" }) }),
@@ -192,7 +185,7 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
-    await getStatusHandler()({ app: fakeApp() }, response);
+    await handleActiveServerStatus({ app: fakeApp() }, response);
 
     expect(resolveDockerHostSignal).not.toHaveBeenCalled();
   });
@@ -201,7 +194,7 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockRejectedValue(new Error("db exploded"));
     const response = createResponse();
 
-    await getStatusHandler()({ app: fakeApp() }, response);
+    await handleActiveServerStatus({ app: fakeApp() }, response);
 
     expect(response.status).toHaveBeenCalledWith(500);
   });

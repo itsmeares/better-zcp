@@ -7,7 +7,7 @@ import type {
   Request,
   RequestHandler,
   Response,
-} from "../http/startApiRouter.ts";
+} from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import {

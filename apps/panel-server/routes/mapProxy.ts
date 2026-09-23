@@ -1,10 +1,10 @@
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { Request, Response as NativeResponse } from "../http/startApiRouter.ts";
+import type { Request, Response as NativeResponse } from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.ts";

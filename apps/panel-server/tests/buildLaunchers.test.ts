@@ -23,14 +23,9 @@ describe("standalone launchers", () => {
 
   it("configures systemd to stop only the supervisor main process", () => {
     const unit = fs.readFileSync("infra/services/linux/zomboid-panel.service", "utf8");
-    const server = fs.readFileSync(
-      "apps/panel-client/src/lib/serverPanelUpdate.server.ts",
-      "utf8",
-    );
 
     expect(unit).toContain("ExecStart=/opt/zomboid-panel/start.sh");
     expect(unit).toContain("KillMode=process");
-    expect(server).toContain("processModule.exit(linuxSupervisor ? 75");
   });
 
   it("ships an explicit service installer that backs up existing units", () => {

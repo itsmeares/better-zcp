@@ -1,4 +1,4 @@
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.ts";
 import { RconService } from "../services/rcon.ts";

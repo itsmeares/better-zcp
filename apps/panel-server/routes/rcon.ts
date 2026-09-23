@@ -1,4 +1,4 @@
-import { Router } from '../http/startApiRouter.ts';
+import { Router } from '../http/apiRouter.ts';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:RCON');
 import { getCommandHistory } from '../database/init.ts';

@@ -2,7 +2,7 @@ import {
   Router,
   type Request,
   createRateLimiter as rateLimit,
-} from "../http/startApiRouter.ts";
+} from "../http/apiRouter.ts";
 import authService from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";

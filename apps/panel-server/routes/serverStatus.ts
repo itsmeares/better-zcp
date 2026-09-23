@@ -1,4 +1,4 @@
-import { Router } from "../http/startApiRouter.ts";
+import type { Request, Response } from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.ts";
@@ -8,13 +8,12 @@ import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 import { getActiveLifecycleOperation } from "../services/lifecycleCoordinator.ts";
 
 const log = createLogger("API:ServerStatus");
-const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-router.get("/active/status", async (req, res) => {
+export async function handleActiveServerStatus(req: Request, res: Response) {
   try {
     const server = await getActiveServer();
     if (!server) {
@@ -67,6 +66,4 @@ router.get("/active/status", async (req, res) => {
     log.error(`Failed to get composed server status: ${message}`);
     res.status(500).json({ error: sanitizeError(message) });
   }
-});
-
-export default router;
+}
