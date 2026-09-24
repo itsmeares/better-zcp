@@ -6,11 +6,12 @@ import path from "path";
 
 
 const isLinux = process.platform !== "win32";
+const getServers = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getServer: vi.fn(async () => null),
-  getServers: vi.fn(async () => []),
+  getServers,
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),
@@ -42,6 +43,7 @@ function makeManager(overrides) {
     const spawnedPids = [];
 
     beforeEach(() => {
+      getServers.mockResolvedValue([]);
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-scan-ambiguous-"));
       fakeJava = path.join(tmpDir, "java");
       fs.writeFileSync(fakeJava, "#!/bin/bash\nsleep 30\n", { mode: 0o755 });
@@ -138,6 +140,31 @@ function makeManager(overrides) {
       expect(details.running).toBe(true);
       expect(details.scanFailed).toBe(false);
       expect(details.owned).toHaveLength(1);
+    });
+
+    it("does not force-stop a managed profile's unlabelled JVM from a direct profile", async () => {
+      getServers.mockResolvedValue([
+        { id: "direct", serverName: "Direct", installPath: "/opt/shared" },
+        { id: "managed", serverName: "Managed", installPath: "/opt/shared", lifecycleProvider: "systemd" },
+      ]);
+      const manager = makeManager({
+        _serverId: "direct",
+        serverName: "Direct",
+        serverPath: "/opt/shared",
+      });
+      manager._scanDedicatedServerProcesses = async () => ({
+        running: true,
+        matched: [{ pid: "4242", cmd: "/opt/shared/jre64/bin/java zombie.network.GameServer" }],
+      });
+      manager._killPids = vi.fn();
+
+      const details = await manager.getServerProcessDetails();
+      const stopped = await manager.stopServer(false);
+
+      expect(details.running).toBe(false);
+      expect(details.scanFailed).toBe(true);
+      expect(stopped.success).toBe(false);
+      expect(manager._killPids).not.toHaveBeenCalled();
     });
 
     it("a genuinely idle host (nothing spawned at all) still reports confidently stopped -- the fix must not make every check say unknown", async () => {

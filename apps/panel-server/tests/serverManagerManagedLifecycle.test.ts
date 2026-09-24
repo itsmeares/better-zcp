@@ -96,13 +96,11 @@ describe("ServerManager managed Linux lifecycle", () => {
 
   it("force-stops through systemd instead of killing host PIDs", async () => {
     manager._killPids = vi.fn();
-    manager._genericForceStop = vi.fn();
 
     const result = await manager.stopServer(false);
 
     expect(lifecycle.run).toHaveBeenCalledWith("stop");
     expect(manager._killPids).not.toHaveBeenCalled();
-    expect(manager._genericForceStop).not.toHaveBeenCalled();
     expect(result.confirmed).toBe(true);
   });
 

@@ -14,6 +14,8 @@ import {
   sanitizeServerResponseList,
 } from "../utils/sanitize.ts";
 import { testRconConnection } from "../services/rcon.ts";
+import { classifyServerProcess, serverProcessDescriptor } from "../services/serverManager.ts";
+import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 import { getServers, getServer, getActiveServer } from "../database/init.ts";
 import { handleActiveServerStatus } from "./serverStatus.ts";
 import { handleCreateFromDiscovery, handleDiscoverMounts } from "./discovery.ts";
@@ -489,26 +491,24 @@ router.get("/status", async (req, res) => {
     const activeServer = await getActiveServer();
     const activeId = activeServer?.id || null;
 
-    let matched = [];
-    let detectionError = null;
-    if (serverManager?.getServerProcessDetails) {
+    let matched: JsonRecord[] = [];
+    let detectionError: string | null = null;
+    if (serverManager?._scanDedicatedServerProcesses) {
       try {
-        const result = await serverManager.getServerProcessDetails();
+        const result = await serverManager._scanDedicatedServerProcesses();
         matched = Array.isArray(result?.matched) ? result.matched : [];
         if (result?.scanFailed) {
           detectionError = result.error || "Process detection failed";
+        } else if (result?.ambiguous?.length) {
+          detectionError = "Some server processes could not be identified";
         }
       } catch (err: unknown) {
         detectionError = errorMessage(err);
         log.debug(`Per-server status detection failed: ${errorMessage(err)}`);
       }
+    } else {
+      detectionError = "Process detection unavailable";
     }
-
-    const norm = (p: unknown): string =>
-      String(p || "")
-        .toLowerCase()
-        .replace(/\\/g, "/")
-        .trim();
 
     const statuses = await Promise.all(
       servers.map(async (server: JsonRecord) => {
@@ -540,29 +540,34 @@ router.get("/status", async (req, res) => {
           };
         }
       }
-      const installPathNorm = norm(server.installPath);
-      let running = false;
-      let pid;
-      if (installPathNorm) {
-        for (const m of matched) {
-          if (norm(m.cmd).includes(installPathNorm)) {
-            running = true;
-            pid = m.pid;
-            break;
-          }
+      if (server.dockerContainerName || server.dockerContainerId) {
+        try {
+          const signal = await resolveDockerHostSignal(server, req.app.get("dockerClient"));
+          return {
+            id: server.id, name: server.name, running: signal.running, pid: null,
+            isActive: server.id === activeId, provider: "docker",
+            stateUnknown: signal.scanFailed,
+          };
+        } catch (error: unknown) {
+          return {
+            id: server.id, name: server.name, running: false, pid: null,
+            isActive: server.id === activeId, provider: "docker",
+            stateUnknown: true, error: sanitizeError(errorMessage(error)),
+          };
         }
       }
-      if (!running && server.id === activeId && serverManager?.isRunning) {
-        running = true;
-      }
+      const descriptor = serverProcessDescriptor(server);
+      const peers = servers.filter((peer) => String(peer.id) !== String(server.id)).map(serverProcessDescriptor);
+      const owned = matched.find((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "owned");
+      const unknown = matched.some((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "unknown");
       return {
         id: server.id,
         name: server.name,
-        running,
-        pid: pid || null,
+        running: Boolean(owned),
+        pid: owned?.pid || null,
         isActive: server.id === activeId,
         provider: "direct",
-        stateUnknown: Boolean(detectionError),
+        stateUnknown: Boolean(detectionError) || (!owned && unknown),
       };
       }),
     );

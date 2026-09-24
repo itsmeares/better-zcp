@@ -294,11 +294,34 @@ export function scoreServerProcessOwnership(commandLine: unknown, descriptor: An
   }
 
   const installPath = normalizePathForCompare(descriptor.serverPath);
-  if (installPath && normalizePathForCompare(cmd).includes(installPath)) {
+  if (installPath && new RegExp(`(?:^|[\\s"'=])${escapeRegExp(installPath)}(?=$|[/\\s"'])`).test(normalizePathForCompare(cmd))) {
     score += 1;
   }
 
   return score;
+}
+
+export function serverProcessDescriptor(server: AnyRecord) {
+  const launchMode = resolveLaunchMode(server);
+  return {
+    serverName: server.serverName,
+    savePath: server.zomboidDataPath,
+    serverPath: launchMode.mode === "custom"
+      ? path.dirname(launchMode.launcherPath)
+      : server.serverPath || server.installPath,
+  };
+}
+
+export function classifyServerProcess(
+  commandLine: unknown,
+  descriptor: AnyRecord,
+  peers: AnyRecord[] = [],
+): "owned" | "other" | "unknown" {
+  const score = scoreServerProcessOwnership(commandLine, descriptor);
+  const peerScore = Math.max(-1, ...peers.map((peer) => scoreServerProcessOwnership(commandLine, peer)));
+  if (score < 0 || peerScore > score) return "other";
+  if (score > 0 && score > peerScore) return "owned";
+  return "unknown";
 }
 
 export class ServerManager {
@@ -352,6 +375,7 @@ export class ServerManager {
   }
 
   async reloadConfig(serverId: string | null = null) {
+    const previousId = this._serverId;
     this.serverPath = process.env.PZ_SERVER_PATH || "";
     this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
     this.savePath = process.env.PZ_SAVE_PATH || "";
@@ -364,6 +388,12 @@ export class ServerManager {
     this._serverRecord = null;
     this.configLoaded = false;
     await this.loadConfig(serverId);
+    if (previousId !== this._serverId) {
+      this.serverProcess = null;
+      this.isRunning = false;
+      this.startTime = null;
+      this.gamePort = null;
+    }
   }
 
   async loadConfig(serverId: string | null = null) {
@@ -374,6 +404,7 @@ export class ServerManager {
         ? await getServer(serverId)
         : await getActiveServer();
       if (activeServer) {
+        this._serverId = String(activeServer.id);
         this._serverRecord = activeServer;
         this.lifecycleProvider = activeServer.lifecycleProvider || "direct";
         let serverDir = activeServer.serverPath || activeServer.installPath;
@@ -502,6 +533,13 @@ export class ServerManager {
     };
   }
 
+  async _getOwnershipPeers() {
+    const servers = await getServers();
+    return (servers || [])
+      .filter((server: AnyRecord) => String(server.id) !== this._serverId)
+      .map(serverProcessDescriptor);
+  }
+
   async getServerProcessDetails() {
     await this.loadConfig(this._serverId);
 
@@ -541,16 +579,23 @@ export class ServerManager {
     const scanGeneration = this._scanGeneration;
     const scan = await scanPromise;
     const descriptor = this._getOwnershipDescriptor();
+    let peers: AnyRecord[];
+    try {
+      peers = await this._getOwnershipPeers();
+    } catch (error: any) {
+      log.warn(`Could not verify configured server ownership: ${error.message}`);
+      return { running: false, matched: [], owned: [], scanFailed: true };
+    }
 
     const owned = [];
     const unattributable = [];
     for (const candidate of scan.matched) {
-      const score = scoreServerProcessOwnership(candidate.cmd, descriptor);
-      if (score > 0) owned.push(candidate);
-      else if (score === 0) unattributable.push(candidate);
+      const owner = classifyServerProcess(candidate.cmd, descriptor, peers);
+      if (owner === "owned") owned.push(candidate);
+      else if (owner === "unknown") unattributable.push(candidate);
     }
 
-    const resolved = owned.length > 0 ? owned : unattributable;
+    const resolved = owned;
     if (scan.matched.length !== resolved.length) {
       log.debug(
         `getServerProcessDetails: ${scan.matched.length} PZ server process(es) on this host, ${resolved.length} belong to "${this.serverName}"`,
@@ -560,10 +605,10 @@ export class ServerManager {
     if (
       !scan.scanFailed &&
       owned.length === 0 &&
-      (scan.ambiguous?.length ?? 0) > 0
+      ((scan.ambiguous?.length ?? 0) > 0 || unattributable.length > 0)
     ) {
       log.warn(
-        `getServerProcessDetails: found ${scan.ambiguous?.length ?? 0} ambiguous JVM-shaped process(es) while no process could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
+        `getServerProcessDetails: found ${(scan.ambiguous?.length ?? 0) + unattributable.length} unattributed server process(es) while none could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
       );
       return {
         running: false,
@@ -647,7 +692,6 @@ export class ServerManager {
             }
 
             if (!psStdout) {
-              if (this._scanGeneration === scanGeneration) this.isRunning = false;
               resolve({ running: false, matched: [] });
               return;
             }
@@ -686,9 +730,6 @@ export class ServerManager {
               return;
             }
 
-            if (this._scanGeneration === scanGeneration) {
-              this.isRunning = matched.length > 0;
-            }
             resolve({ running: matched.length > 0, matched, ambiguous });
           },
         );
@@ -733,9 +774,6 @@ export class ServerManager {
                 );
                 resolve({ running: false, matched: [], scanFailed: true });
                 return;
-              }
-              if (this._scanGeneration === scanGeneration) {
-                this.isRunning = matched.length > 0;
               }
               resolve({ running: matched.length > 0, matched, ambiguous });
               return;
@@ -785,9 +823,6 @@ export class ServerManager {
                 resolve({ running: false, matched: [], scanFailed: true });
                 return;
               }
-              if (this._scanGeneration === scanGeneration) {
-                this.isRunning = matched.length > 0;
-              }
               resolve({ running: matched.length > 0, matched, ambiguous });
             });
           },
@@ -797,7 +832,7 @@ export class ServerManager {
   }
 
   _pidFilePath() {
-    const safeName = String(this.serverName || "default").replace(
+    const safeName = String(this._serverId || this.serverName || "default").replace(
       /[^a-zA-Z0-9_-]/g,
       "_",
     );
@@ -880,11 +915,13 @@ export class ServerManager {
       : isLinuxDedicatedServerCommandLine(cmd);
     if (!looksLikeDedicatedServer) return null;
 
-    const score = scoreServerProcessOwnership(
-      cmd,
-      this._getOwnershipDescriptor(),
-    );
-    if (score <= 0) return null;
+    let peers: AnyRecord[];
+    try {
+      peers = await this._getOwnershipPeers();
+    } catch {
+      return null;
+    }
+    if (classifyServerProcess(cmd, this._getOwnershipDescriptor(), peers) !== "owned") return null;
 
     log.debug(
       `getServerProcessDetails: pidfile fast path hit for pid=${recorded.pid}, skipping full scan`,
@@ -926,7 +963,7 @@ export class ServerManager {
     this._starting = true;
 
     try {
-      if (serverId !== this._serverId) this.configLoaded = false;
+      if (serverId !== this._serverId) await this.reloadConfig(serverId);
       await this.loadConfig(serverId);
 
       const installPathForSteamCheck =
@@ -1130,6 +1167,14 @@ export class ServerManager {
         return { success: true, message: "Server start command executed" };
       }
 
+      if (!this.startCommand && this.launchMode === "managed" && this.serverName) {
+        const generated = isWindows
+          ? `StartServer_${this.serverName}.bat`
+          : `start-server_${this.serverName}.sh`;
+        if (fs.existsSync(path.join(this.serverPath, generated))) {
+          this.serverBat = generated;
+        }
+      }
       const batPath = path.join(this.serverPath, this.serverBat);
 
       if (!fs.existsSync(batPath)) {
@@ -1291,7 +1336,7 @@ export class ServerManager {
 
     this._stopping = true;
     try {
-      if (serverId !== this._serverId) this.configLoaded = false;
+      if (serverId !== this._serverId) await this.reloadConfig(serverId);
       await this.loadConfig(serverId);
       if (this.usesManagedServiceLifecycle()) {
         const result = await this._getManagedLifecycle().run("stop");
@@ -1375,7 +1420,7 @@ export class ServerManager {
         return { success: true, message: "Server stopped" };
       }
 
-      if (!details.scanFailed) {
+      if (!details.scanFailed && !details.running) {
         log.debug(
           `stopServer: no running process belongs to "${this.serverName}"`,
         );
@@ -1383,57 +1428,12 @@ export class ServerManager {
         return { success: true, message: "Server was not running" };
       }
 
-      if (!(await this._isOnlyLocalServer())) {
-        throw new Error(
-          "Process detection failed and more than one server is configured on this host — force stop aborted rather than risk killing the wrong server. Stop it from its own console window.",
-        );
-      }
-
-      log.warn(
-        "stopServer: process detection failed. Falling back to generic force stop.",
-      );
-      const forceResult = await this._genericForceStop();
-      const { timedOut, failed, errors = [] } = forceResult;
-      if (timedOut) {
-        log.warn(
-          `stopServer: generic force stop did not finish within ${this._killTimeoutMs}ms — could not confirm the process actually exited`,
-        );
-        await (logServerEvent as any)(
-          "server_stop",
-          "Server stop timed out waiting for kill confirmation (generic fallback)",
-        ).catch((e: any) => log.warn(`Failed to log event: ${e.message}`));
-        return {
-          success: true,
-          confirmed: false,
-          timedOut: true,
-          message:
-            "Stop signal sent, but confirmation timed out — check whether the server actually exited before starting it again",
-        };
-      }
-      if (failed) {
-        const errorMessage = errors.join("; ") || "force-stop command failed";
-        log.error(`stopServer: generic force stop failed: ${errorMessage}`);
-        return {
-          success: false,
-          confirmed: false,
-          error: errorMessage,
-          message: "The server could not be force-stopped.",
-        };
-      }
-      if (!(await this._confirmProcessStopped())) {
-        return {
-          success: true,
-          confirmed: false,
-          timedOut: true,
-          message:
-            "Stop signal sent, but the server is still running or its exit could not be confirmed",
-        };
-      }
-      this._clearRunState();
-      await (logServerEvent as any)("server_stop", "Server force stopped").catch((e: any) =>
-        log.warn(`Failed to log event: ${e.message}`),
-      );
-      return { success: true, message: "Forced fallback kill executed" };
+      return {
+        success: false,
+        confirmed: false,
+        error: "Cannot identify this server's process and PID; force stop aborted.",
+        message: "Process detection could not safely identify this server. Stop it from its own console window.",
+      };
     } finally {
       this._stopping = false;
     }
@@ -1448,16 +1448,6 @@ export class ServerManager {
     this.serverProcess = null;
     this.startTime = null;
     this._deletePidFile();
-  }
-
-  async _isOnlyLocalServer() {
-    try {
-      const servers = await getServers();
-      return (servers || []).length <= 1;
-    } catch (error: any) {
-      log.debug(`Could not count configured servers: ${error.message}`);
-      return false;
-    }
   }
 
   _killPids(pids: string[]) {
@@ -1540,48 +1530,6 @@ export class ServerManager {
     } finally {
       clearTimeout(timeoutId);
     }
-  }
-
-  _genericForceStop(): Promise<AnyRecord> {
-    return new Promise<AnyRecord>((resolve) => {
-      if (isWindows) {
-        let timedOut = false;
-        const errors: string[] = [];
-        exec(
-          "taskkill /IM ProjectZomboid64.exe /T /F",
-          { timeout: this._killTimeoutMs },
-          (err1: any) => {
-            const outcome1 = classifyProcessKillError(err1);
-            if (outcome1 === "timedOut") timedOut = true;
-            if (outcome1 === "failed") errors.push(`ProjectZomboid64.exe: ${err1?.message || "kill failed"}`);
-            exec(
-              "powershell -Command \"Get-CimInstance Win32_Process -Filter \\\"Name='java.exe'\\\" | Where-Object { $_.CommandLine -like '*zombie.network.gameserver*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }\"",
-              { timeout: this._killTimeoutMs },
-              (err2: any) => {
-                const outcome2 = classifyProcessKillError(err2);
-                if (outcome2 === "timedOut") timedOut = true;
-                if (outcome2 === "failed") errors.push(`java.exe: ${err2?.message || "kill failed"}`);
-                resolve({ timedOut, failed: errors.length > 0, errors });
-              },
-            );
-          },
-        );
-        return;
-      }
-
-      exec(
-        "pkill -9 -f 'zombie.network.[Gg]ame[Ss]erver|[Pp]roject[Zz]omboid64|[Pp]roject[Zz]omboid32'",
-        { timeout: this._killTimeoutMs },
-        (err: any) => {
-          const outcome = classifyProcessKillError(err);
-          resolve({
-            timedOut: outcome === "timedOut",
-            failed: outcome === "failed",
-            errors: outcome === "failed" ? [err?.message || "kill failed"] : [],
-          });
-        },
-      );
-    });
   }
 
   async restartServer(rconService: any, warningMinutes: number = 5) {

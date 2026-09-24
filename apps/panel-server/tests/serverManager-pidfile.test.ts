@@ -176,4 +176,21 @@ describe('ServerManager pidfile fast path', () => {
       } catch { /* best-effort cleanup; the file may already be gone */ }
     }
   });
+
+  it('scopes the pidfile by profile ID when two profiles use the same server name', () => {
+    const managerA = new ServerManager();
+    const managerB = new ServerManager();
+    Object.assign(managerA, { _serverId: 'profile-a', serverName: 'Shared' });
+    Object.assign(managerB, { _serverId: 'profile-b', serverName: 'Shared' });
+    try {
+      managerA._writePidFile(111);
+      managerB._writePidFile(222);
+      expect(managerA._pidFilePath()).not.toBe(managerB._pidFilePath());
+      expect(managerA._readPidFile().pid).toBe('111');
+      expect(managerB._readPidFile().pid).toBe('222');
+    } finally {
+      managerA._deletePidFile();
+      managerB._deletePidFile();
+    }
+  });
 });

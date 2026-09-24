@@ -85,6 +85,18 @@ async function runStart(manager) {
     });
 
     describe("default-bat path", () => {
+      it("uses the generated profile script when it appeared after config was loaded", async () => {
+        fs.writeFileSync(path.join(tmpRoot, "StartServer64.bat"), "@echo off\r\n");
+        const generated = path.join(tmpRoot, "StartServer_SpawnFixTest.bat");
+        fs.writeFileSync(generated, "@echo off\r\n");
+        const manager = makeManager(tmpRoot, "StartServer64.bat");
+
+        await runStart(manager);
+
+        expect(spawnCalls[0].args[1]).toContain(generated);
+        expect(manager.serverBat).toBe("StartServer_SpawnFixTest.bat");
+      });
+
       it("spawns the resolved absolute batch path, not the bare filename", async () => {
         const serverBat = "StartServer_pz-verify.bat";
         fs.writeFileSync(path.join(tmpRoot, serverBat), "@echo off\r\n");
