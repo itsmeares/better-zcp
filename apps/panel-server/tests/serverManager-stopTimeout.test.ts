@@ -48,7 +48,7 @@ describe('stopServer: kill timeout cannot leave the server permanently stuck', (
     expect(manager._stopping).toBe(false);
   });
 
-  it('does the same for the generic (detection-failed) fallback path', async () => {
+  it('refuses a force stop when process detection fails', async () => {
     const manager = makeManager();
     manager.getServerProcessDetails = async () => ({
       running: false,
@@ -56,13 +56,12 @@ describe('stopServer: kill timeout cannot leave the server permanently stuck', (
       owned: [],
       scanFailed: true,
     });
-    manager._isOnlyLocalServer = async () => true;
-    manager._genericForceStop = async () => ({ timedOut: true });
+    manager._killPids = vi.fn();
 
     const result = await stopServerWithGuard(manager);
 
-    expect(result.success).toBe(true);
-    expect(result.message.toLowerCase()).toContain('timed out');
+    expect(result.success).toBe(false);
+    expect(manager._killPids).not.toHaveBeenCalled();
     expect(manager._stopping).toBe(false);
   });
 
@@ -82,20 +81,20 @@ describe('stopServer: kill timeout cannot leave the server permanently stuck', (
     expect(manager._stopping).toBe(false);
   });
 
-  it('regression: the generic fallback still reports plain success when it finishes normally', async () => {
+  it('refuses a force stop when a running process has no verified PID', async () => {
     const manager = makeManager();
     manager.getServerProcessDetails = async () => ({
-      running: false,
+      running: true,
       matched: [],
       owned: [],
-      scanFailed: true,
+      scanFailed: false,
     });
-    manager._isOnlyLocalServer = async () => true;
-    manager._genericForceStop = async () => ({ timedOut: false });
+    manager._killPids = vi.fn();
 
     const result = await stopServerWithGuard(manager);
 
-    expect(result).toEqual({ success: true, message: 'Forced fallback kill executed' });
+    expect(result.success).toBe(false);
+    expect(manager._killPids).not.toHaveBeenCalled();
     expect(manager._stopping).toBe(false);
   });
 

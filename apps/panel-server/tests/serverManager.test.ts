@@ -3,6 +3,7 @@ import {
   classifyProcessKillError,
   isWindowsDedicatedServerCommandLine,
   scoreServerProcessOwnership,
+  classifyServerProcess,
   resolveConfiguredRconPort,
   ServerManager,
 } from '../services/serverManager.ts';
@@ -79,6 +80,15 @@ describe('ServerManager process ownership', () => {
 
     expect(scoreServerProcessOwnership(commandLine, serverA)).toBe(0);
   });
+
+  it('does not claim a shared install, a path prefix, or an unidentified external launch', () => {
+    const peer = { serverName: 'ServerB', savePath: 'C:\\Zomboid\\B', serverPath: serverA.serverPath };
+    expect(classifyServerProcess('"C:\\pz\\a\\java.exe" zombie.network.GameServer', serverA, [peer])).toBe('unknown');
+    expect(scoreServerProcessOwnership('"C:\\pz\\alpha\\java.exe" zombie.network.GameServer', serverA)).toBe(0);
+    expect(classifyServerProcess('java zombie.network.GameServer', serverA, [peer])).toBe('unknown');
+    expect(classifyServerProcess('java zombie.network.GameServer -servername ServerB', serverA, [peer])).toBe('other');
+    expect(classifyServerProcess('java zombie.network.GameServer -servername ServerA', serverA, [peer])).toBe('owned');
+  });
 });
 
 describe('ServerManager detection with two servers on one host', () => {
@@ -119,6 +129,25 @@ describe('ServerManager detection with two servers on one host', () => {
     const details = await serverA.getServerProcessDetails();
     expect(details.running).toBe(true);
     expect(details.owned.map((entry) => entry.pid)).toEqual(['111']);
+  });
+});
+
+describe('ServerManager profile switching', () => {
+  it('drops the old launcher and observed state when a different profile becomes active', async () => {
+    const manager = new ServerManager();
+    Object.assign(manager, {
+      _serverId: 'profile-a', serverName: 'Shared', configLoaded: true,
+      serverProcess: { pid: 4242, killed: false, exitCode: null },
+      isRunning: true, startTime: new Date(), gamePort: 16261,
+    });
+    manager.loadConfig = async () => { manager._serverId = 'profile-b'; manager.configLoaded = true; };
+
+    await manager.reloadConfig('profile-b');
+
+    expect(manager.serverProcess).toBeNull();
+    expect(manager.isRunning).toBe(false);
+    expect(manager.startTime).toBeNull();
+    expect(manager.gamePort).toBeNull();
   });
 });
 
