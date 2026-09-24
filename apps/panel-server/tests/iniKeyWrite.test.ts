@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { hasIniKeyLine, hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
 
 describe("iniKeyWrite -- anchored key read/write, not substring matching", () => {

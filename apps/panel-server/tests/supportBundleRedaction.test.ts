@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { Readable } from "stream";
 import { createServer, setSetting } from "../database/init.ts";
 import {

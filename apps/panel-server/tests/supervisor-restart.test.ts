@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vite-plus/test";
 import { execFileSync, spawn } from "child_process";
 import crypto from "crypto";
 import fs from "fs";

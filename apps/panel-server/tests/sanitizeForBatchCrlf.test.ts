@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { generateStartupScripts } from "../routes/server.ts";
 
 describe("sanitizeForBatch CR/LF injection (generateStartupScripts)", () => {

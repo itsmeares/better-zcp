@@ -61,10 +61,8 @@
       "matchPackageNames": [
         "pnpm",
         "typescript",
-        "vite",
-        "vitest",
+        "vite-plus",
         "eslint",
-        "prettier",
         "husky",
         "lint-staged"
       ],

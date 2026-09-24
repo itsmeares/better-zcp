@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createPanelRequestHandler } from "../http/panelWeb.ts";
 import type { TrustProxySetting } from "../utils/trustProxy.ts";
 import { parseOriginList } from "../utils/corsOrigins.ts";

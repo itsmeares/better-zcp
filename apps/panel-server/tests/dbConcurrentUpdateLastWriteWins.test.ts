@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vite-plus/test";
 import { createServer, deleteServer, getServer, updateServer } from "../database/init.ts";
 
 describe("updateServer(): two concurrent updates to the same db.json record", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { isLinuxPanelSupervisor } from "../utils/restartSupervisor.ts";
 
 describe("Linux panel supervisor detection", () => {

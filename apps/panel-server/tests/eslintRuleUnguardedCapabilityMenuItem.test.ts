@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 import { RuleTester } from "eslint";
 import rule from "../../../scripts/eslint-rules/no-unguarded-capability-menu-item.js";
 

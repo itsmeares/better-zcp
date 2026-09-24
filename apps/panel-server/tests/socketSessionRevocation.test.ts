@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const settings = new Map<string, unknown>();
 const db = { data: { users: [] as any[], roles: [] as any[] } };

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 const { applySandboxChanges, parseSandboxVars, findUnpersistedSandboxKeys } =
   await import("../routes/serverFiles.ts");

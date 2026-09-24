@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vite-plus/test";
 import { spawn, execSync } from "child_process";
 import fs from "fs";
 import os from "os";

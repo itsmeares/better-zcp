@@ -42,7 +42,7 @@
     "prepare": "node .husky/install.mjs"
   },
   "lint-staged": {
-    "*.{json,yml,yaml}": "prettier --ignore-unknown --write"
+    "*.{json,yml,yaml}": "vp fmt"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -52,8 +52,8 @@
     "esbuild": "^0.28.2",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
-    "prettier": "3.9.6",
-    "unzipper": "^0.12.5"
+    "unzipper": "^0.12.5",
+    "vite-plus": "catalog:"
   },
   "overrides": {
     "esbuild": "$esbuild",

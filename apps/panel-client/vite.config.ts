@@ -1,11 +1,9 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, lazyPlugins } from 'vite-plus'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { readFileSync } from 'fs'
 import { execFileSync } from 'child_process'
-
-/// <reference types="vitest" />
 
 const rootPkg = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf-8'))
 
@@ -38,7 +36,7 @@ export default defineConfig(({ mode }) => {
       __PANEL_BUILD_SHA__: JSON.stringify(buildSha),
       __PANEL_API_CONTRACT_VERSION__: JSON.stringify(apiContractVersion),
     },
-    plugins: [
+    plugins: lazyPlugins(() => [
       tanstackRouter({ target: 'react', autoCodeSplitting: true }),
       react(),
       {
@@ -55,7 +53,7 @@ export default defineConfig(({ mode }) => {
           })
         },
       },
-    ],
+    ]),
     build: {
       outDir: 'dist',
     },

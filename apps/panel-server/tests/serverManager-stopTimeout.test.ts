@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { execFile } from 'child_process';
 import { ServerManager } from '../services/serverManager.ts';
 
