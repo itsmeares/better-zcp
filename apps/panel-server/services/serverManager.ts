@@ -536,7 +536,7 @@ export class ServerManager {
   async _getOwnershipPeers() {
     const servers = await getServers();
     return (servers || [])
-      .filter((server: AnyRecord) => String(server.id) !== this._serverId && !isManagedLifecycleProvider(server.lifecycleProvider) && !server.dockerContainerName && !server.dockerContainerId)
+      .filter((server: AnyRecord) => String(server.id) !== this._serverId)
       .map(serverProcessDescriptor);
   }
 
@@ -1167,6 +1167,14 @@ export class ServerManager {
         return { success: true, message: "Server start command executed" };
       }
 
+      if (!this.startCommand && this.launchMode === "managed" && this.serverName) {
+        const generated = isWindows
+          ? `StartServer_${this.serverName}.bat`
+          : `start-server_${this.serverName}.sh`;
+        if (fs.existsSync(path.join(this.serverPath, generated))) {
+          this.serverBat = generated;
+        }
+      }
       const batPath = path.join(this.serverPath, this.serverBat);
 
       if (!fs.existsSync(batPath)) {

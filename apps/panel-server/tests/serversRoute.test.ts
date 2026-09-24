@@ -123,6 +123,34 @@ describe('GET /api/servers/status', () => {
       servers: [expect.objectContaining({ id: 'docker', running: true, provider: 'docker', stateUnknown: false })],
     }));
   });
+
+  it('does not claim an unlabelled process when a managed profile shares the install path', async () => {
+    const profiles = [
+      { id: 'direct', name: 'Direct', serverName: 'A', installPath: '/tmp/pz' },
+      { id: 'docker', name: 'Docker', serverName: 'B', installPath: '/tmp/pz', dockerContainerName: 'pz-b' },
+    ];
+    getServers.mockResolvedValue(profiles);
+    getActiveServer.mockResolvedValue(profiles[0]);
+    const dockerClient = {
+      enabled: true, available: true,
+      inspectManagedContainer: vi.fn().mockResolvedValue({ State: { Running: false } }),
+    };
+    const res = createResponse();
+
+    await runRoute('/status', 'get', { app: { get: (key) => ({
+      serverManager: { _scanDedicatedServerProcesses: async () => ({ matched: [
+        { pid: '333', cmd: '/tmp/pz/jre64/bin/java zombie.network.GameServer' },
+      ] }) },
+      dockerClient,
+    })[key] } }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      servers: [
+        expect.objectContaining({ id: 'direct', running: false, stateUnknown: true }),
+        expect.objectContaining({ id: 'docker', running: false, stateUnknown: false }),
+      ],
+    }));
+  });
 });
 
 describe("POST /api/servers", () => {

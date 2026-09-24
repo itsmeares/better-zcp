@@ -510,11 +510,6 @@ router.get("/status", async (req, res) => {
       detectionError = "Process detection unavailable";
     }
 
-    const directServers = servers.filter((server) =>
-      !isManagedLifecycleProvider(server.lifecycleProvider) &&
-      !server.dockerContainerName && !server.dockerContainerId,
-    );
-
     const statuses = await Promise.all(
       servers.map(async (server: JsonRecord) => {
       if (isManagedLifecycleProvider(server.lifecycleProvider)) {
@@ -562,7 +557,7 @@ router.get("/status", async (req, res) => {
         }
       }
       const descriptor = serverProcessDescriptor(server);
-      const peers = directServers.filter((peer) => peer.id !== server.id).map(serverProcessDescriptor);
+      const peers = servers.filter((peer) => String(peer.id) !== String(server.id)).map(serverProcessDescriptor);
       const owned = matched.find((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "owned");
       const unknown = matched.some((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "unknown");
       return {
