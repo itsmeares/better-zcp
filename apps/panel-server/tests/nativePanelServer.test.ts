@@ -14,7 +14,6 @@ function makeOptions(clientDistPath: string) {
   return {
     isPackaged: false,
     clientDistPath,
-    externalClientDistPath: clientDistPath,
     embeddedClientDistPath: null,
     buildMetadata: {
       panelVersion: "test",
@@ -24,13 +23,6 @@ function makeOptions(clientDistPath: string) {
     logger,
     inlineScriptCspSources: () => "'sha256-test'",
   };
-}
-
-function writeStartBundle(clientDistPath: string, source: string): void {
-  const clientRoot = path.resolve(clientDistPath, "..");
-  fs.mkdirSync(path.join(clientRoot, "dist-start-server"), { recursive: true });
-  fs.writeFileSync(path.join(clientRoot, "..", "package.json"), '{"type":"module"}');
-  fs.writeFileSync(path.join(clientRoot, "dist-start-server", "server.js"), source);
 }
 
 async function startServer(clientDistPath: string, trustProxy?: TrustProxySetting, configuredOrigins = "http://allowed.test") {
@@ -141,20 +133,11 @@ describe("native panel HTTP host", () => {
     }
   });
 
-  it("serves the static document and routes server functions through Start only", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-start-"));
+  it("serves the static document and rejects removed server function URLs", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-static-"));
     temporaryRoots.push(root);
     const clientDistPath = path.join(root, "client", "dist");
     fs.mkdirSync(clientDistPath, { recursive: true });
-    writeStartBundle(clientDistPath, `
-      export default { fetch: async (request) => {
-        const pathname = new URL(request.url).pathname;
-        if (pathname === "/_serverFn/test-command") {
-          return Response.json({ method: request.method, body: await request.json() });
-        }
-        return Response.json({ source: "start" });
-      }};
-    `);
     fs.writeFileSync(path.join(clientDistPath, "index.html"), "<!doctype html><script>window.native = true</script>");
     const { server, baseUrl } = await startServer(clientDistPath);
 
@@ -168,10 +151,7 @@ describe("native panel HTTP host", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "ping" }),
       });
-      expect(await serverFunction.json()).toEqual({
-        method: "POST",
-        body: { action: "ping" },
-      });
+      expect(serverFunction.status).toBe(404);
 
       const unknownApi = await fetch(`${baseUrl}/api/start`);
       expect(unknownApi.status).toBe(401);
@@ -192,15 +172,6 @@ describe("native panel HTTP host", () => {
     temporaryRoots.push(root);
     const clientDistPath = path.join(root, "client", "dist");
     fs.mkdirSync(path.join(clientDistPath, "assets"), { recursive: true });
-    writeStartBundle(clientDistPath, `
-      export default { fetch: async (request) => {
-        const pathname = new URL(request.url).pathname;
-        if (pathname === "/assets/app.js") {
-          return Response.json({ error: "document handler received an asset" }, { status: 500 });
-        }
-        return new Response("<html>start page</html>", { headers: { "content-type": "text/html" } });
-      }};
-    `);
     fs.writeFileSync(path.join(clientDistPath, "index.html"), "static shell");
     fs.writeFileSync(path.join(clientDistPath, "assets", "app.js"), "console.log('asset');");
     fs.writeFileSync(path.join(clientDistPath, "assets", "app.css"), "body { color: red; }");

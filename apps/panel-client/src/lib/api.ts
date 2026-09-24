@@ -4,155 +4,6 @@ export { ApiError } from "./ApiError";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import type { LifecycleState } from "./serverStatus";
-import {
-  getDiskSpace,
-  getRuntimeInfo,
-  getStorageHealth,
-} from "./serverSystem";
-import {
-  changePassword,
-  getAppSettings,
-  getDebugRam,
-  getPerformanceHistory,
-  regenerateJwtSecret,
-  clearCorsBlockedOrigins,
-  getCorsDiagnostics,
-  reloadCorsDiagnostics,
-  testAppRconConnection,
-  updateAppSettings,
-} from "./serverAdmin";
-import {
-  getBackupSnapshot,
-  getBackupHistory,
-  getBackupInfo,
-  getBackups,
-  getBackupStatus,
-  getPlayerActivity,
-  getPlayerNote,
-  getPlayerNotes,
-  getPlayerStat,
-  getPlayerStats,
-} from "./serverResourceReadsRpc";
-import {
-  addIgnoredModPair,
-  cancelPendingModRestart,
-  clearAllIgnoredMods,
-  getIgnoredModPairs,
-  getIgnoredMods,
-  getModsStatus,
-  getServerMods,
-  getTrackedMods,
-  getWorkshopStatus,
-  removeCollectionTracking,
-  removeIgnoredModPair,
-  setModAutoRestart,
-  setModRestartOptions,
-  startModChecker,
-  stopModChecker,
-  trackMod,
-  unignoreMod,
-  untrackMod,
-} from "./serverModsRpc";
-import {
-  createBackup as createBackupServer,
-  deleteBackup,
-  deleteBackupsOlderThan,
-  restoreBackup as restoreBackupServer,
-  updateBackupSettings,
-} from "./serverResourceActionsRpc";
-import {
-  getDockerStats,
-  getDockerStatus,
-  runDockerAction,
-} from "./serverIntegrationsRpc";
-import {
-  addAllToWhitelist,
-  addAllowedSteamId,
-  addPlayerItem,
-  addPlayerXp,
-  addRconUser,
-  activateManagedLifecycleProvider,
-  activateManagedServer,
-  addToWhitelist,
-  banPlayer,
-  banSteamId,
-  createScheduledTask,
-  clearSchedulerHistory,
-  connectRcon,
-  createManagedServer,
-  createServerFromDiscovery,
-  deleteScheduledTask,
-  deleteManagedServer,
-  disconnectRcon,
-  executeRcon,
-  getActiveManagedServer,
-  getDiscoveredMounts,
-  getGameServerStatus,
-  getLifecycleTemplate,
-  getManagedServer,
-  getManagedServers,
-  getNetworkInterfaces,
-  getPlayerAccessLevels,
-  getPlayerPerks,
-  getPlayers,
-  getRconCommands,
-  getRconHistory,
-  getRconStatus,
-  getSchedulerHistory,
-  getSchedulerPresets,
-  getSchedulerStatus,
-  getSchedulerTasks,
-  getSteamIdBans,
-  getWhitelist,
-  kickPlayer,
-  reloadLua,
-  removeAllowedSteamId,
-  removeFromWhitelist,
-  restartServer,
-  restartScheduledServer,
-  runScheduledTask,
-  saveGameWorld,
-  sendServerMessage,
-  setAccessLevel,
-  setGodMode,
-  setInvisible,
-  setLogLevel,
-  setNoclip,
-  setSchedulerRestartWarning,
-  setSchedulerTimezone,
-  setServerStats,
-  setVoiceBan,
-  startServer,
-  stopServer,
-  forceStopServer,
-  teleportPlayer,
-  testRconConnection,
-  updateScheduledTask,
-  updateManagedServer,
-  unbanPlayer,
-  unbanSteamId,
-  validateSchedulerCron,
-} from "./serverGameControlRpc";
-import { sendPanelBridgeCommand } from "./serverPanelBridgeRpc";
-import {
-  getPanelBridgeServerInfo,
-  savePanelBridgeWorld,
-  sendPanelBridgeWorldCommand,
-} from "./serverPanelBridgeWorldRpc";
-import {
-  sendPanelBridgePlayerCommand,
-  sendPanelBridgeServerMessage,
-} from "./serverPanelBridgePlayerChatRpc";
-import {
-  getPanelBridgeCatalog,
-  scanPanelBridgeCatalog,
-} from "./serverPanelBridgeEffectsRpc";
-import { sendPanelBridgeDiagnosticsCommand } from "./serverPanelBridgeDiagnosticsRpc";
-import {
-  getPanelBridgeStatus,
-  pingPanelBridge,
-  sendPanelBridgeSetupCommand,
-} from "./serverPanelBridgeSetupRpc";
 
 const API_BASE = "/api";
 
@@ -378,22 +229,6 @@ function buildResponseError(response: Response, payload?: unknown): ApiError {
   });
 }
 
-async function serverCall<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    const result = await operation();
-    if (result instanceof Response) {
-      const payload = await parseResponseBody(result);
-      if (!result.ok) throw buildResponseError(result, payload);
-      showBackupWarning(payload);
-      return payload as T;
-    }
-    showBackupWarning(result);
-    return result;
-  } catch (error) {
-    throw toApiError(error);
-  }
-}
-
 async function responseHasCode(
   response: Response,
   expectedCode: string,
@@ -588,6 +423,36 @@ function apiPut<T = any>(endpoint: string, body?: unknown): Promise<T> {
   }).then((response) => handleResponse<T>(response));
 }
 
+function apiRoute<T = any>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  data?: object,
+): Promise<T> {
+  const values: Record<string, unknown> = { ...data };
+  const endpoint = path.replace(/:([a-zA-Z]\w*)/g, (_match, key: string) => {
+    const value = values[key];
+    if (typeof value !== "string" && typeof value !== "number") {
+      throw new Error(`Missing URL parameter: ${key}`);
+    }
+    delete values[key];
+    return encodeURIComponent(String(value));
+  });
+  if (method === "GET") {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== null) query.set(key, String(value));
+    }
+    return apiGet(endpoint + (query.size ? `?${query}` : ""));
+  }
+  if (method === "POST") return apiPost(endpoint, data === undefined ? undefined : values);
+  if (method === "PUT") return apiPut(endpoint, data === undefined ? undefined : values);
+  return fetchWithRetry(`${API_BASE}${endpoint}`, {
+    method: "DELETE",
+    headers: Object.keys(values).length ? { "Content-Type": "application/json" } : undefined,
+    body: Object.keys(values).length ? JSON.stringify(values) : undefined,
+  }).then((response) => handleResponse<T>(response));
+}
+
 export interface SteamBranch {
   name: string;
   description: string;
@@ -597,20 +462,20 @@ export interface SteamBranch {
 
 export const serverApi = {
   getStatus: (_options?: { retries?: number }) =>
-    serverCall(() => getGameServerStatus()),
+    apiRoute("GET", "/server/status"),
   getNetworkInterfaces: (): Promise<{
     interfaces: { name: string; address: string }[];
-  }> => serverCall(() => getNetworkInterfaces()),
-  start: () => serverCall(() => startServer()),
-  stop: () => serverCall(() => stopServer()),
-  forceStop: () => serverCall(() => forceStopServer()),
+  }> => apiRoute("GET", "/server/network-interfaces"),
+  start: () => apiRoute("POST", "/server/start"),
+  stop: () => apiRoute("POST", "/server/stop"),
+  forceStop: () => apiRoute("POST", "/server/force-stop"),
   restart: (warningMinutes?: number) =>
-    serverCall(() => restartServer({ data: { warningMinutes } })),
+    apiRoute("POST", "/server/restart", { warningMinutes }),
   restartNow: () =>
-    serverCall(() => restartServer({ data: { warningMinutes: 0 } })),
-  save: () => serverCall(() => saveGameWorld()),
+    apiRoute("POST", "/server/restart", { warningMinutes: 0 }),
+  save: () => apiRoute("POST", "/server/save"),
   sendMessage: (message: string) =>
-    serverCall(() => sendServerMessage({ data: { message } })),
+    apiRoute("POST", "/server/message", { message }),
 
   wipePreview: (targets: string[]) =>
     apiPost("/server/wipe/preview", { targets }),
@@ -673,13 +538,13 @@ export const serverApi = {
     }>,
 
   reloadLua: (filename: string) =>
-    serverCall(() => reloadLua({ data: { filename } })),
+    apiRoute("POST", "/server/reloadlua", { filename }),
 
   setLogLevel: (type: string, level: string) =>
-    serverCall(() => setLogLevel({ data: { type, level } })),
+    apiRoute("POST", "/server/log", { type, level }),
 
   setStats: (mode: string, period?: number) =>
-    serverCall(() => setServerStats({ data: { mode, period } })),
+    apiRoute("POST", "/server/stats", { mode, period }),
 
   getConsoleLog: (lines?: number) =>
     apiGet(`/server/console-log${lines ? `?lines=${lines}` : ""}`),
@@ -696,7 +561,7 @@ export const serverApi = {
 
 export const playersApi = {
   getPlayers: (_options?: { retries?: number }) =>
-    serverCall(() => getPlayers()),
+    apiRoute("GET", "/players"),
   getWhitelist: (): Promise<{
     success: boolean
     available: boolean
@@ -713,76 +578,70 @@ export const playersApi = {
     allowedSteamIds: string[]
     reason?: string
     server?: { id: string | number; name: string }
-  }> => serverCall(() => getWhitelist()),
+  }> => apiRoute("GET", "/players/whitelist"),
   kick: (username: string, reason?: string) =>
-    serverCall(() => kickPlayer({ data: { username, reason } })),
+    apiRoute("POST", "/players/kick", { username, reason }),
   ban: (username: string, banIp?: boolean, reason?: string) =>
-    serverCall(() => banPlayer({ data: { username, banIp, reason } })),
+    apiRoute("POST", "/players/ban", { username, banIp, reason }),
   unban: (username: string) =>
-    serverCall(() => unbanPlayer({ data: { username } })),
+    apiRoute("POST", "/players/unban", { username }),
   setAccessLevel: (username: string, level: string) =>
-    serverCall(() => setAccessLevel({ data: { username, level } })),
+    apiRoute("POST", "/players/access-level", { username, level }),
   addToWhitelist: (username: string, password: string) =>
-    serverCall(() => addToWhitelist({ data: { username, password } })),
+    apiRoute("POST", "/players/whitelist/add", { username, password }),
   removeFromWhitelist: (username: string) =>
-    serverCall(() => removeFromWhitelist({ data: { username } })),
+    apiRoute("POST", "/players/whitelist/remove", { username }),
   addAllowedSteamId: (steamId: string) =>
-    serverCall(() => addAllowedSteamId({ data: { steamId } })),
+    apiRoute("POST", "/players/whitelist/steamid/add", { steamId }),
   removeAllowedSteamId: (steamId: string) =>
-    serverCall(() => removeAllowedSteamId({ data: { steamId } })),
+    apiRoute("POST", "/players/whitelist/steamid/remove", { steamId }),
   teleport: (
     player1: string,
     destination?: string | { x: number; y: number; z?: number },
   ) => {
     if (destination && typeof destination === "object") {
-      return serverCall(() =>
-        teleportPlayer({
-          data: {
+      return apiRoute("POST", "/players/teleport", {
             player1,
             x: destination.x,
             y: destination.y,
             z: destination.z ?? 0,
-          },
-        }),
-      );
+          });
     }
 
-    return serverCall(() =>
-      teleportPlayer({ data: { player1, player2: destination } }),
-    );
+    return apiRoute("POST", "/players/teleport", { player1, player2: destination });
   },
   addItem: (username: string | null, item: string, count?: number) =>
-    serverCall(() => addPlayerItem({ data: { username, item, count } })),
+    apiRoute("POST", "/players/add-item", { username, item, count }),
   addXp: (username: string, perk: string, amount: number) =>
-    serverCall(() => addPlayerXp({ data: { username, perk, amount } })),
+    apiRoute("POST", "/players/add-xp", { username, perk, amount }),
   setGodMode: (username: string | null, enabled: boolean) =>
-    serverCall(() => setGodMode({ data: { username, enabled } })),
+    apiRoute("POST", "/players/godmode", { username, enabled }),
   setInvisible: (username: string | null, enabled: boolean) =>
-    serverCall(() => setInvisible({ data: { username, enabled } })),
+    apiRoute("POST", "/players/invisible", { username, enabled }),
   setNoclip: (username: string | null, enabled: boolean) =>
-    serverCall(() => setNoclip({ data: { username, enabled } })),
-  getPerks: () => serverCall(() => getPlayerPerks()),
-  getAccessLevels: () => serverCall(() => getPlayerAccessLevels()),
+    apiRoute("POST", "/players/noclip", { username, enabled }),
+  getPerks: () => apiRoute("GET", "/players/perks"),
+  getAccessLevels: () => apiRoute("GET", "/players/access-levels"),
   banSteamId: (steamId: string, reason?: string) =>
-    serverCall(() => banSteamId({ data: { steamId, reason } })),
+    apiRoute("POST", "/players/banid", { steamId, reason }),
   unbanSteamId: (steamId: string) =>
-    serverCall(() => unbanSteamId({ data: { steamId } })),
-  getSteamIdBans: () => serverCall(() => getSteamIdBans()),
+    apiRoute("POST", "/players/unbanid", { steamId }),
+  getSteamIdBans: () => apiRoute("GET", "/players/steamid-bans"),
   voiceBan: (username: string, enabled: boolean) =>
-    serverCall(() => setVoiceBan({ data: { username, enabled } })),
+    apiRoute("POST", "/players/voiceban", { username, enabled }),
   addUser: (username: string, password: string) =>
-    serverCall(() => addRconUser({ data: { username, password } })),
-  addAllToWhitelist: () => serverCall(() => addAllToWhitelist()),
+    apiRoute("POST", "/players/adduser", { username, password }),
+  addAllToWhitelist: () => apiRoute("POST", "/players/whitelist/addall"),
   getActivityLogs: (player?: string, limit?: number) =>
-    getPlayerActivity({ data: { player, limit: limit || 100 } }),
-  getNotes: () => getPlayerNotes(),
-  getNote: (playerName: string) => getPlayerNote({ data: { playerName } }),
+    apiRoute("GET", "/players/activity", { player, limit: limit || 100 }),
+  getNotes: () => apiRoute("GET", "/players/notes"),
+  getNote: (playerName: string) => apiRoute("GET", "/players/notes/:playerName", { playerName }),
   saveNote: (playerName: string, note: string, tags: string[]) =>
     apiPost("/players/notes", { playerName, note, tags }),
   deleteNote: (playerName: string) =>
     apiDelete(`/players/notes/${encodeURIComponent(playerName)}`),
-  getStats: () => getPlayerStats(),
-  getStat: (playerName: string) => getPlayerStat({ data: { playerName } }),
+  getStats: () => apiRoute("GET", "/players/stats"),
+  getStat: (playerName: string) => apiRoute("GET", "/players/stats/:playerName", { playerName }),
 };
 
 export interface RconTestResult {
@@ -793,16 +652,16 @@ export interface RconTestResult {
 
 export const rconApi = {
   execute: (command: string) =>
-    serverCall(() => executeRcon({ data: { command } })),
-  getStatus: () => serverCall(() => getRconStatus()),
+    apiRoute("POST", "/rcon/execute", { command }),
+  getStatus: () => apiRoute("GET", "/rcon/status"),
   connect: (host?: string, port?: number, password?: string) =>
-    serverCall(() => connectRcon({ data: { host, port, password } })),
-  disconnect: () => serverCall(() => disconnectRcon()),
+    apiRoute("POST", "/rcon/connect", { host, port, password }),
+  disconnect: () => apiRoute("POST", "/rcon/disconnect"),
   getHistory: (limit?: number) =>
-    serverCall(() => getRconHistory({ data: { limit } })),
-  getCommands: () => serverCall(() => getRconCommands()),
+    apiRoute("GET", "/rcon/history", { limit }),
+  getCommands: () => apiRoute("GET", "/rcon/commands"),
   testConnection: (host: string, port: number, password: string) =>
-    serverCall(() => testRconConnection({ data: { host, port, password } })),
+    apiRoute("POST", "/rcon/test", { host, port, password }),
 };
 
 export interface ScheduleHistoryEntry {
@@ -834,17 +693,15 @@ export interface SchedulerStatus {
 
 export const schedulerApi = {
   getStatus: () =>
-    serverCall(() => getSchedulerStatus()) as Promise<SchedulerStatus>,
-  getTasks: () => serverCall(() => getSchedulerTasks()),
+    apiRoute("GET", "/scheduler/status") as Promise<SchedulerStatus>,
+  getTasks: () => apiRoute("GET", "/scheduler/tasks"),
   createTask: (
     name: string,
     cronExpression: string,
     command: string,
     serverId?: string | number,
   ) =>
-    serverCall(() =>
-      createScheduledTask({ data: { name, cronExpression, command, serverId } }),
-    ),
+    apiRoute("POST", "/scheduler/tasks", { name, cronExpression, command, serverId }),
   updateTask: (
     id: number,
     name: string,
@@ -853,48 +710,38 @@ export const schedulerApi = {
     enabled: boolean,
     serverId?: string | number,
   ) =>
-    serverCall(() =>
-      updateScheduledTask({
-        data: { id, name, cronExpression, command, enabled, serverId },
-      }),
-    ),
+    apiRoute("PUT", "/scheduler/tasks/:id", { id, name, cronExpression, command, enabled, serverId }),
   deleteTask: (id: number) =>
-    serverCall(() => deleteScheduledTask({ data: { id } })),
-  runTask: (id: number) => serverCall(() => runScheduledTask({ data: { id } })),
+    apiRoute("DELETE", "/scheduler/tasks/:id", { id }),
+  runTask: (id: number) => apiRoute("POST", "/scheduler/tasks/:id/run", { id }),
   restartNow: (warningMinutes?: number) =>
-    serverCall(() =>
-      restartScheduledServer({ data: { warningMinutes } }),
-    ) as Promise<{
+    apiRoute("POST", "/scheduler/restart-now", { warningMinutes }) as Promise<{
       success: boolean;
       message: string;
       warningMinutes: number;
     }>,
-  getCronPresets: () => serverCall(() => getSchedulerPresets()),
+  getCronPresets: () => apiRoute("GET", "/scheduler/cron-presets"),
   validateCron: (cronExpression: string) =>
-    serverCall(() => validateSchedulerCron({ data: { cronExpression } })) as Promise<{
+    apiRoute("POST", "/scheduler/validate-cron", { cronExpression }) as Promise<{
       valid: boolean;
       error?: string;
       code?: string;
     }>,
   getHistory: (limit?: number, taskId?: number) => {
-    return serverCall(() =>
-      getSchedulerHistory({ data: { limit, taskId } }),
-    ) as Promise<{
+    return apiRoute("GET", "/scheduler/history", { limit, taskId }) as Promise<{
       history: ScheduleHistoryEntry[];
     }>;
   },
-  clearHistory: () => serverCall(() => clearSchedulerHistory()),
+  clearHistory: () => apiRoute("DELETE", "/scheduler/history"),
   setTimezone: (timezone: string) =>
-    serverCall(() => setSchedulerTimezone({ data: { timezone } })) as Promise<{
+    apiRoute("PUT", "/scheduler/timezone", { timezone }) as Promise<{
       success: boolean;
       timezone: string;
       configuredTimezone: string | null;
       timezoneFallback: { configured: string; effective: string } | null;
     }>,
   setRestartWarning: (restartWarning: RestartWarningSettings) =>
-    serverCall(() =>
-      setSchedulerRestartWarning({ data: restartWarning }),
-    ) as Promise<{
+    apiRoute("PUT", "/scheduler/restart-warning", restartWarning) as Promise<{
       success: boolean;
       restartWarning: RestartWarningSettings;
     }>,
@@ -902,22 +749,22 @@ export const schedulerApi = {
 
 export const modsApi = {
   getStatus: (_options?: RequestInit) =>
-    getModsStatus(),
+    apiRoute("GET", "/mods/status"),
   getTrackedMods: (_options?: RequestInit) =>
-    getTrackedMods(),
+    apiRoute("GET", "/mods/tracked"),
   trackMod: (workshopId: string) =>
-    serverCall(() => trackMod({ data: { workshopId } })),
+    apiRoute("POST", "/mods/track", { workshopId }),
   untrackMod: (workshopId: string) =>
-    serverCall(() => untrackMod({ data: { workshopId } })),
+    apiRoute("DELETE", "/mods/track/:workshopId", { workshopId }),
 
-  getIgnoredMods: () => getIgnoredMods(),
+  getIgnoredMods: () => apiRoute("GET", "/mods/ignored"),
   unignoreMod: (workshopId: string) =>
-    serverCall(() => unignoreMod({ data: { workshopId } })),
+    apiRoute("DELETE", "/mods/ignored/:workshopId", { workshopId }),
   clearAllIgnoredMods: () =>
-    serverCall(() => clearAllIgnoredMods()),
+    apiRoute("DELETE", "/mods/ignored"),
 
   getIgnoredModPairs: () =>
-    getIgnoredModPairs() as Promise<
+    apiRoute("GET", "/mods/ignored-pairs") as Promise<
       Array<{
         mod_a: string;
         mod_b: string;
@@ -927,32 +774,32 @@ export const modsApi = {
       }>
     >,
   addIgnoredModPair: (modIdA: string, modIdB: string, reason?: string) =>
-    serverCall(() => addIgnoredModPair({ data: { modIdA, modIdB, reason } })),
+    apiRoute("POST", "/mods/ignored-pairs", { modIdA, modIdB, reason }),
   removeIgnoredModPair: (modIdA: string, modIdB: string) =>
-    serverCall(() => removeIgnoredModPair({ data: { modIdA, modIdB } })),
+    apiRoute("DELETE", "/mods/ignored-pairs", { modIdA, modIdB }),
   checkUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/check-updates", undefined, options),
-  getServerMods: () => getServerMods(),
+  getServerMods: () => apiRoute("GET", "/mods/server-mods"),
   syncFromServer: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/sync-from-server", undefined, options),
   clearUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/clear-updates", undefined, options),
   start: (_options?: { signal?: AbortSignal }) =>
-    serverCall(() => startModChecker()),
+    apiRoute("POST", "/mods/start"),
   stop: (_options?: { signal?: AbortSignal }) =>
-    serverCall(() => stopModChecker()),
+    apiRoute("POST", "/mods/stop"),
   setAutoRestart: (enabled: boolean) =>
-    serverCall(() => setModAutoRestart({ data: { enabled } })),
+    apiRoute("POST", "/mods/auto-restart", { enabled }),
   setRestartOptions: (options: {
     warningMinutes?: number;
     delayIfPlayersOnline?: boolean;
     maxDelayMinutes?: number;
     checkInterval?: number;
   }) =>
-    serverCall(() => setModRestartOptions({ data: options })),
+    apiRoute("PUT", "/mods/restart-options", options),
   cancelPendingRestart: () =>
-    serverCall(() => cancelPendingModRestart()),
-  getWorkshopStatus: () => getWorkshopStatus(),
+    apiRoute("POST", "/mods/cancel-pending-restart"),
+  getWorkshopStatus: () => apiRoute("GET", "/mods/workshop-status"),
 
   importCollection: (collectionUrl: string) =>
     apiPost("/mods/import-collection", { collectionUrl }),
@@ -1161,7 +1008,7 @@ export const modsApi = {
       serverConfigRead?: boolean;
     }>,
   collectionUntrack: (workshopId: string) =>
-    serverCall(() => removeCollectionTracking({ data: { workshopId } })) as Promise<{
+    apiRoute("DELETE", "/mods/collection/tracking/:workshopId", { workshopId }) as Promise<{
       ok: true;
       workshopId: string;
       removed: boolean;
@@ -1241,11 +1088,11 @@ export const modsApi = {
 
 export const configApi = {
   getAppSettings: (): Promise<{ settings: Record<string, any> }> =>
-    serverCall(() => getAppSettings()),
+    apiRoute("GET", "/config/app-settings"),
   updateAppSettings: (settings: Record<string, unknown>) =>
-    serverCall(() => updateAppSettings({ data: { settings } })),
+    apiRoute("PUT", "/config/app-settings", { settings }),
   getCorsDiagnostics: () =>
-    serverCall(() => getCorsDiagnostics()) as Promise<{
+    apiRoute("GET", "/config/cors-debug") as Promise<{
       diagnostics: {
         allowAll: boolean;
         allowPrivateNetworks: boolean;
@@ -1263,7 +1110,7 @@ export const configApi = {
       };
     }>,
   reloadCorsDiagnostics: () =>
-    serverCall(() => reloadCorsDiagnostics()) as Promise<{
+    apiRoute("POST", "/config/cors-debug/reload") as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1282,7 +1129,7 @@ export const configApi = {
       };
     }>,
   clearCorsBlockedOrigins: () =>
-    serverCall(() => clearCorsBlockedOrigins()) as Promise<{
+    apiRoute("DELETE", "/config/cors-debug/blocked") as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1301,7 +1148,7 @@ export const configApi = {
       };
     }>,
   testRcon: () =>
-    serverCall(() => testAppRconConnection()),
+    apiRoute("POST", "/config/test-rcon"),
 };
 
 export interface ConfigTestRconResult {
@@ -1366,7 +1213,7 @@ export interface ComposedServerStatus {
 
 export const serversApi = {
   getAll: () =>
-    serverCall(() => getManagedServers()) as Promise<{
+    apiRoute("GET", "/servers") as Promise<{
       servers: ServerInstance[];
       lifecycleCapabilities?: {
         supported: boolean;
@@ -1376,11 +1223,11 @@ export const serversApi = {
       };
     }>,
   getActive: () =>
-    serverCall(() => getActiveManagedServer()) as Promise<{ server: ServerInstance }>,
+    apiRoute("GET", "/servers/active") as Promise<{ server: ServerInstance }>,
   getComposedStatus: (options?: { retries?: number }) =>
     apiGet("/servers/active/status", undefined, options?.retries) as Promise<ComposedServerStatus>,
   getResolvedActive: async () => {
-    const data = (await getManagedServers()) as { servers: ServerInstance[] };
+    const data = (await apiRoute("GET", "/servers")) as { servers: ServerInstance[] };
     return {
       server:
         data.servers.find((server) => server.isActive) ??
@@ -1414,18 +1261,18 @@ export const serversApi = {
       }>;
     }>,
   get: (id: string | number) =>
-    serverCall(() => getManagedServer({ data: { id: String(id) } })) as Promise<{ server: ServerInstance }>,
+    apiRoute("GET", "/servers/:id", { id: String(id) }) as Promise<{ server: ServerInstance }>,
   create: (
     config: Partial<ServerInstance> & {
       importIniFrom?: { dataPath: string; serverName: string };
     },
   ) =>
-    serverCall(() => createManagedServer({ data: config })) as Promise<{
+    apiRoute("POST", "/servers", config) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   update: (id: string | number, updates: Partial<ServerInstance>) =>
-    serverCall(() => updateManagedServer({ data: { id: String(id), updates } })) as Promise<{
+    apiPut(`/servers/${encodeURIComponent(String(id))}`, updates) as Promise<{
       server: ServerInstance;
       message: string;
       warnings?: string[];
@@ -1434,7 +1281,7 @@ export const serversApi = {
     id: string | number,
     provider: "systemd" | "openrc",
   ) =>
-    getLifecycleTemplate({ data: { id: String(id), provider } }) as Promise<{
+    apiRoute("GET", "/servers/:id/lifecycle-template", { id: String(id), provider }) as Promise<{
       provider: "systemd" | "openrc";
       serviceName: string;
       filename: string;
@@ -1447,20 +1294,17 @@ export const serversApi = {
     id: string | number,
     provider: "direct" | "systemd" | "openrc",
   ) =>
-    serverCall(() =>
-        activateManagedLifecycleProvider({
-          data: { id: String(id), provider, confirm: true },
-        })) as Promise<{
+    apiRoute("POST", "/servers/:id/lifecycle-provider", { id: String(id), provider, confirm: true }) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   delete: (id: string | number) =>
-    serverCall(() => deleteManagedServer({ data: { id: String(id) } })) as Promise<{
+    apiRoute("DELETE", "/servers/:id", { id: String(id) }) as Promise<{
       success: boolean;
       message: string;
     }>,
   activate: (id: string | number) =>
-    serverCall(() => activateManagedServer({ data: { id: String(id) } })) as Promise<{
+    apiRoute("POST", "/servers/:id/activate", { id: String(id) }) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
@@ -1488,7 +1332,7 @@ export const serversApi = {
     }) as Promise<{ success: boolean; message: string }>,
 
   discoverMounts: () =>
-    getDiscoveredMounts() as Promise<{
+    apiRoute("GET", "/servers/discover-mounts") as Promise<{
       mounts: DiscoveredMount[];
     }>,
 
@@ -1498,7 +1342,7 @@ export const serversApi = {
     serverName?: string;
     name?: string;
   }) =>
-    serverCall(() => createServerFromDiscovery({ data })) as Promise<{
+    apiRoute("POST", "/servers/create-from-discovery", data) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
@@ -1524,12 +1368,12 @@ export interface DockerContainerStats {
 }
 
 export const dockerApi = {
-  getStatus: () => serverCall(() => getDockerStatus()) as Promise<{
+  getStatus: () => apiRoute("GET", "/docker/status") as Promise<{
     enabled: boolean;
     available: boolean;
     containers: DockerContainerSummary[];
   }>,
-  getStats: () => serverCall(() => getDockerStats()) as Promise<{
+  getStats: () => apiRoute("GET", "/docker/stats") as Promise<{
     containers: Record<string, DockerContainerStats>;
   }>,
   runAction: (
@@ -1537,10 +1381,7 @@ export const dockerApi = {
     action: "start" | "stop" | "restart",
     serverId: string | number,
   ) =>
-    serverCall(() =>
-        runDockerAction({
-          data: { id, action, serverId },
-        })) as Promise<{
+    apiRoute("POST", "/docker/containers/:id/:action", { id, action, serverId }) as Promise<{
       success: boolean;
       message?: string;
       error?: string;
@@ -1727,7 +1568,7 @@ export interface BridgeCommandResult<T = Record<string, unknown>> {
 
 export const panelBridgeApi = {
   getStatus: () =>
-    serverCall(() => getPanelBridgeStatus()) as Promise<{
+    apiRoute("GET", "/panel-bridge/status") as Promise<{
       configured: boolean;
       bridgePath: string | null;
       isRunning: boolean;
@@ -1796,10 +1637,7 @@ export const panelBridgeApi = {
     }>,
 
   autoConfigure: (serverId?: string | number) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "autoConfigure", args: { serverId } },
-        })) as Promise<{
+    apiRoute("POST", "/panel-bridge/auto-configure", { serverId }) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -1816,10 +1654,7 @@ export const panelBridgeApi = {
     }>,
 
   scanForServer: (serverId: string | number) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "scanServer", args: { serverId } },
-        })) as Promise<{
+    apiRoute("GET", "/panel-bridge/scan-server/:serverId", { serverId }) as Promise<{
       success: boolean;
       serverName: string;
       paths: Array<{
@@ -1834,25 +1669,13 @@ export const panelBridgeApi = {
     }>,
 
   autoDetect: (serverName: string, zomboidUserFolder?: string) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: {
-            action: "autoDetect",
-            args: { serverName, zomboidUserFolder },
-          },
-        })),
+    apiRoute("POST", "/panel-bridge/auto-detect", { serverName, zomboidUserFolder }),
 
   configure: (zomboidSavePath: string) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "configure", args: { zomboidSavePath } },
-        })),
+    apiRoute("POST", "/panel-bridge/configure", { zomboidSavePath }),
 
   configureDirect: (bridgePath: string) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "configureDirect", args: { bridgePath } },
-        })) as Promise<{
+    apiRoute("POST", "/panel-bridge/configure-direct", { bridgePath }) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -1860,28 +1683,16 @@ export const panelBridgeApi = {
     }>,
 
   start: () =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "start", args: {} },
-        })),
+    apiRoute("POST", "/panel-bridge/start", {}),
 
   stop: () =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "stop", args: {} },
-        })),
+    apiRoute("POST", "/panel-bridge/stop", {}),
 
   refresh: () =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "refresh", args: {} },
-        })),
+    apiRoute("POST", "/panel-bridge/refresh", {}),
 
   scanPaths: () =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "scanPaths", args: {} },
-        })) as Promise<{
+    apiRoute("GET", "/panel-bridge/scan-paths") as Promise<{
       foundBridges: Array<{
         path: string;
         serverName: string;
@@ -1899,32 +1710,28 @@ export const panelBridgeApi = {
     }>,
 
   ping: () =>
-    serverCall(() => pingPanelBridge()),
+    apiRoute("GET", "/panel-bridge/ping"),
 
   sendCommand: (
     action: string,
     args?: Record<string, unknown>,
   ) =>
-    serverCall(() => sendPanelBridgeCommand({ data: { action, args } })),
+    apiRoute("POST", "/panel-bridge/command", { action, args }),
 
   getServerInfo: () =>
-    serverCall(() => getPanelBridgeServerInfo()),
+    apiRoute("GET", "/panel-bridge/server-info"),
 
   getWorldStats: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({ data: { action: "getWorldStats" } })) as Promise<{
+    apiRoute("GET", "/panel-bridge/world/stats") as Promise<{
       success: boolean;
       data: { serverName: string; map: string; zombiesInCell: number };
     }>,
 
   saveWorld: () =>
-    serverCall(() => savePanelBridgeWorld()),
+    apiRoute("POST", "/panel-bridge/world/save"),
 
   getAllPlayerDetails: () =>
-    serverCall(() =>
-        sendPanelBridgePlayerCommand({
-          data: { action: "getAllPlayerDetails" },
-        })) as Promise<{
+    apiRoute("GET", "/panel-bridge/players") as Promise<{
       success: boolean;
       data: {
         players: Array<{
@@ -1944,10 +1751,7 @@ export const panelBridgeApi = {
       };
     }>,
   getPlayerDetails: (username: string) =>
-    serverCall(() =>
-        sendPanelBridgePlayerCommand({
-          data: { action: "getPlayerDetails", args: { username } },
-        })) as Promise<{
+    apiRoute("GET", "/panel-bridge/players/:username", { username }) as Promise<{
       success: boolean;
       data: {
         username?: string;
@@ -1982,67 +1786,34 @@ export const panelBridgeApi = {
       error?: string;
     }>,
   teleportPlayerBridge: (username: string, x: number, y: number, z?: number) =>
-    serverCall(() =>
-        sendPanelBridgePlayerCommand({
-          data: {
-            action: "teleportPlayer",
-            args: { username, x, y, z },
-          },
-        })),
+    apiRoute("POST", "/panel-bridge/players/:username/teleport", { username, x, y, z }),
 
   killPlayer: (username: string) =>
-    serverCall(() =>
-        sendPanelBridgePlayerCommand({
-          data: { action: "killPlayer", args: { username } },
-        })),
+    apiRoute("POST", "/panel-bridge/players/:username/kill", { username }),
 
   sendServerMessage: (message: string, color?: string) =>
-    serverCall(() => sendPanelBridgeServerMessage({ data: { message, color } })),
+    apiRoute("POST", "/panel-bridge/message", { message, color }),
 
   getBridgeDebugStats: () =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "getStats" },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("GET", "/panel-bridge/debug/stats") as Promise<BridgeCommandResult>,
 
   checkBridgeApi: (object?: string, method?: string) =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "checkAPI", args: { object, method } },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("GET", "/panel-bridge/debug/api", { object, method }) as Promise<BridgeCommandResult>,
 
   getBridgeAvailableHandlers: () =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "getAvailableHandlers" },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("GET", "/panel-bridge/debug/handlers") as Promise<BridgeCommandResult>,
 
   getBridgeDebugLog: (limit: number = 50, level: string = "DEBUG") =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: {
-            action: "getDebugLog",
-            args: { limit, level },
-          },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("GET", "/panel-bridge/debug/log", { limit, level }) as Promise<BridgeCommandResult>,
 
   runBridgeDebugItemScript: () =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "debugItemScript" },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("POST", "/panel-bridge/catalog/debug-item-script") as Promise<BridgeCommandResult>,
 
   setBridgeDebugMode: (enabled: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "setDebugMode", args: { enabled } },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("POST", "/panel-bridge/debug/mode", { enabled }) as Promise<BridgeCommandResult>,
 
   clearBridgeErrors: () =>
-    serverCall(() =>
-        sendPanelBridgeDiagnosticsCommand({
-          data: { action: "clearErrors" },
-        })) as Promise<BridgeCommandResult>,
+    apiRoute("POST", "/panel-bridge/debug/clear-errors") as Promise<BridgeCommandResult>,
 
   getSandboxOptions: () => apiGet("/panel-bridge/sandbox"),
 
@@ -2064,10 +1835,7 @@ export const panelBridgeApi = {
     }>,
 
   installModAuto: (serverId?: string | number) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "installModAuto", args: { serverId } },
-        })) as Promise<{
+    apiRoute("POST", "/panel-bridge/install-mod-auto", { serverId }) as Promise<{
       success: boolean;
       message: string;
       path: string;
@@ -2080,10 +1848,7 @@ export const panelBridgeApi = {
 
 
   getUtilitiesStatus: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "getUtilitiesStatus" },
-        })) as Promise<{
+    apiRoute("GET", "/panel-bridge/utilities/status") as Promise<{
       success: boolean;
       data: {
         hydroPowerOn: boolean;
@@ -2099,26 +1864,14 @@ export const panelBridgeApi = {
     }>,
 
   restoreUtilities: (power?: boolean, water?: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "restoreUtilities",
-            args: { power: power !== false, water: water !== false },
-          },
-        })) as Promise<UtilitiesChangeResult>,
+    apiRoute("POST", "/panel-bridge/utilities/restore", { power: power !== false, water: water !== false }) as Promise<UtilitiesChangeResult>,
 
   shutOffUtilities: (power?: boolean, water?: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "shutOffUtilities",
-            args: { power: power !== false, water: water !== false },
-          },
-        })) as Promise<UtilitiesChangeResult>,
+    apiRoute("POST", "/panel-bridge/utilities/shutoff", { power: power !== false, water: water !== false }) as Promise<UtilitiesChangeResult>,
 
 
   getCatalogItems: () =>
-    serverCall(() => getPanelBridgeCatalog({ data: { kind: "items" } })) as Promise<{
+    apiRoute("GET", "/panel-bridge/catalog/items") as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -2130,7 +1883,7 @@ export const panelBridgeApi = {
     }>,
 
   scanCatalogItems: () =>
-    serverCall(() => scanPanelBridgeCatalog({ data: { kind: "items" } })) as Promise<{
+    apiRoute("POST", "/panel-bridge/catalog/scan-items") as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -2185,25 +1938,25 @@ export interface BackupContentsInfo {
 }
 
 export const backupApi = {
-  getStatus: (): Promise<BackupStatus> => getBackupStatus(),
+  getStatus: (): Promise<BackupStatus> => apiRoute("GET", "/backup/status"),
 
-  getInfo: (): Promise<BackupContentsInfo> => getBackupInfo(),
+  getInfo: (): Promise<BackupContentsInfo> => apiRoute("GET", "/backup/info"),
 
   listBackups: (): Promise<{ backups: ServerBackupArchive[] }> =>
-    getBackups(),
+    apiRoute("GET", "/backup/list"),
 
   getHistory: (serverId?: string | number) =>
-    getBackupHistory({ data: { serverId } }) as Promise<{
+    apiRoute("GET", "/backup/history", { serverId }) as Promise<{
       records: BackupHistoryRecord[];
     }>,
 
   getSnapshot: (name: string): Promise<{ success: boolean; snapshot?: BackupSnapshot; message?: string }> =>
-    getBackupSnapshot({ data: { name } }),
+    apiRoute("GET", "/backup/:name/snapshot", { name }),
 
   updateSettings: (
     settings: Partial<BackupSettings>,
   ): Promise<{ success: boolean; settings: BackupSettings }> =>
-    serverCall(() => updateBackupSettings({ data: settings })),
+    apiRoute("POST", "/backup/settings", settings),
 
   createBackup: (options?: {
     includeDb?: boolean;
@@ -2213,12 +1966,12 @@ export const backupApi = {
     duration?: number;
     message?: string;
   }> =>
-    serverCall(() => createBackupServer({ data: options || {} })),
+    apiRoute("POST", "/backup/create", options || {}),
 
   deleteBackup: (
     name: string,
   ): Promise<{ success: boolean; message?: string }> =>
-    serverCall(() => deleteBackup({ data: { name } })),
+    apiRoute("DELETE", "/backup/:name", { name }),
 
   restoreBackup: (
     name: string,
@@ -2228,7 +1981,7 @@ export const backupApi = {
     message?: string;
     duration?: number;
   }> =>
-    serverCall(() => restoreBackupServer({ data: { name, options } })),
+    apiPost(`/backup/restore/${encodeURIComponent(name)}`, options),
 
   deleteOlderThan: (
     days: number,
@@ -2239,7 +1992,7 @@ export const backupApi = {
     deletedNames?: string[];
     message?: string;
   }> =>
-    serverCall(() => deleteBackupsOlderThan({ data: { days } })),
+    apiRoute("POST", "/backup/delete-older-than", { days }),
 
   getDownloadUrl: (name: string): string =>
     `${API_BASE}/backup/download/${encodeURIComponent(name)}`,
@@ -2344,7 +2097,7 @@ export const debugApi = {
     freeGB: number;
     recommendedMin: number;
     recommendedMax: number;
-  }> => serverCall(() => getDebugRam()),
+  }> => apiRoute("GET", "/debug/ram"),
   getPerformanceHistory: (
     limit: number = 30,
   ): Promise<{
@@ -2357,7 +2110,7 @@ export const debugApi = {
       hostMemUsed?: number;
       hostMemTotal?: number;
     }>;
-  }> => serverCall(() => getPerformanceHistory({ data: { limit } })),
+  }> => apiRoute("GET", "/debug/performance-history", { limit }),
 };
 
 export const authApi = {
@@ -2365,12 +2118,10 @@ export const authApi = {
     currentPassword: string,
     newPassword: string,
   ): Promise<{ success: boolean; message?: string }> =>
-    serverCall(() =>
-      changePassword({ data: { currentPassword, newPassword } }),
-    ),
+    apiRoute("POST", "/auth/change-password", { currentPassword, newPassword }),
 
   regenerateJwtSecret: (): Promise<{ success: boolean; message?: string }> =>
-    serverCall(() => regenerateJwtSecret()),
+    apiRoute("POST", "/auth/regenerate-jwt-secret"),
 };
 
 export const serversDetectApi = {
@@ -2597,8 +2348,8 @@ export interface RuntimeInfo {
 
 export const systemApi = {
   getDiskSpace: (): Promise<DiskSpaceReport> =>
-    getDiskSpace(),
+    apiRoute("GET", "/system/disk-space"),
   getStorageHealth: (): Promise<StorageHealth> =>
-    getStorageHealth(),
-  getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfo(),
+    apiRoute("GET", "/system/storage-health"),
+  getRuntime: (): Promise<RuntimeInfo> => apiRoute("GET", "/system/runtime"),
 };

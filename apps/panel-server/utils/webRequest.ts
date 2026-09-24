@@ -1,29 +1,4 @@
-import { pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
-import type { ServerResponse } from "node:http";
-import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
-
-export type TanStackStartHandler = {
-  fetch(request: Request): Response | Promise<Response>;
-};
-
-export async function loadTanStackStartHandler(
-  filePath: string,
-): Promise<TanStackStartHandler> {
-  const module = (typeof process.pkg !== "undefined"
-    ? createRequire(import.meta.url)(filePath)
-    : await import(pathToFileURL(filePath).href)) as {
-    default?: unknown;
-  };
-  const handler = module.default as Partial<TanStackStartHandler> | undefined;
-  if (!handler || typeof handler.fetch !== "function") {
-    throw new Error(
-      "TanStack Start server bundle has no fetch handler: " + filePath,
-    );
-  }
-  return handler as TanStackStartHandler;
-}
 
 type RequestLike = {
   method?: string;
@@ -40,7 +15,7 @@ type RequestLike = {
   on?: (...args: any[]) => unknown;
 };
 
-export function toTanStackStartRequest(req: RequestLike): Request {
+export function toWebRequest(req: RequestLike): Request {
   const method = req.method || "GET";
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
@@ -91,30 +66,4 @@ export function toTanStackStartRequest(req: RequestLike): Request {
     headers,
     ...(body === undefined ? {} : { body, duplex: "half" as const }),
   });
-}
-
-type ResponseLike = Pick<ServerResponse, "setHeader" | "statusCode" | "end">;
-export async function sendTanStackStartResponse(
-  response: Response,
-  res: ResponseLike,
-): Promise<void> {
-  const setCookies = (
-    response.headers as Headers & { getSetCookie?: () => string[] }
-  ).getSetCookie?.();
-
-  response.headers.forEach((value, name) => {
-    if (name === "set-cookie" && setCookies?.length) return;
-    res.setHeader(name, value);
-  });
-  if (setCookies?.length) res.setHeader("set-cookie", setCookies);
-
-  res.statusCode = response.status;
-  if (!response.body) {
-    res.end();
-    return;
-  }
-  await pipeline(
-    Readable.fromWeb(response.body as any),
-    res as unknown as NodeJS.WritableStream,
-  );
 }

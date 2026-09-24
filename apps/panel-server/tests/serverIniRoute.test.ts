@@ -3,11 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getActiveServerContext, getRoleByName, getPanelRuntime } = vi.hoisted(
+const { getActiveServerContext } = vi.hoisted(
   () => ({
     getActiveServerContext: vi.fn(),
-    getRoleByName: vi.fn(),
-    getPanelRuntime: vi.fn(),
   }),
 );
 
@@ -20,25 +18,30 @@ vi.mock("../services/sandboxPersistence.ts", () => ({
   ServerNotConfiguredError: class ServerNotConfiguredError extends Error {},
 }));
 
-vi.mock("../database/init.ts", () => ({ getRoleByName }));
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime }));
-
 const { maskSecretValue } = await import("../utils/sanitize.ts");
-const { saveServerIni } = await import(
-  "../../panel-client/src/lib/serverFileReads.server.ts"
-);
+const { default: router } = await import("../routes/serverFiles.ts");
+const saveIni = router.stack.find((entry) =>
+  entry.route?.path === "/ini" && entry.route.methods.put,
+)?.route?.stack.at(-1)?.handle;
 
-const execute = (saveServerIni as any).__executeImplementation as (
-  data: Record<string, unknown>,
-  context: Record<string, unknown>,
-) => Promise<any>;
+async function execute(body: Record<string, unknown>) {
+  if (!saveIni) throw new Error("INI route missing");
+  const response = {
+    statusCode: 200,
+    body: null as any,
+    status(code: number) { this.statusCode = code; return this; },
+    json(value: unknown) { this.body = value; return this; },
+  };
+  await saveIni({ body } as any, response as any, () => {});
+  return response;
+}
 
-describe("Start server-file mutations", () => {
+describe("structured INI API route", () => {
   let configDir: string;
   let iniPath: string;
 
   beforeEach(() => {
-    configDir = fs.mkdtempSync(path.join(os.tmpdir(), "start-file-mutation-"));
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), "ini-route-"));
     iniPath = path.join(configDir, "TestServer.ini");
     fs.writeFileSync(
       iniPath,
@@ -49,16 +52,6 @@ describe("Start server-file mutations", () => {
       serverName: "TestServer",
       activeServer: {},
     });
-    getRoleByName.mockResolvedValue({ capabilities: ["server.configure"] });
-    getPanelRuntime.mockReturnValue({
-      serverManager: {
-        reloadConfig: vi.fn(async () => undefined),
-        getServerProcessDetails: vi.fn(async () => ({
-          running: false,
-          scanFailed: false,
-        })),
-      },
-    });
   });
 
   afterEach(() => {
@@ -66,38 +59,30 @@ describe("Start server-file mutations", () => {
   });
 
   it("preserves masked secrets while writing the structured INI", async () => {
-    const result = await execute(
-      {
+    const result = await execute({
         settings: {
           PVP: "false",
           RCONPassword: maskSecretValue("live-rcon-secret"),
           Password: maskSecretValue("live-join-secret"),
         },
-      },
-      { authenticatedUser: { role: "admin" } },
-    );
+      });
 
     expect(fs.readFileSync(iniPath, "utf8")).toBe(
       "PVP=false\nRCONPassword=live-rcon-secret\nPassword=live-join-secret\n",
     );
-    expect(result.settings.RCONPassword).toBe(
+    expect(result.statusCode).toBe(200);
+    expect(result.body.settings.RCONPassword).toBe(
       maskSecretValue("live-rcon-secret"),
     );
-    expect(JSON.stringify(result)).not.toContain("live-rcon-secret");
+    expect(JSON.stringify(result.body)).not.toContain("live-rcon-secret");
   });
 
   it("refuses structured saves when duplicate INI keys would be discarded", async () => {
     fs.writeFileSync(iniPath, "PVP=true\nPublicName=First\nPublicName=Second\n");
 
-    await expect(
-      execute(
-        { settings: { PVP: "false" } },
-        { authenticatedUser: { role: "admin" } },
-      ),
-    ).rejects.toMatchObject({
-      status: 409,
-      code: "INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE",
-    });
+    const result = await execute({ settings: { PVP: "false" } });
+    expect(result.statusCode).toBe(409);
+    expect(result.body.code).toBe("INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE");
     expect(fs.readFileSync(iniPath, "utf8")).toContain("PVP=true");
   });
 });

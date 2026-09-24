@@ -3,10 +3,10 @@ import { gzipSync } from 'node:zlib'
 import path from 'node:path'
 
 const html = readFileSync('dist/index.html', 'utf8')
-const preloads = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)]
+const preloads = [...html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="([^"]+\.js)"/g)]
   .map((match) => match[1])
 
-if (preloads.length === 0) throw new Error('No initial JavaScript preloads found')
+if (preloads.length === 0) throw new Error('No initial JavaScript found')
 
 let rawBytes = 0
 let gzipBytes = 0
