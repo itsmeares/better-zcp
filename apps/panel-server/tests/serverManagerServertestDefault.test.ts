@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { ServerManager, scoreServerProcessOwnership } from '../services/serverManager.ts';
 
 describe('ServerManager serverName default identity', () => {

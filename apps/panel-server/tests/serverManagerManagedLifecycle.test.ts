@@ -1,5 +1,5 @@
 import path from "path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getServer = vi.fn();
 const getActiveServer = vi.fn();

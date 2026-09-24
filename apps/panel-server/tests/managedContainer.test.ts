@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { getServer, getActiveServer } = vi.hoisted(() => ({
   getServer: vi.fn(),

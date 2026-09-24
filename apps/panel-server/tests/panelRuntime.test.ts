@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { getPanelRuntime, setPanelRuntime } from "../utils/panelRuntime.ts";
 
 describe("panel runtime bridge", () => {

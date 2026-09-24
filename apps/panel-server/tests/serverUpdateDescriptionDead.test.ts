@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vite-plus/test";
 import { createServer, deleteServer, getServer } from "../database/init.ts";
 
 function createResponse() {

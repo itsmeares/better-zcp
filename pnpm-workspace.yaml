@@ -3,6 +3,7 @@ packages:
 
 overrides:
   js-yaml@^4.1.1: 4.3.2
+  vite@*: "catalog:"
 
 allowBuilds:
   cpu-features: true
@@ -15,3 +16,11 @@ minimumReleaseAgeExclude:
   - "@tanstack/router-core@1.171.28"
   - "@tanstack/router-generator@1.167.34"
   - "@tanstack/router-plugin@1.168.36"
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0-rc.0
+  vite-plus: 1.0.0-rc.0
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"

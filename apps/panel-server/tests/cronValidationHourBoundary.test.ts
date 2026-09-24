@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { isCronTooFrequent } from "../utils/cronValidation.ts";
 
 describe("isCronTooFrequent() -- hour-boundary wrap, not just the literal '*' hour case", () => {

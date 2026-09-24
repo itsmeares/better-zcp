@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vite-plus/test";
 import net from "net";
 import { SourceRconClient } from "../utils/sourceRcon.ts";
 

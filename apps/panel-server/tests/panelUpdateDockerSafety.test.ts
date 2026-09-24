@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { handlePanelUpdateDownload } from "../index.ts";
 import { ServerManager } from "../services/serverManager.ts";
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { lua, to_luastring } from 'fengari';

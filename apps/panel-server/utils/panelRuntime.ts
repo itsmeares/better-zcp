@@ -1,6 +1,6 @@
 type PanelRuntime = Record<string, any>;
 
-// The host and Vite's SSR bundle load this module as separate module instances.
+// API handlers read services from the initialized Node process.
 const PANEL_RUNTIME_KEY = "__better_zcp_panel_runtime__";
 type RuntimeGlobal = typeof globalThis & {
   [PANEL_RUNTIME_KEY]?: PanelRuntime;

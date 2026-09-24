@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vite-plus/test";
 import path from "path";
 import { ServerManager } from "../services/serverManager.ts";
 import {

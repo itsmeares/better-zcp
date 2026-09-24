@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { validateReleaseManifest } from "../services/panelUpdateChecker.ts";
 
 describe("standalone release manifest validation", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { toWebRequest } from "../utils/webRequest.ts";
 
 describe("native HTTP request adapter", () => {

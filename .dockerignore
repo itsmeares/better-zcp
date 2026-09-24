@@ -1,6 +1,7 @@
 node_modules/
 apps/panel-client/node_modules/
 apps/panel-client/dist/
+apps/panel-client/dist-start-server/
 dist-exe/
 release/
 data/db.json

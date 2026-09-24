@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import net from 'net';
 import { testRconConnection, RCON_UNREACHABLE_DETAIL } from '../services/rcon.ts';
 import router from '../routes/rcon.ts';

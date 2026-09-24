@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach, afterAll } from "vitest";
+import { describe, expect, it, vi, afterEach, afterAll } from "vite-plus/test";
 
 
 const execMock = vi.fn();

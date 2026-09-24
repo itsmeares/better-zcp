@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadPanelBridge } from "./helpers/panelBridgeLua.ts";

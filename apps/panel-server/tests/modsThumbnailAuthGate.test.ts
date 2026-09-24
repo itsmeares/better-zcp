@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { handleApiRequest } from "../http/apiDispatcher.ts";
 
 const settings = new Map();

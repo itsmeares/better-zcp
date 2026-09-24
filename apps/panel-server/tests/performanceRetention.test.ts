@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it } from 'vite-plus/test'
 import { recentPerformanceHistory } from '../database/init.ts'
 
 it('keeps only valid snapshots from the last 24 hours and caps one-minute samples', () => {

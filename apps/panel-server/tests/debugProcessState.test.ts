@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { getServerProcessState } from "../routes/debug.ts";
 
 describe("debug server process state", () => {

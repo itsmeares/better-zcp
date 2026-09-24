@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const initUrl = new URL("../database/init.ts", import.meta.url).href;
-const runtimeUrl = new URL("../utils/panelRuntime.ts", import.meta.url).href;
 const tempRoots = [];
 
 function createSandbox() {
@@ -25,7 +24,6 @@ function runChild(configPath, markerPath, source, databaseDriver = "sqlite") {
     ...process.env,
     PANEL_PATHS_CONFIG_PATH: configPath,
     ZCP_INIT_URL: initUrl,
-    ZCP_RUNTIME_URL: runtimeUrl,
     ZCP_MARKER: markerPath,
   };
   if (databaseDriver) env.PANEL_DATABASE_DRIVER = databaseDriver;
@@ -104,43 +102,43 @@ process.exit(0);`,
     expect(fs.statSync(path.join(dataDir, "db.sqlite")).mode & 0o777).toBe(0o600);
   });
 
-  it("shares the database between the native host and its Start SSR bundle", () => {
+  it("persists two distinct server profiles and the active selection", () => {
     const { configPath, dataDir, root } = createSandbox();
-    const markerPath = path.join(root, "bundle.marker");
+    const markerPath = path.join(root, "writer.marker");
     const writer = runChild(
       configPath,
       markerPath,
       `import fs from "node:fs";
-const { setPanelRuntime } = await import(process.env.ZCP_RUNTIME_URL);
-setPanelRuntime({});
-const host = await import(process.env.ZCP_INIT_URL + "?host");
-const start = await import(process.env.ZCP_INIT_URL + "?start");
-const hostDb = await host.getDb();
-await host.setSetting("hostPendingWrite", "keep");
-const startDb = await start.getDb();
-startDb.data.servers.push({ id: "start-bundle-server" });
-await start.commitNow();
-await host.flushForShutdown();
-fs.writeFileSync(process.env.ZCP_MARKER, String(hostDb === startDb));
+const { createServer, setActiveServer, commitNow, getServers } = await import(process.env.ZCP_INIT_URL);
+const first = await createServer({ name: "Alpha", serverName: "Alpha", installPath: "/tmp/alpha", serverPort: 16261 });
+const second = await createServer({ name: "Beta", serverName: "Beta", installPath: "/tmp/beta", serverPort: 16262 });
+await setActiveServer(second.id);
+await commitNow();
+fs.writeFileSync(process.env.ZCP_MARKER, JSON.stringify({ ids: (await getServers()).map((server) => server.id), firstId: first.id, secondId: second.id }));
 process.exit(0);`,
     );
     expect(writer.status, writer.stderr).toBe(0);
-    expect(fs.readFileSync(markerPath, "utf8")).toBe("true");
+    const created = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    expect(created.firstId).not.toBe(created.secondId);
+    expect(created.ids).toEqual([created.firstId, created.secondId]);
 
-    const markerForReader = path.join(root, "bundle-reader.marker");
+    const markerForReader = path.join(root, "reader.marker");
     const reader = runChild(
       configPath,
       markerForReader,
       `import fs from "node:fs";
-const { getDb } = await import(process.env.ZCP_INIT_URL);
-const db = await getDb();
-fs.writeFileSync(process.env.ZCP_MARKER, db.data.servers[0]?.id || "missing");
+const { getServers, getActiveServer } = await import(process.env.ZCP_INIT_URL);
+fs.writeFileSync(process.env.ZCP_MARKER, JSON.stringify({ servers: (await getServers()).map((server) => ({ id: server.id, name: server.name, port: server.serverPort })), activeId: (await getActiveServer())?.id }));
 process.exit(0);`,
     );
     expect(reader.status, reader.stderr).toBe(0);
-    expect(fs.readFileSync(markerForReader, "utf8")).toBe(
-      "start-bundle-server",
-    );
+    expect(JSON.parse(fs.readFileSync(markerForReader, "utf8"))).toEqual({
+      servers: [
+        { id: created.firstId, name: "Alpha", port: 16261 },
+        { id: created.secondId, name: "Beta", port: 16262 },
+      ],
+      activeId: created.secondId,
+    });
     expect(fs.existsSync(path.join(dataDir, "db.sqlite"))).toBe(true);
   });
 

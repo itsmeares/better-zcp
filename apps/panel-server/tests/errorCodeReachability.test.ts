@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { handlePanelUpdateDownload, handlePanelUpdateStatus } from "../index.ts";
 import { apiErrorHandler } from "../http/panelWeb.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
