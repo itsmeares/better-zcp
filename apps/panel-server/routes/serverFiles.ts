@@ -133,6 +133,20 @@ router.use(
   },
 );
 
+router.use((req: ServerFilesRequest, res: Response, next: NextFunction) => {
+  if (!Object.prototype.hasOwnProperty.call(req.body || {}, "expectedServerId")) {
+    return next();
+  }
+  const currentId = req.activeServerContext?.activeServer?.id ?? null;
+  if (String(req.body.expectedServerId ?? "") !== String(currentId ?? "")) {
+    return res.status(409).json({
+      error: "The active server changed. Reload this page before saving.",
+      code: ErrorCode.SERVER_PROFILE_CHANGED,
+    });
+  }
+  next();
+});
+
 const LOCAL_CONFIG_MUTATIONS = new Set([
   "PUT /ini",
   "PUT /sandbox",
@@ -795,7 +809,7 @@ router.get("/paths", async (req, res) => {
       spawnregions: fs.existsSync(files.spawnregions),
     };
 
-    res.json({ configPath, serverName, files, exists });
+    res.json({ serverId: req.activeServerContext?.activeServer?.id ?? null, configPath, serverName, files, exists });
   } catch (error: unknown) {
     log.error("Failed to get paths:", error);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });

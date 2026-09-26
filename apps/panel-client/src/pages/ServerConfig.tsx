@@ -217,6 +217,46 @@ function createSandboxDefaults(): SandboxData {
   return sandbox
 }
 
+function changedIniFields(
+  current: Record<string, string>,
+  previous: Record<string, string>,
+) {
+  return Object.fromEntries(
+    Object.entries(current).filter(([key, value]) => value !== previous[key]),
+  )
+}
+
+function changedSandboxFields(current: SandboxData, previous: SandboxData) {
+  const changes: Record<string, Record<string, string | number | boolean>> = {}
+  for (const [section, values] of Object.entries(current)) {
+    if (section === 'VERSION' || !values || typeof values !== 'object') continue
+    const oldValues = (previous as unknown as Record<string, Record<string, unknown>>)[section] || {}
+    const changed = Object.fromEntries(
+      Object.entries(values as Record<string, string | number | boolean>)
+        .filter(([key, value]) => value !== oldValues[key]),
+    )
+    if (Object.keys(changed).length) changes[section] = changed
+  }
+  return changes as Partial<SandboxData>
+}
+
+function previewValue(key: string, value: unknown) {
+  if (/password|secret|token|api.?key/i.test(key)) return '(hidden)'
+  return String(value ?? '(empty)').slice(0, 80)
+}
+
+function rawChangePreview(previous: string, current: string) {
+  const oldLines = previous.split(/\r?\n/)
+  const newLines = current.split(/\r?\n/)
+  const items: string[] = []
+  for (let index = 0; index < Math.max(oldLines.length, newLines.length); index++) {
+    if (oldLines[index] === newLines[index]) continue
+    const key = `${oldLines[index]?.split('=')[0] || ''} ${newLines[index]?.split('=')[0] || ''}`
+    items.push(`Line ${index + 1}: ${previewValue(key, oldLines[index])} → ${previewValue(key, newLines[index])}`)
+  }
+  return items
+}
+
 export function isWorldSaveFailure(
   data: { persisted?: unknown } | null | undefined,
 ): boolean {
@@ -886,6 +926,7 @@ export default function ServerConfig() {
   }, [filterMode])
 
   const [pathsInfo, setPathsInfo] = useState<{
+    serverId: string | number | null
     configPath: string
     serverName: string
     exists: {
@@ -900,6 +941,9 @@ export default function ServerConfig() {
   const [sandboxData, setSandboxData] = useState<SandboxData | null>(null)
   const [spawnPoints, setSpawnPoints] = useState<SpawnPointsByProfession>({})
   const [spawnRegions, setSpawnRegions] = useState<SpawnRegion[]>([])
+  const [originalSpawnPoints, setOriginalSpawnPoints] =
+    useState<SpawnPointsByProfession>({})
+  const [originalSpawnRegions, setOriginalSpawnRegions] = useState<SpawnRegion[]>([])
   const [duplicateKeys, setDuplicateKeys] = useState<
     Array<{ key: string; count: number }>
   >([])
@@ -1142,6 +1186,20 @@ export default function ServerConfig() {
   const confirm = useConfirm()
   const socket = useSocket()
 
+  const confirmFileSave = (filename: string, items: string[]) => {
+    if (items.length === 0) {
+      toast({ title: 'No changes', description: 'There is nothing to save.' })
+      return Promise.resolve(false)
+    }
+    return confirm({
+      title: `Save ${filename} for ${pathsInfo?.serverName || activeServerName || 'this server'}?`,
+      description: `${items.length} changed ${items.length === 1 ? 'entry' : 'entries'}. Review the changes below. The panel will attempt a backup before writing; a restart may be needed.`,
+      items: items.length > 12 ? [...items.slice(0, 12), `${items.length - 12} more changes`] : items,
+      confirmLabel: 'Save changes',
+      destructive: false,
+    })
+  }
+
   useEffect(() => {
     loadData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only init
@@ -1156,7 +1214,7 @@ export default function ServerConfig() {
 
   const loadData = async () => {
     setLoading(true)
-    setServerChangedSinceLoad(false)
+    setModSettings(null)
     const active = await serversApi
       .getResolvedActive()
       .catch(() => ({ server: null }))
@@ -1173,6 +1231,10 @@ export default function ServerConfig() {
         setIniSettings(merged)
         setOriginalIniSettings(merged)
         setDuplicateKeys(iniData.duplicateKeys || [])
+      } else {
+        setIniSettings({})
+        setOriginalIniSettings({})
+        setDuplicateKeys([])
       }
 
       const sandboxRes = paths.exists.sandbox
@@ -1184,13 +1246,28 @@ export default function ServerConfig() {
       if (paths.exists.spawnpoints) {
         const spawnRes = await serverFilesApi.getSpawnPoints()
         setSpawnPoints(spawnRes.spawnpoints)
+        setOriginalSpawnPoints(spawnRes.spawnpoints)
+      } else {
+        setSpawnPoints({})
+        setOriginalSpawnPoints({})
       }
 
       if (paths.exists.spawnregions) {
         const regionsRes = await serverFilesApi.getSpawnRegions()
         setSpawnRegions(regionsRes.spawnregions)
+        setOriginalSpawnRegions(regionsRes.spawnregions)
+      } else {
+        setSpawnRegions([])
+        setOriginalSpawnRegions([])
+      }
+      if (editorMode === 'raw' && ['ini', 'sandbox', 'spawnpoints', 'spawnregions'].includes(activeTab)) {
+        const type = activeTab as 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'
+        const raw = paths.exists[type] ? await serverFilesApi.getRaw(type) : null
+        setRawContent(raw?.content || '')
+        setOriginalRawContent(raw?.content || '')
       }
       setLoadError(null)
+      setServerChangedSinceLoad(false)
     } catch (error) {
       reportClientError('Failed to load config.', error)
       const message = getUserErrorMessage(
@@ -1282,12 +1359,20 @@ export default function ServerConfig() {
     originalSandboxData,
   ])
 
+  const hasSpawnPointsChanges = editorMode === 'raw' && activeTab === 'spawnpoints'
+    ? rawContent !== originalRawContent
+    : JSON.stringify(spawnPoints) !== JSON.stringify(originalSpawnPoints)
+  const hasSpawnRegionsChanges = editorMode === 'raw' && activeTab === 'spawnregions'
+    ? rawContent !== originalRawContent
+    : JSON.stringify(spawnRegions) !== JSON.stringify(originalSpawnRegions)
+
   useEffect(() => {
     if (!socket) return
     const handleActiveServerChanged = () => {
-      if (hasIniChanges || hasSandboxChanges) {
+      if (hasIniChanges || hasSandboxChanges || hasSpawnPointsChanges || hasSpawnRegionsChanges) {
         setServerChangedSinceLoad(true)
       } else {
+        setServerChangedSinceLoad(true)
         loadData()
       }
     }
@@ -1295,17 +1380,17 @@ export default function ServerConfig() {
     return () => {
       socket.off('activeServerChanged', handleActiveServerChanged)
     }
-  }, [socket, hasIniChanges, hasSandboxChanges]) // eslint-disable-line react-hooks/exhaustive-deps -- loadData is mount-stable, not a dep
+  }, [socket, hasIniChanges, hasSandboxChanges, hasSpawnPointsChanges, hasSpawnRegionsChanges, editorMode, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps -- loadData is mount-stable, not a dep
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
     }
-    if (hasIniChanges || hasSandboxChanges) {
+    if (hasIniChanges || hasSandboxChanges || hasSpawnPointsChanges || hasSpawnRegionsChanges) {
       window.addEventListener('beforeunload', handler)
     }
     return () => window.removeEventListener('beforeunload', handler)
-  }, [hasIniChanges, hasSandboxChanges])
+  }, [hasIniChanges, hasSandboxChanges, hasSpawnPointsChanges, hasSpawnRegionsChanges])
 
   const handleCreateBackup = async (
     type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions',
@@ -1464,6 +1549,10 @@ export default function ServerConfig() {
 
   const handleOptionChange = useCallback(
     async (optName: string, newValue: unknown, groupName: string) => {
+      if (serverChangedSinceLoad) {
+        toast({ title: 'Server changed', description: 'Reload before changing a server option.', variant: 'destructive' })
+        return
+      }
       setSavingOptions((prev) => {
         if (prev.has(optName)) return prev
         const next = new Set(prev)
@@ -1551,6 +1640,7 @@ export default function ServerConfig() {
             const saved = await serverFilesApi.saveSandboxOption(
               optName,
               confirmedVal as string | number | boolean,
+              pathsInfo?.serverId ?? null,
             )
             if (!saved.persisted) {
               toast({
@@ -1596,7 +1686,7 @@ export default function ServerConfig() {
         })
       }
     },
-    [toast],
+    [toast, pathsInfo?.serverId, serverChangedSinceLoad],
   )
 
   const handleSaveIni = async () => {
@@ -1621,16 +1711,23 @@ export default function ServerConfig() {
         })
         return
       }
+      const changed = changedIniFields(iniSettings, originalIniSettings)
+      const preview = editorMode === 'raw'
+        ? rawChangePreview(originalRawContent, rawContent)
+        : Object.entries(changed).map(([key, value]) =>
+            `${key}: ${previewValue(key, originalIniSettings[key])} → ${previewValue(key, value)}`,
+          )
+      if (!(await confirmFileSave(`${pathsInfo?.serverName || 'server'}.ini`, preview))) return
       if (editorMode === 'raw') {
-        await serverFilesApi.saveRaw('ini', rawContent)
+        await serverFilesApi.saveRaw('ini', rawContent, pathsInfo?.serverId ?? null)
         setOriginalRawContent(rawContent)
       } else {
-        await serverFilesApi.saveIni(iniSettings)
+        await serverFilesApi.saveIni(changed, pathsInfo?.serverId ?? null)
         setOriginalIniSettings({ ...iniSettings })
       }
 
       try {
-        await serverFilesApi.saveAndReload()
+        await serverFilesApi.saveAndReload(pathsInfo?.serverId ?? null)
         toast({
           title: 'Saved & Reloaded',
           description: 'Server settings saved and reloaded.',
@@ -1689,8 +1786,26 @@ export default function ServerConfig() {
         })
         return
       }
+      const sandboxChanges = sandboxData && originalSandboxData
+        ? changedSandboxFields(sandboxData, originalSandboxData)
+        : sandboxData
+      const preview = editorMode === 'raw'
+        ? rawChangePreview(originalRawContent, rawContent)
+        : sandboxChanges
+          ? Object.entries(sandboxChanges).flatMap(([section, values]) =>
+              typeof values === 'object' && values
+                ? Object.entries(values).map(([key, value]) =>
+                    `${section}.${key}: ${previewValue(key, (originalSandboxData?.[section as keyof SandboxData] as SandboxRecord | undefined)?.[key])} → ${previewValue(key, value)}`,
+                  )
+                : [],
+            )
+          : []
+      if (!pathsInfo?.exists.sandbox && editorMode !== 'raw') {
+        preview.unshift('Create SandboxVars.lua from these settings')
+      }
+      if (!(await confirmFileSave(`${pathsInfo?.serverName || 'server'}_SandboxVars.lua`, preview))) return
       if (editorMode === 'raw') {
-        await serverFilesApi.saveRaw('sandbox', rawContent)
+        await serverFilesApi.saveRaw('sandbox', rawContent, pathsInfo?.serverId ?? null)
         setOriginalRawContent(rawContent)
       } else if (sandboxData) {
         const cleanData = JSON.parse(JSON.stringify(sandboxData)) as SandboxData
@@ -1717,7 +1832,10 @@ export default function ServerConfig() {
           }
         })
 
-        const sandboxSaveResult = await serverFilesApi.saveSandbox(cleanData)
+        const submitted = pathsInfo?.exists.sandbox && originalSandboxData
+          ? changedSandboxFields(cleanData, originalSandboxData)
+          : cleanData
+        const sandboxSaveResult = await serverFilesApi.saveSandbox(submitted, pathsInfo?.serverId ?? null)
         setSandboxData(cleanData)
         setOriginalSandboxData(cleanData)
 
@@ -1761,12 +1879,23 @@ export default function ServerConfig() {
   }
 
   const handleSaveSpawnPoints = async () => {
+    if (serverChangedSinceLoad) {
+      toast({ title: 'Server changed', description: 'Reload before saving spawn points.', variant: 'destructive' })
+      return
+    }
     setSaving(true)
     try {
+      const preview = editorMode === 'raw'
+        ? rawChangePreview(originalRawContent, rawContent)
+        : [...new Set([...Object.keys(originalSpawnPoints), ...Object.keys(spawnPoints)])]
+            .filter((profession) => JSON.stringify(spawnPoints[profession]) !== JSON.stringify(originalSpawnPoints[profession]))
+            .map((profession) => `${profession}: ${originalSpawnPoints[profession]?.length || 0} → ${spawnPoints[profession]?.length || 0} spawn points`)
+      if (!pathsInfo?.exists.spawnpoints && editorMode !== 'raw') preview.unshift('Create spawn points file')
+      if (!(await confirmFileSave(`${pathsInfo?.serverName || 'server'}_spawnpoints.lua`, preview))) return
       const result =
         editorMode === 'raw'
-          ? await serverFilesApi.saveRaw('spawnpoints', rawContent)
-          : await serverFilesApi.saveSpawnPoints(spawnPoints)
+          ? await serverFilesApi.saveRaw('spawnpoints', rawContent, pathsInfo?.serverId ?? null)
+          : await serverFilesApi.saveSpawnPoints(spawnPoints, pathsInfo?.serverId ?? null)
       toast({
         title: 'Saved',
         description: result?.restartRequired
@@ -1774,7 +1903,10 @@ export default function ServerConfig() {
           : 'Spawn points saved',
       })
       if (editorMode === 'raw') {
+        setOriginalRawContent(rawContent)
         loadData()
+      } else {
+        setOriginalSpawnPoints(spawnPoints)
       }
     } catch (error) {
       toast({
@@ -1788,12 +1920,26 @@ export default function ServerConfig() {
   }
 
   const handleSaveSpawnRegions = async () => {
+    if (serverChangedSinceLoad) {
+      toast({ title: 'Server changed', description: 'Reload before saving spawn regions.', variant: 'destructive' })
+      return
+    }
     setSaving(true)
     try {
+      const preview = editorMode === 'raw'
+        ? rawChangePreview(originalRawContent, rawContent)
+        : spawnRegions
+            .filter((region, index) => JSON.stringify(region) !== JSON.stringify(originalSpawnRegions[index]))
+            .map((region) => `${region.name}: ${region.isServerFile ? 'server file' : 'map file'} ${region.file}`)
+      if (spawnRegions.length < originalSpawnRegions.length) {
+        preview.push(`${originalSpawnRegions.length - spawnRegions.length} region removed`)
+      }
+      if (!pathsInfo?.exists.spawnregions && editorMode !== 'raw') preview.unshift('Create spawn regions file')
+      if (!(await confirmFileSave(`${pathsInfo?.serverName || 'server'}_spawnregions.lua`, preview))) return
       const result =
         editorMode === 'raw'
-          ? await serverFilesApi.saveRaw('spawnregions', rawContent)
-          : await serverFilesApi.saveSpawnRegions(spawnRegions)
+          ? await serverFilesApi.saveRaw('spawnregions', rawContent, pathsInfo?.serverId ?? null)
+          : await serverFilesApi.saveSpawnRegions(spawnRegions, pathsInfo?.serverId ?? null)
       toast({
         title: 'Saved',
         description: result?.restartRequired
@@ -1801,7 +1947,10 @@ export default function ServerConfig() {
           : 'Spawn regions saved',
       })
       if (editorMode === 'raw') {
+        setOriginalRawContent(rawContent)
         loadData()
+      } else {
+        setOriginalSpawnRegions(spawnRegions)
       }
     } catch (error) {
       toast({
@@ -2009,7 +2158,7 @@ export default function ServerConfig() {
     if (!ok) return
 
     try {
-      await serverFilesApi.restoreBackup(filename)
+      await serverFilesApi.restoreBackup(filename, pathsInfo?.serverId ?? null)
       toast({
         title: 'Restored',
         description: 'Restored from ' + String(filename),
