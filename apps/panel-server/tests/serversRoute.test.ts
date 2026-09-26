@@ -501,6 +501,7 @@ describe("PUT /api/servers/:id", () => {
       id: 1,
       name: "Test Server",
       isActive: true,
+      rconPassword: "configured-password",
     });
     const response = createResponse();
     const rconService = {

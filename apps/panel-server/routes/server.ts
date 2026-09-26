@@ -67,6 +67,7 @@ import {
 import { scoreServerProcessOwnership } from "../services/serverManager.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 import { resolveEnvRconHost } from "../services/rcon.ts";
+import { updateServerProfile } from "../services/serverProfiles.ts";
 
 export { applyUpnpToIni } from "../utils/upnpConfig.ts";
 
@@ -479,22 +480,21 @@ async function ensureSteamCmdInstalled(installPath: string, io: any) {
   }
 }
 
-async function getServerConfigPath() {
+async function getServerConfigTarget() {
   const activeServer = await getActiveServer();
-  if (activeServer?.serverConfigPath) {
-    return activeServer.serverConfigPath;
+  if (activeServer) {
+    return {
+      activeServer,
+      serverConfigPath: activeServer.serverConfigPath ||
+        (activeServer.zomboidDataPath ? path.join(activeServer.zomboidDataPath, "Server") : null),
+      serverName: activeServer.serverName || null,
+    };
   }
-  const legacyPath = await getSetting("serverConfigPath");
-  return legacyPath || null;
-}
-
-async function getServerName() {
-  const activeServer = await getActiveServer();
-  if (activeServer?.serverName) {
-    return activeServer.serverName;
-  }
-  const legacyName = await getSetting("serverName");
-  return legacyName || null;
+  return {
+    activeServer: null,
+    serverConfigPath: (await getSetting("serverConfigPath")) || null,
+    serverName: (await getSetting("serverName")) || null,
+  };
 }
 
 function isValidServerName(name: any) {
@@ -1866,12 +1866,11 @@ router.post("/configure-rcon", async (req, res) => {
     }
     const rconPort = rconPortCheck.value;
 
-    if (!rconPassword) {
+    if (typeof rconPassword !== "string" || !rconPassword || rconPassword.length > 256) {
       return res.status(400).json({ error: "RCON password is required", code: ErrorCode.CONFIGURE_RCON_PASSWORD_REQUIRED });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { activeServer, serverConfigPath, serverName } = await getServerConfigTarget();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1899,9 +1898,20 @@ router.post("/configure-rcon", async (req, res) => {
       writeFileAtomic(iniPath, content, { encoding: "utf-8", mode: 0o600 });
     });
 
-    await setSetting("rconPassword", rconPassword);
-    await setSetting("rconPort", rconPort);
-    await setSetting("rconHost", resolveEnvRconHost());
+    if (activeServer) {
+      await updateServerProfile(activeServer.id, {
+        rconPassword,
+        rconPort,
+        rconHost: resolveEnvRconHost(),
+      }, {
+        rconService: req.app.get("rconService"),
+        serverManager: req.app.get("serverManager"),
+      });
+    } else {
+      await setSetting("rconPassword", rconPassword);
+      await setSetting("rconPort", rconPort);
+      await setSetting("rconHost", resolveEnvRconHost());
+    }
 
     log.info(`RCON configured in ${iniPath}`);
     res.json({
@@ -1929,8 +1939,7 @@ router.post("/configure-network", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { activeServer, serverConfigPath, serverName } = await getServerConfigTarget();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1959,8 +1968,14 @@ router.post("/configure-network", async (req, res) => {
 
     await applyUpnpToIni(serverConfigPath, serverName, useUpnp);
 
-    await setSetting("serverPort", serverPort);
-    await setSetting("useUpnp", useUpnp);
+    if (activeServer) {
+      await updateServerProfile(activeServer.id, { serverPort, useUpnp }, {
+        serverManager: req.app.get("serverManager"),
+      });
+    } else {
+      await setSetting("serverPort", serverPort);
+      await setSetting("useUpnp", useUpnp);
+    }
 
     log.info(
       `Network settings configured in ${iniPath}: port=${serverPort}, UPnP=${useUpnp ? "true" : "false"}`,
@@ -3120,14 +3135,17 @@ function filterConsoleLogLines(lines: string[], filterLevel = "filtered") {
   });
 }
 
+async function getConsoleDataPath() {
+  const activeServer = await getActiveServer();
+  if (activeServer) {
+    return activeServer.zomboidDataPath || activeServer.installPath || null;
+  }
+  return (await getSetting("zomboidDataPath")) || (await getSetting("serverPath"));
+}
+
 router.get("/console-log", async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
-    const zomboidDataPath =
-      activeServer?.zomboidDataPath ||
-      activeServer?.installPath ||
-      (await getSetting("zomboidDataPath")) ||
-      (await getSetting("serverPath"));
+    const zomboidDataPath = await getConsoleDataPath();
 
     if (!zomboidDataPath) {
       return res.status(400).json({ error: "Server data path not configured", code: ErrorCode.SERVER_DATA_PATH_NOT_CONFIGURED });
@@ -3195,31 +3213,25 @@ router.get("/console-log", async (req, res) => {
   }
 });
 
-let errorCountCache: { at: number; value: AnyRecord | null } = {
+let errorCountCache: { at: number; path: string | null; value: AnyRecord | null } = {
   at: 0,
+  path: null,
   value: null,
 };
 const ERROR_COUNT_TTL_MS = 20000;
 
 router.get("/console-log/error-count", async (req, res) => {
   try {
-    const now = Date.now();
-    if (errorCountCache.value && now - errorCountCache.at < ERROR_COUNT_TTL_MS) {
-      return res.json(errorCountCache.value);
-    }
-
-    const activeServer = await getActiveServer();
-    const zomboidDataPath =
-      activeServer?.zomboidDataPath ||
-      activeServer?.installPath ||
-      (await getSetting("zomboidDataPath")) ||
-      (await getSetting("serverPath"));
-
+    const zomboidDataPath = await getConsoleDataPath();
     if (!zomboidDataPath) {
       return res.json({ exists: false, count: 0, sinceStart: false });
     }
 
     const consoleLogPath = path.join(zomboidDataPath, "server-console.txt");
+    const now = Date.now();
+    if (errorCountCache.path === consoleLogPath && errorCountCache.value && now - errorCountCache.at < ERROR_COUNT_TTL_MS) {
+      return res.json(errorCountCache.value);
+    }
     if (!fs.existsSync(consoleLogPath)) {
       return res.json({ exists: false, count: 0, sinceStart: false });
     }
@@ -3268,7 +3280,7 @@ router.get("/console-log/error-count", async (req, res) => {
       truncated,
       lastModified: stats.mtime.toISOString(),
     };
-    errorCountCache = { at: now, value: payload };
+    errorCountCache = { at: now, path: consoleLogPath, value: payload };
     res.json(payload);
   } catch (error: any) {
     log.error(`Failed to count console log errors: ${error.message}`);
@@ -3278,12 +3290,7 @@ router.get("/console-log/error-count", async (req, res) => {
 
 router.get("/console-log/stream", async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
-    const zomboidDataPath =
-      activeServer?.zomboidDataPath ||
-      activeServer?.installPath ||
-      (await getSetting("zomboidDataPath")) ||
-      (await getSetting("serverPath"));
+    const zomboidDataPath = await getConsoleDataPath();
 
     if (!zomboidDataPath) {
       return res.status(400).json({ error: "Server data path not configured", code: ErrorCode.SERVER_DATA_PATH_NOT_CONFIGURED });
@@ -3362,12 +3369,7 @@ router.get("/console-log/stream", async (req, res) => {
 
 router.post("/console-log/clear", async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
-    const zomboidDataPath =
-      activeServer?.zomboidDataPath ||
-      activeServer?.installPath ||
-      (await getSetting("zomboidDataPath")) ||
-      (await getSetting("serverPath"));
+    const zomboidDataPath = await getConsoleDataPath();
 
     if (!zomboidDataPath) {
       return res.status(400).json({ error: "Server data path not configured", code: ErrorCode.SERVER_DATA_PATH_NOT_CONFIGURED });
@@ -3377,6 +3379,7 @@ router.post("/console-log/clear", async (req, res) => {
 
     if (fs.existsSync(consoleLogPath)) {
       fs.writeFileSync(consoleLogPath, "");
+      errorCountCache = { at: 0, path: null, value: null };
       log.info("Server console log cleared");
     }
 

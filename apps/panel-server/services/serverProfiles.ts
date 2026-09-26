@@ -213,9 +213,29 @@ async function reloadServicesForActiveServer(
   runtime: ServerProfileRuntime,
   server: JsonRecord,
 ): Promise<void> {
+  let rconReloaded = false;
+  if (runtime.rconService?.reloadConfig) {
+    try {
+      await runtime.rconService.reloadConfig();
+      rconReloaded = true;
+    } catch (error: unknown) {
+      log.warn(`Failed to reload RCON for new server: ${errorMessage(error)}`);
+    }
+  }
+
   if (runtime.serverManager?.reloadConfig) {
     await runtime.serverManager.reloadConfig();
     log.info(`ServerManager reloaded config for server: ${server.name}`);
+  }
+
+  if (rconReloaded && server.rconPassword) {
+    try {
+      if (await runtime.rconService!.connect()) {
+        log.info(`RCON reconnected for server: ${server.name}`);
+      }
+    } catch (error: unknown) {
+      log.warn(`Failed to connect RCON for new server: ${errorMessage(error)}`);
+    }
   }
 
   await refreshWorkshopCheckerIfAvailable(runtime);
@@ -225,20 +245,6 @@ async function reloadServicesForActiveServer(
       await runtime.logTailer.reloadConfig();
     } catch (error: unknown) {
       log.warn(`LogTailer refresh failed: ${errorMessage(error)}`);
-    }
-  }
-
-  if (runtime.rconService?.isConnected?.()) {
-    await runtime.rconService.disconnect();
-  }
-
-  if (runtime.rconService && server.rconPassword) {
-    try {
-      await runtime.rconService.reloadConfig();
-      await runtime.rconService.connect();
-      log.info(`RCON reconnected for server: ${server.name}`);
-    } catch (error: unknown) {
-      log.warn(`Failed to connect RCON for new server: ${errorMessage(error)}`);
     }
   }
 
@@ -593,15 +599,14 @@ export async function updateServerProfile(
 
       if (rconFieldsChanged && runtime.rconService?.reloadConfig) {
         try {
-          if (runtime.rconService.isConnected?.()) {
-            await runtime.rconService.disconnect();
-          }
           await runtime.rconService.reloadConfig();
-          const reconnected = await runtime.rconService.connect();
-          if (!reconnected) {
-            reloadWarnings.push(
-              "RCON could not reconnect; verify the updated connection settings",
-            );
+          if (server.rconPassword) {
+            const reconnected = await runtime.rconService.connect();
+            if (!reconnected) {
+              reloadWarnings.push(
+                "RCON could not reconnect; verify the updated connection settings",
+              );
+            }
           }
         } catch (error: unknown) {
           log.warn(`RCON reload failed after update: ${errorMessage(error)}`);

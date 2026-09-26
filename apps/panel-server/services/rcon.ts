@@ -264,6 +264,7 @@ export class RconService extends EventEmitter {
   serverStarting: boolean;
   serverStartingTimeout: ReturnType<typeof setTimeout> | null;
   connectionVersion: number;
+  targetVersion: number;
   reconnecting: boolean;
   reconnectPromise: Promise<boolean> | null;
   connectionTimeout: number;
@@ -305,6 +306,7 @@ export class RconService extends EventEmitter {
     this.serverStarting = false;
     this.serverStartingTimeout = null;
     this.connectionVersion = 0;
+    this.targetVersion = 0;
     this.reconnecting = false;
     this.reconnectPromise = null;
 
@@ -550,6 +552,8 @@ export class RconService extends EventEmitter {
   }
 
   async reloadConfig(serverId: string | null = null) {
+    this.targetVersion++;
+    this.connectionVersion++;
     this.configLoaded = false;
     await this.disconnect();
     await this.loadConfig(serverId);
@@ -988,8 +992,16 @@ export class RconService extends EventEmitter {
     command: string,
     { skipLog = false, retryOnConnectionError = false }: { skipLog?: boolean; retryOnConnectionError?: boolean } = {},
   ): Promise<AnyRecord> {
+    const targetVersion = this.targetVersion;
     let commandClient: SourceRconClient | null = null;
     let commandSent = false;
+    const targetChanged = () => this.targetVersion !== targetVersion;
+    const changedTargetResult = () => ({
+      success: false,
+      error: "Server profile changed while the RCON command was running; its result is unknown",
+      code: ErrorCode.RCON_EXECUTE_DISCONNECTED,
+      commandSent,
+    });
     try {
       if (this.serverStarting) {
         return { success: false, error: "Server is starting, please wait..." };
@@ -997,6 +1009,7 @@ export class RconService extends EventEmitter {
 
       if (!this.connected) {
         const connectResult = await this.connect();
+        if (targetChanged()) return changedTargetResult();
         if (connectResult === false) {
           return {
             success: false,
@@ -1009,6 +1022,7 @@ export class RconService extends EventEmitter {
       log.debug(`executing: ${redactRconCommandSecrets(command)}`);
 
       commandClient = this.client;
+      if (targetChanged()) return changedTargetResult();
       if (!commandClient || typeof commandClient.execute !== "function") {
         throw new Error("RCON not connected");
       }
@@ -1028,6 +1042,7 @@ export class RconService extends EventEmitter {
       } finally {
         clearTimeout(timeoutId);
       }
+      if (targetChanged()) return changedTargetResult();
 
       if (this.client === commandClient && this.connected) {
         this.lastSuccessfulCommand = Date.now();
@@ -1052,6 +1067,7 @@ export class RconService extends EventEmitter {
         response: response || "Command executed successfully",
       };
     } catch (error: any) {
+      if (targetChanged()) return changedTargetResult();
       const errorMsg = error.message || "Unknown error";
 
       const isConnectionError =
@@ -1111,6 +1127,7 @@ export class RconService extends EventEmitter {
 
         try {
           await this.reconnect();
+          if (targetChanged()) return changedTargetResult();
           const retryClient = this.client;
           if (this.connected && retryClient) {
             let retryTimeoutId: any;
@@ -1129,6 +1146,7 @@ export class RconService extends EventEmitter {
                 retryTimeoutPromise,
               ]);
             } catch (retryError: any) {
+              if (targetChanged()) return changedTargetResult();
               const retryWasCurrentClient = this.client === retryClient;
               this._cleanupClient(retryClient);
               if (retryWasCurrentClient) this.connected = false;
@@ -1146,6 +1164,7 @@ export class RconService extends EventEmitter {
             } finally {
               clearTimeout(retryTimeoutId);
             }
+            if (targetChanged()) return changedTargetResult();
 
             if (this.client === retryClient && this.connected) {
               this.lastSuccessfulCommand = Date.now();
@@ -1176,6 +1195,7 @@ export class RconService extends EventEmitter {
             };
           }
         } catch (reconnectError: any) {
+          if (targetChanged()) return changedTargetResult();
           const reconnectMsg = this.getUserFriendlyError(
             reconnectError.message,
           );
@@ -1608,6 +1628,8 @@ export class RconService extends EventEmitter {
   }
 
   async updateConfig(host?: string, port?: number | null, password?: string) {
+    this.targetVersion++;
+    this.connectionVersion++;
     this.config.host = host !== undefined ? host : this.config.host;
     this.config.port = port !== undefined ? port : this.config.port;
     this.config.password =

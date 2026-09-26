@@ -46,6 +46,12 @@ describe("getServerName (Finding 2: path traversal via serverName)", () => {
     await expect(getServerName()).resolves.toBe("LegacyServer");
   });
 
+  it("does not take the legacy name when an active server has none", async () => {
+    getActiveServer.mockResolvedValue({ id: "2" });
+    getAllSettings.mockResolvedValue({ serverName: "OldServer" });
+    await expect(getServerName()).rejects.toThrow(ServerNotConfiguredError);
+  });
+
   it("throws ServerNotConfiguredError instead of inventing 'servertest' when nothing is configured", async () => {
     getActiveServer.mockResolvedValue(null);
     getAllSettings.mockResolvedValue({});
@@ -68,6 +74,12 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
   it("throws even when an active server row exists but has no path anywhere and no legacy fallback either", async () => {
     getActiveServer.mockResolvedValue({ id: "1", serverName: "Ghost" });
     getAllSettings.mockResolvedValue({});
+    await expect(getServerConfigPath()).rejects.toThrow(ServerNotConfiguredError);
+  });
+
+  it("does not take the legacy config path when an active server has none", async () => {
+    getActiveServer.mockResolvedValue({ id: "2", serverName: "NewServer" });
+    getAllSettings.mockResolvedValue({ serverConfigPath: "/old/Server" });
     await expect(getServerConfigPath()).rejects.toThrow(ServerNotConfiguredError);
   });
 

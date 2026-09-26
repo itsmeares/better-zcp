@@ -3,6 +3,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+const updateServerProfile = vi.fn(async () => ({}));
+vi.mock("../services/serverProfiles.ts", () => ({ updateServerProfile }));
 
 vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
@@ -52,7 +54,8 @@ beforeEach(() => {
     `PVP=false\n${welcomeLine}\nRCONPassword=old\nRCONPort=27015\nUPnP=true\nDefaultPort=16261\nUDPPort=16262\n`,
     "utf-8",
   );
-  getActiveServer.mockResolvedValue({ serverConfigPath, serverName: "servertest" });
+  getActiveServer.mockResolvedValue({ id: "server-1", serverConfigPath, serverName: "servertest" });
+  updateServerProfile.mockClear();
 });
 
 afterEach(() => {
@@ -79,6 +82,10 @@ describe("POST /configure-rcon leaves a free-text RCONPassword=/RCONPort= collis
     expect(content).toContain("RCONPort=27020");
     expect(content.match(/^RCONPassword=/gm)).toHaveLength(1);
     expect(content.match(/^RCONPort=/gm)).toHaveLength(1);
+    expect(updateServerProfile).toHaveBeenCalledWith("server-1", expect.objectContaining({
+      rconPassword: "brand-new-secret",
+      rconPort: 27020,
+    }), expect.any(Object));
   });
 });
 
@@ -100,6 +107,10 @@ describe("POST /configure-network leaves a free-text DefaultPort=/UDPPort=/UPnP=
     expect(content.match(/^DefaultPort=/gm)).toHaveLength(1);
     expect(content.match(/^UDPPort=/gm)).toHaveLength(1);
     expect(content.match(/^UPnP=/gm)).toHaveLength(1);
+    expect(updateServerProfile).toHaveBeenCalledWith("server-1", {
+      serverPort: 17000,
+      useUpnp: false,
+    }, expect.any(Object));
   });
 });
 
