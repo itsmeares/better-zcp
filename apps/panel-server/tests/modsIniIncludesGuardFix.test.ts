@@ -9,7 +9,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getActiveServer, getSetting } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -110,5 +110,49 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
     const modsLine = content.match(/^Mods=(.*)$/m)?.[1];
     expect(modsLine, "no real Mods= line was ever written -- the change was silently dropped").toBeDefined();
     expect(modsLine.split(";")).toContain("NewMod");
+  });
+
+  it("does not write an old server's INI when the active profile has no config path", async () => {
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mods-profile-path-"));
+    const oldConfigPath = path.join(dataRoot, "Server");
+    fs.mkdirSync(oldConfigPath);
+    iniPath = path.join(oldConfigPath, "OldServer.ini");
+    fs.writeFileSync(iniPath, "Mods=OldMod\n");
+    getActiveServer.mockReset().mockResolvedValue({ id: "new", serverName: "NewServer" });
+    getSetting.mockReset().mockImplementation(async (key) =>
+      key === "serverConfigPath" ? oldConfigPath : "OldServer",
+    );
+
+    const res = await runRoute("/toggle-mod-id", "post", {
+      body: { modId: "NewMod", enabled: true },
+    });
+
+    expect(res.getStatusCode()).toBe(400);
+    expect(fs.readFileSync(iniPath, "utf8")).toBe("Mods=OldMod\n");
+    expect(getSetting).not.toHaveBeenCalled();
+  });
+
+  it("uses one profile snapshot for the INI path and server name", async () => {
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mods-profile-switch-"));
+    const profiles = ["First", "Second"].map((name) => {
+      const serverConfigPath = path.join(dataRoot, name);
+      fs.mkdirSync(serverConfigPath);
+      fs.writeFileSync(path.join(serverConfigPath, `${name}.ini`), "Mods=Existing\n");
+      return { id: name, serverConfigPath, serverName: name };
+    });
+    getActiveServer.mockReset()
+      .mockResolvedValueOnce(profiles[0])
+      .mockResolvedValue(profiles[1]);
+
+    const res = await runRoute("/toggle-mod-id", "post", {
+      body: { modId: "NewMod", enabled: true },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    expect(getActiveServer).toHaveBeenCalledOnce();
+    expect(fs.readFileSync(path.join(profiles[0].serverConfigPath, "First.ini"), "utf8"))
+      .toContain("Mods=Existing;NewMod");
+    expect(fs.readFileSync(path.join(profiles[1].serverConfigPath, "Second.ini"), "utf8"))
+      .toBe("Mods=Existing\n");
   });
 });

@@ -116,44 +116,25 @@ function getSanitizedIniPath(
   return path.join(serverConfigPath, `${sanitizedServerName}.ini`);
 }
 
-async function getServerConfigPath() {
+async function getServerPaths() {
   const activeServer = await getActiveServer();
-
-  if (activeServer?.serverConfigPath) {
-    return activeServer.serverConfigPath;
-  }
-
-  if (activeServer?.zomboidDataPath) {
-    return path.join(activeServer.zomboidDataPath, "Server");
+  if (activeServer) {
+    return {
+      serverConfigPath: activeServer.serverConfigPath ||
+        (activeServer.zomboidDataPath ? path.join(activeServer.zomboidDataPath, "Server") : null),
+      serverName: activeServer.serverName || null,
+      serverPath: activeServer.installPath || null,
+    };
   }
 
   const legacyPath = await getSetting("serverConfigPath");
-  if (legacyPath) return legacyPath;
-
-  const legacyZomboidPath = await getSetting("zomboidDataPath");
-  if (legacyZomboidPath) {
-    return path.join(legacyZomboidPath, "Server");
-  }
-
-  return null;
-}
-
-async function getServerName() {
-  const activeServer = await getActiveServer();
-  if (activeServer?.serverName) {
-    return activeServer.serverName;
-  }
-  const legacyName = await getSetting("serverName");
-  return legacyName || null;
-}
-
-async function getServerPath() {
-  const activeServer = await getActiveServer();
-  if (activeServer?.installPath) {
-    return activeServer.installPath;
-  }
-  const legacyPath = await getSetting("serverPath");
-  return legacyPath || null;
+  const legacyZomboidPath = legacyPath ? null : await getSetting("zomboidDataPath");
+  return {
+    serverConfigPath: legacyPath ||
+      (legacyZomboidPath ? path.join(legacyZomboidPath, "Server") : null),
+    serverName: (await getSetting("serverName")) || null,
+    serverPath: (await getSetting("serverPath")) || null,
+  };
 }
 
 function getModChecker(req: Request, res: Response): any {
@@ -190,8 +171,7 @@ router.get("/status", async (req, res) => {
 router.get("/tracked", async (req, res) => {
   try {
     try {
-      const serverConfigPath = await getServerConfigPath();
-      const serverName = await getServerName();
+      const { serverConfigPath, serverName } = await getServerPaths();
       if (serverConfigPath && serverName) {
         const sanitizedServerName = path.basename(serverName);
         if (sanitizedServerName === serverName && !serverName.includes("..")) {
@@ -796,8 +776,7 @@ router.post("/cancel-pending-restart", async (req, res) => {
 
 router.post("/sync-from-server", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       log.warn("sync-from-server: Server config path not set");
@@ -941,8 +920,7 @@ router.get("/collection/diff", async (req, res) => {
     const configuredWorkshopIds = new Set<string>();
     let serverConfigRead = false;
     try {
-      const serverConfigPath = await getServerConfigPath();
-      const serverName = await getServerName();
+      const { serverConfigPath, serverName } = await getServerPaths();
       const sanitizedServerName = path.basename(serverName || "");
       if (
         serverConfigPath &&
@@ -1333,9 +1311,7 @@ router.post("/write-to-ini", async (req, res) => {
       }
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1523,8 +1499,7 @@ router.post("/write-to-ini", async (req, res) => {
 
 router.get("/current-config", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.json({
@@ -1574,7 +1549,6 @@ router.get("/current-config", async (req, res) => {
 
     const duplicateKeys = findDuplicateIniKeys(content);
 
-    const serverPath = await getServerPath();
     const modIdSet = new Set(modIds);
     const workshopModMap: Record<string, AnyRecord[]> = {};
     if (serverPath) {
@@ -1628,8 +1602,7 @@ router.post("/toggle-mod-id", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1657,8 +1630,6 @@ router.post("/toggle-mod-id", async (req, res) => {
         code: ErrorCode.MODS_CONFIG_FILE_NOT_FOUND,
       });
     }
-
-    const serverPath = await getServerPath();
 
     const result = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
@@ -1767,8 +1738,7 @@ router.post("/batch-toggle-mod-ids", async (req, res) => {
       }
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1796,8 +1766,6 @@ router.post("/batch-toggle-mod-ids", async (req, res) => {
         code: ErrorCode.MODS_CONFIG_FILE_NOT_FOUND,
       });
     }
-
-    const serverPath = await getServerPath();
 
     const result = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
@@ -1885,8 +1853,7 @@ router.post("/add-to-ini", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -1920,8 +1887,6 @@ router.post("/add-to-ini", async (req, res) => {
 
     let detectedModId = modId;
     let detectionSource = "provided";
-    const serverPath = await getServerPath();
-
     if (!detectedModId) {
       if (serverPath) {
         detectedModId = findModIdFromWorkshop(String(workshopId), serverPath);
@@ -2560,7 +2525,7 @@ router.post("/inspect-workshop-item", async (req, res) => {
       });
     }
 
-    const serverPath = await getServerPath();
+    const { serverPath } = await getServerPaths();
     if (!serverPath) {
       return res.status(400).json({
         error: "Server path not configured",
@@ -2607,9 +2572,7 @@ router.post("/remove-from-ini", async (req, res) => {
       ? clientModIds.slice(0, 50)
       : [];
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverPath = await getServerPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverPath, serverName } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -2832,9 +2795,7 @@ router.post("/batch-remove", async (req, res) => {
 
     const dbResults = { removed: 0, failed: 0 };
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverPath = await getServerPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverPath, serverName } = await getServerPaths();
 
     let iniResult: AnyRecord = { removed: 0, skipped: 0 };
     let iniEditApplied = false;
@@ -2970,9 +2931,7 @@ router.post("/batch-remove", async (req, res) => {
 
 router.post("/repair-map-entries", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverPath = await getServerPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverPath, serverName } = await getServerPaths();
 
     if (!serverConfigPath || !serverPath || !serverName) {
       return res.status(400).json({
@@ -3102,8 +3061,7 @@ router.post("/repair-map-entries", async (req, res) => {
 
 router.post("/deduplicate-mod-ids", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -3219,9 +3177,7 @@ router.post("/add-missing-dep", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     if (!serverConfigPath || !serverName)
       return res.status(400).json({
         error: "Server path not configured.",
@@ -3368,9 +3324,7 @@ router.post("/add-all-resolved-deps", async (req, res) => {
       }
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
         error: "Server config path not set",
@@ -3532,7 +3486,7 @@ router.post("/search-workshop-mods", async (req, res) => {
       typeof parentModId === "string" && parentModId.length < 100
         ? parentModId
         : "";
-    const serverPath = await getServerPath();
+    const { serverPath } = await getServerPaths();
 
     const buildSearchVariants = (raw: string, parent: string): string[] => {
       const variants: string[] = [];
@@ -3822,7 +3776,7 @@ router.post("/resolve-missing-deps", async (req, res) => {
       });
     }
 
-    const serverPath = await getServerPath();
+    const { serverPath } = await getServerPaths();
     const resolved = [];
 
     for (const dep of deps) {
@@ -3898,9 +3852,7 @@ router.post("/resolve-missing-deps", async (req, res) => {
 
 router.post("/sync-mod-ids", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
         error: "Server config path not set",
@@ -4068,9 +4020,7 @@ router.post("/sync-mod-ids", async (req, res) => {
 
 router.get("/validate-config", async (req, res) => {
   try {
-    const serverConfigPath = await getServerConfigPath();
-    const serverPath = await getServerPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverPath, serverName } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -4211,8 +4161,7 @@ router.post("/save-order", async (req, res) => {
       }
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName } = await getServerPaths();
     const iniPath = getSanitizedIniPath(serverConfigPath, serverName);
 
     if (!iniPath) {
@@ -4283,7 +4232,7 @@ router.post("/discover-mod-ids", async (req, res) => {
       });
     }
 
-    const serverPath = await getServerPath();
+    const { serverPath } = await getServerPaths();
     const discoveredModIds: string[] = [];
     const sources = [];
 
@@ -4419,9 +4368,7 @@ router.post("/add-mod-advanced", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
 
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
@@ -5043,12 +4990,10 @@ function hashFileSync(filePath: string): string | null {
   }
 }
 
-async function readIniModLists(): Promise<{
+async function readIniModLists({ serverConfigPath, serverName }: Awaited<ReturnType<typeof getServerPaths>>): Promise<{
   workshopIds: string[];
   modIdsFromIni: string[];
 }> {
-  const serverConfigPath = await getServerConfigPath();
-  const serverName = await getServerName();
   const iniPath = getSanitizedIniPath(serverConfigPath, serverName);
   let workshopIds: string[] = [];
   let modIdsFromIni: string[] = [];
@@ -5852,8 +5797,9 @@ router.get("/conflicts/cached", async (req, res) => {
     return res.json(null);
   }
   try {
-    const { workshopIds, modIdsFromIni } = await readIniModLists();
-    const currentServerPath = await getServerPath();
+    const paths = await getServerPaths();
+    const { workshopIds, modIdsFromIni } = await readIniModLists(paths);
+    const currentServerPath = paths.serverPath;
     const currentSnapshot = createConflictScanSnapshots(
       workshopIds,
       modIdsFromIni,
@@ -5890,13 +5836,14 @@ router.get("/conflicts", async (req, res) => {
   }
   const scanStart = Date.now();
   try {
-    const serverPath = await getServerPath();
+    const paths = await getServerPaths();
+    const { serverPath } = paths;
     if (!serverPath)
       return res.status(400).json({
         error: "Server install path not set — configure it in Settings",
         code: ErrorCode.MODS_SERVER_INSTALL_PATH_NOT_SET,
       });
-    const { workshopIds, modIdsFromIni } = await readIniModLists();
+    const { workshopIds, modIdsFromIni } = await readIniModLists(paths);
     if (workshopIds.length === 0) {
       return res.json({
         totalConflicts: 0,
@@ -6048,7 +5995,8 @@ router.get("/conflicts/stream", async (req, res) => {
   heartbeat.unref?.();
 
   try {
-    const serverPath = await getServerPath();
+    const paths = await getServerPaths();
+    const { serverPath } = paths;
     if (!serverPath) {
       send("error", {
         error: "Server install path not set — configure it in Settings",
@@ -6057,7 +6005,7 @@ router.get("/conflicts/stream", async (req, res) => {
       res.end();
       return;
     }
-    const { workshopIds, modIdsFromIni } = await readIniModLists();
+    const { workshopIds, modIdsFromIni } = await readIniModLists(paths);
 
     send("init", {
       totalWorkshopIds: workshopIds.length,
@@ -6296,13 +6244,14 @@ router.get("/conflicts/diff", async (req, res) => {
       });
     }
 
-    const serverPath = await getServerPath();
+    const paths = await getServerPaths();
+    const { serverPath } = paths;
     if (!serverPath)
       return res.status(400).json({
         error: "Server install path not set — configure it in Settings",
         code: ErrorCode.MODS_SERVER_INSTALL_PATH_NOT_SET,
       });
-    const { workshopIds } = await readIniModLists();
+    const { workshopIds } = await readIniModLists(paths);
 
     let pathA = null,
       pathB = null;
@@ -6607,8 +6556,7 @@ router.get("/disk-only", async (req, res) => {
       return res.json({ mods: [], reason: "workshop folder not configured" });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { serverConfigPath, serverName } = await getServerPaths();
     const inIni = new Set();
     if (serverConfigPath && serverName) {
       const sanitized = path.basename(serverName);
@@ -6676,9 +6624,7 @@ router.post("/enable-disk-mod", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
         error: "Server config path not set",
@@ -6757,9 +6703,7 @@ router.post("/enable-disk-mod", async (req, res) => {
 });
 
 async function deleteModFromDiskAndIni(wsId: string): Promise<AnyRecord> {
-  const serverConfigPath = await getServerConfigPath();
-  const serverName = await getServerName();
-  const serverPath = await getServerPath();
+  const { serverConfigPath, serverName, serverPath } = await getServerPaths();
   const sanitized = serverName ? path.basename(serverName) : null;
   const iniPath =
     sanitized && serverConfigPath
@@ -7014,9 +6958,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     const sanitized = serverName ? path.basename(serverName) : null;
     const iniPath =
       sanitized && serverConfigPath
@@ -7153,9 +7095,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       });
     }
 
-    const serverConfigPath = await getServerConfigPath();
-    const serverName = await getServerName();
-    const serverPath = await getServerPath();
+    const { serverConfigPath, serverName, serverPath } = await getServerPaths();
     if (!serverConfigPath || !serverName) {
       return res.status(400).json({
         error: "Server config path not set",

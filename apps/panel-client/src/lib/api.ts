@@ -1452,6 +1452,7 @@ export interface BackupSnapshot {
 export const serverFilesApi = {
   getPaths: () =>
     apiGet("/server-files/paths") as Promise<{
+      serverId: string | number | null;
       configPath: string;
       serverName: string;
       files: {
@@ -1475,8 +1476,8 @@ export const serverFilesApi = {
       serverName: string;
       duplicateKeys?: Array<{ key: string; count: number }>;
     }>,
-  saveIni: (settings: Record<string, string>) =>
-    apiPut("/server-files/ini", { settings }) as Promise<{
+  saveIni: (settings: Record<string, string>, expectedServerId: string | number | null) =>
+    apiPut("/server-files/ini", { settings, expectedServerId }) as Promise<{
       success: boolean;
       message: string;
       path: string;
@@ -1490,8 +1491,8 @@ export const serverFilesApi = {
       path: string;
       serverName: string;
     }>,
-  saveSandbox: (sandbox: SandboxData) =>
-    apiPut("/server-files/sandbox", { sandbox }) as Promise<{
+  saveSandbox: (sandbox: Partial<SandboxData>, expectedServerId: string | number | null) =>
+    apiPut("/server-files/sandbox", { sandbox, expectedServerId }) as Promise<{
       success: boolean;
       created: boolean;
       message: string;
@@ -1520,16 +1521,16 @@ export const serverFilesApi = {
       spawnpoints: SpawnPointsByProfession;
       path: string;
     }>,
-  saveSpawnPoints: (spawnpoints: SpawnPointsByProfession) =>
-    apiPut("/server-files/spawnpoints", { spawnpoints }),
+  saveSpawnPoints: (spawnpoints: SpawnPointsByProfession, expectedServerId: string | number | null) =>
+    apiPut("/server-files/spawnpoints", { spawnpoints, expectedServerId }),
 
   getSpawnRegions: () =>
     apiGet("/server-files/spawnregions") as Promise<{
       spawnregions: SpawnRegion[];
       path: string;
     }>,
-  saveSpawnRegions: (spawnregions: SpawnRegion[]) =>
-    apiPut("/server-files/spawnregions", { spawnregions }),
+  saveSpawnRegions: (spawnregions: SpawnRegion[], expectedServerId: string | number | null) =>
+    apiPut("/server-files/spawnregions", { spawnregions, expectedServerId }),
 
   getRaw: (type: "ini" | "sandbox" | "spawnpoints" | "spawnregions") =>
     apiGet(`/server-files/raw/${type}`) as Promise<{
@@ -1540,23 +1541,26 @@ export const serverFilesApi = {
   saveRaw: (
     type: "ini" | "sandbox" | "spawnpoints" | "spawnregions",
     content: string,
-  ) => apiPut(`/server-files/raw/${type}`, { content }),
+    expectedServerId: string | number | null,
+  ) => apiPut(`/server-files/raw/${type}`, { content, expectedServerId }),
 
   getBackups: () =>
     apiGet("/server-files/backups") as Promise<{
       backups: ConfigBackupFile[];
       path: string;
     }>,
-  restoreBackup: (filename: string) =>
-    apiPost(`/server-files/restore/${filename}`),
+  restoreBackup: (filename: string, expectedServerId: string | number | null) =>
+    apiPost(`/server-files/restore/${filename}`, { expectedServerId }),
 
-  saveAndReload: () => apiPost("/server-files/save-and-reload"),
+  saveAndReload: (expectedServerId: string | number | null) =>
+    apiPost("/server-files/save-and-reload", { expectedServerId }),
 
   saveSandboxOption: (
     name: string,
     value: string | number | boolean,
+    expectedServerId: string | number | null,
   ): Promise<{ success: boolean; persisted: boolean }> =>
-    apiPut("/server-files/sandbox-option", { name, value }),
+    apiPut("/server-files/sandbox-option", { name, value, expectedServerId }),
 
 };
 

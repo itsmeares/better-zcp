@@ -517,6 +517,7 @@ export function installDemoFetchShim(): void {
 
     if (path === '/api/server-files/paths') {
       return jsonResponse({
+        serverId: 'demo-server',
         configPath: '/home/pz/Zomboid/Server',
         serverName: 'DoomerZDemo',
         files: {
