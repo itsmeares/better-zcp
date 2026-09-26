@@ -42,6 +42,8 @@ export async function getServerConfigPath(
     return path.join(resolvedActiveServer.zomboidDataPath, "Server");
   }
 
+  if (resolvedActiveServer) throw new ServerNotConfiguredError();
+
   const settings = await getAllSettings();
   if (settings.serverConfigPath) {
     return settings.serverConfigPath;
@@ -59,7 +61,7 @@ export async function getServerName(
   const resolvedActiveServer =
     activeServer === undefined ? await getActiveServer() : activeServer;
   let raw;
-  if (resolvedActiveServer?.serverName) {
+  if (resolvedActiveServer) {
     raw = resolvedActiveServer.serverName;
   } else {
     const settings = await getAllSettings();

@@ -6,6 +6,7 @@ import path from "node:path";
 const getActiveServer = vi.fn();
 const getSetting = vi.fn();
 const setSetting = vi.fn();
+const updateServerProfile = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args: unknown[]) => getActiveServer(...args),
@@ -15,6 +16,7 @@ vi.mock("../database/init.ts", () => ({
 vi.mock("../services/rcon.ts", () => ({
   resolveEnvRconHost: () => "127.0.0.1",
 }));
+vi.mock("../services/serverProfiles.ts", () => ({ updateServerProfile }));
 
 const { default: router } = await import("../routes/server.ts");
 
@@ -43,6 +45,7 @@ beforeEach(() => {
   getActiveServer.mockReset().mockResolvedValue(null);
   getSetting.mockReset().mockResolvedValue(null);
   setSetting.mockReset().mockResolvedValue(undefined);
+  updateServerProfile.mockReset().mockResolvedValue({});
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -86,6 +89,31 @@ describe("server API routes", () => {
     })).body).toMatchObject({ newLines: ["RCON: connected"] });
     expect((await execute("/console-log/clear", "post")).body).toEqual({ success: true });
     expect(fs.readFileSync(logPath, "utf8")).toBe("");
+    expect((await execute("/console-log/error-count", "get")).body)
+      .toMatchObject({ count: 0 });
+  });
+
+  it("keeps console logs and cached error counts on the selected profile", async () => {
+    const secondPath = path.join(root, "second");
+    fs.mkdirSync(secondPath);
+    fs.writeFileSync(path.join(root, "server-console.txt"), "ERROR[server] first\n");
+    fs.writeFileSync(path.join(secondPath, "server-console.txt"), "ordinary line\n");
+    getActiveServer.mockResolvedValue({ zomboidDataPath: root });
+    getSetting.mockResolvedValue(root);
+
+    expect((await execute("/console-log/error-count", "get")).body)
+      .toMatchObject({ count: 1 });
+    getActiveServer.mockResolvedValue({ zomboidDataPath: secondPath });
+    expect((await execute("/console-log/error-count", "get")).body)
+      .toMatchObject({ count: 0 });
+    expect((await execute("/console-log", "get", { filter: "all" })).body.path)
+      .toBe(path.join(secondPath, "server-console.txt"));
+
+    getActiveServer.mockResolvedValue({ name: "unconfigured" });
+    expect((await execute("/console-log", "get")).statusCode).toBe(400);
+    expect((await execute("/console-log/clear", "post")).statusCode).toBe(400);
+    expect(fs.readFileSync(path.join(root, "server-console.txt"), "utf8"))
+      .toContain("ERROR[server] first");
   });
 
   it("writes RCON settings through the locked INI writer", async () => {
@@ -93,7 +121,7 @@ describe("server API routes", () => {
     fs.mkdirSync(configPath);
     const iniPath = path.join(configPath, "TestServer.ini");
     fs.writeFileSync(iniPath, "DefaultPort=16261\nRCONPassword=old\n");
-    getActiveServer.mockResolvedValue({ serverConfigPath: configPath, serverName: "TestServer" });
+    getActiveServer.mockResolvedValue({ id: "server-1", serverConfigPath: configPath, serverName: "TestServer" });
     const result = await execute("/configure-rcon", "post", {
       rconPassword: "new",
       rconPort: "27016",
@@ -101,7 +129,33 @@ describe("server API routes", () => {
     expect(result.body).toMatchObject({ success: true, iniPath });
     expect(fs.readFileSync(iniPath, "utf8")).toContain("RCONPassword=new");
     expect(fs.readFileSync(iniPath, "utf8")).toContain("RCONPort=27016");
-    expect(setSetting).toHaveBeenCalledWith("rconPort", 27016);
+    expect(updateServerProfile).toHaveBeenCalledWith("server-1", {
+      rconPassword: "new",
+      rconPort: 27016,
+      rconHost: "127.0.0.1",
+    }, expect.any(Object));
+    expect(setSetting).not.toHaveBeenCalled();
+  });
+
+  it("does not configure an old server when the selected profile has no config path", async () => {
+    const configPath = path.join(root, "Server");
+    fs.mkdirSync(configPath);
+    const iniPath = path.join(configPath, "TestServer.ini");
+    fs.writeFileSync(iniPath, "RCONPassword=old\n");
+    getActiveServer.mockResolvedValue({ name: "new", serverName: "NewServer" });
+    getSetting.mockImplementation(async (key: string) =>
+      key === "serverConfigPath" ? configPath : "TestServer",
+    );
+
+    const result = await execute("/configure-rcon", "post", {
+      rconPassword: "new",
+      rconPort: 27016,
+    });
+
+    expect(result.statusCode).toBe(400);
+    expect(fs.readFileSync(iniPath, "utf8")).toBe("RCONPassword=old\n");
+    expect(setSetting).not.toHaveBeenCalled();
+    expect(updateServerProfile).not.toHaveBeenCalled();
   });
 
   it("returns 503 when the update checker is unavailable", async () => {

@@ -115,7 +115,7 @@ router.post('/connect', async (req, res) => {
     }
 
     if (host !== undefined || port !== undefined || password !== undefined) {
-      rconService.updateConfig(host, normalizedPort, password);
+      await rconService.updateConfig(host, normalizedPort, password);
     }
 
     let connected;
