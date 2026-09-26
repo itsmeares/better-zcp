@@ -1,0 +1,1 @@
+import{G as e,J as t,K as n}from"./index-DSVBXSFW.js";function r(r){let i=t();return n(i.stores.location,e(r,i))}export{r as t};
