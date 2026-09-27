@@ -301,6 +301,10 @@ export class Scheduler {
       return false;
     }
 
+    const pending = this.pendingRestarts.get(task.id);
+    if (pending) clearTimeout(pending);
+    this.pendingRestarts.delete(task.id);
+
     if (this.jobs.has(task.id)) {
       this.jobs.get(task.id).stop();
     }

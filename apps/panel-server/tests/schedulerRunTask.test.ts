@@ -86,6 +86,21 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     }
   });
 
+  it("drops an old retry when a scheduled restart is edited", () => {
+    const { scheduler } = makeScheduler();
+    const task = { id: 101, name: "Restart", command: "restart", cron_expression: "0 */6 * * *" };
+    const staleRetry = setTimeout(() => {}, 60000);
+    scheduler.pendingRestarts.set(task.id, staleRetry);
+
+    try {
+      expect(scheduler.scheduleTask(task)).toMatchObject({ scheduled: true });
+      expect(scheduler.pendingRestarts.has(task.id)).toBe(false);
+    } finally {
+      scheduler.cancelTask(task.id);
+      clearTimeout(staleRetry);
+    }
+  });
+
   it.each([
     [{ success: true, players: [{ name: "Player" }] }, "1 player(s) online"],
     [{ success: false }, "Could not verify"],
