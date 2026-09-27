@@ -1284,7 +1284,9 @@ export default function Settings() {
   const handleCreateBackup = async () => {
     setCreatingBackup(true)
     try {
-      const result = await backupApi.createBackup()
+      const result = await backupApi.createBackup({
+        expectedServerId: servers.find((server) => server.isActive)?.id ?? null,
+      })
       if (result.success && result.backup) {
         toast({
           title: 'Backup Created',
@@ -1314,7 +1316,7 @@ export default function Settings() {
 
   const handleDeleteBackup = async (name: string) => {
     try {
-      await backupApi.deleteBackup(name)
+      await backupApi.deleteBackup(name, servers.find((server) => server.isActive)?.id ?? null)
       toast({
         title: 'Backup Deleted',
         description: 'Deleted ' + String(name),
@@ -1334,7 +1336,7 @@ export default function Settings() {
     setRestoringBackup(name)
     try {
       const result = await backupApi.restoreBackup(name, {
-        createPreRestoreBackup: true,
+        expectedServerId: servers.find((server) => server.isActive)?.id ?? null,
       })
       toast({
         title: 'Backup Restored',

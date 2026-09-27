@@ -21,6 +21,8 @@ export function getAutoUpdateReasonMessage(result: AutoUpdateResult): string {
       'Could not verify whether the server was running, so the update was abandoned for safety.',
     RCON_NOT_CONNECTED:
       'RCON was not connected, so the server could not be stopped safely.',
+    PLAYER_STATUS_UNKNOWN:
+      'Could not verify whether players were online, so the automatic update was postponed.',
     SAVE_FAILED: `The world could not be saved (${String(params.reason ?? 'unknown reason')}), so the update was abandoned rather than lose progress.`,
     STOP_SCAN_FAILED:
       'Lost the ability to verify the server had stopped, so the update was abandoned for safety.',

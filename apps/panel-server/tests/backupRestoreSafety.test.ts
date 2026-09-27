@@ -81,6 +81,20 @@ afterEach(() => {
 });
 
 describe("restoreBackup archive safety", () => {
+  it("never selects another world's save folder when the active profile has no save yet", async () => {
+    const otherWorld = path.join(root, "Saves", "Multiplayer", "OtherServer");
+    writeWorld(otherWorld, "OTHER");
+    const service = new BackupService();
+    const selected = { id: "selected", zomboidDataPath: root, serverName: "NewServer" };
+
+    expect(await service.getSavesPath(selected)).toBe(
+      path.join(root, "Saves", "Multiplayer", "NewServer"),
+    );
+    expect(await service.getSavesPath({ id: "selected", serverName: "NewServer" })).toBeNull();
+    expect(await service.getBackupsPath({ id: "selected", serverName: "NewServer" })).toBeNull();
+    expect(fs.readFileSync(path.join(otherWorld, "map_meta.bin"), "utf8")).toBe("OTHER");
+  });
+
   it("refuses to restore when process detection cannot confirm the server is stopped", async () => {
     const service = createService();
     service.setServerManager({
@@ -182,6 +196,17 @@ describe("restoreBackup archive safety", () => {
     expect(
       fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8"),
     ).toBe("RESTORED");
+  });
+
+  it("restores into a profile with no existing world without requiring a pre-restore backup", async () => {
+    const good = path.join(backupsPath, "good.zip");
+    await writeValidBackup(good, "RESTORED");
+    fs.rmSync(savesPath, { recursive: true });
+
+    const result = await createService().restoreBackup("good.zip");
+
+    expect(result.success).toBe(true);
+    expect(fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8")).toBe("RESTORED");
   });
 
   it("refuses to restore when the mandatory pre-restore backup completed but silently skipped a file", async () => {

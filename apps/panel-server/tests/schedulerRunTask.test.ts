@@ -40,11 +40,75 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     expect(scheduler.performRestart).toHaveBeenCalledWith(null, {
       rconService,
       serverManager: expect.any(Object),
+      onlyWhenEmpty: true,
     });
     expect(rconService.execute).not.toHaveBeenCalledWith(
       "restart",
       expect.anything(),
     );
+  });
+
+  it("records a failed restart as a failed scheduled task", async () => {
+    const { scheduler } = makeScheduler();
+    scheduler.performRestart = vi.fn().mockResolvedValue({ success: false, message: "World save failed" });
+
+    const result = await scheduler.runTaskNow({ id: 99, name: "Restart", command: "restart" });
+
+    expect(result).toEqual({ success: false, message: "World save failed" });
+    expect(logScheduleExecution).toHaveBeenCalledWith(
+      99, "Restart", "restart", false, "World save failed", expect.any(Number),
+    );
+  });
+
+  it("retries a cron restart after players leave and cancels a pending retry with its task", async () => {
+    vi.useFakeTimers();
+    try {
+      const { scheduler } = makeScheduler();
+      const task = { id: 100, name: "Restart", command: "restart" };
+      scheduler.jobs.set(task.id, { stop: vi.fn() });
+      scheduler.performRestart = vi.fn()
+        .mockResolvedValueOnce({ success: false, deferred: true, message: "Players online" })
+        .mockResolvedValue({ success: true });
+
+      await scheduler.runTaskNow(task, true);
+      expect(scheduler.pendingRestarts.has(task.id)).toBe(true);
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(scheduler.performRestart).toHaveBeenCalledTimes(2);
+      expect(scheduler.pendingRestarts.has(task.id)).toBe(false);
+
+      scheduler.performRestart.mockResolvedValue({ success: false, deferred: true, message: "Players online" });
+      await scheduler.runTaskNow(task, true);
+      scheduler.cancelTask(task.id);
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(scheduler.performRestart).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    [{ success: true, players: [{ name: "Player" }] }, "1 player(s) online"],
+    [{ success: false }, "Could not verify"],
+  ])("postpones a scheduled restart when player status is unsafe: %s", async (players, message) => {
+    const rconService = {
+      connected: true,
+      execute: vi.fn().mockResolvedValue({ success: true }),
+      getPlayers: vi.fn().mockResolvedValue(players),
+      save: vi.fn(),
+      quit: vi.fn(),
+    };
+    const serverManager = {
+      _serverId: "server-a",
+      serverName: "Test",
+      getServerProcessDetails: vi.fn().mockResolvedValue({ running: true }),
+    };
+    const scheduler = new Scheduler(rconService, serverManager);
+
+    const result = await scheduler.performRestart(0, { onlyWhenEmpty: true });
+
+    expect(result).toMatchObject({ success: false, deferred: true, message: expect.stringContaining(message) });
+    expect(rconService.save).not.toHaveBeenCalled();
+    expect(rconService.quit).not.toHaveBeenCalled();
   });
 
   it("routes 'save' through rconService.save()", async () => {

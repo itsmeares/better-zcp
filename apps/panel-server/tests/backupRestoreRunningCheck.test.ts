@@ -8,6 +8,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/backup.ts");
+const { getActiveServer } = await import("../database/init.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -51,6 +52,7 @@ let restoreBackup;
 let services;
 
 beforeEach(() => {
+  getActiveServer.mockReset().mockResolvedValue({ id: "server-a", serverName: "A" });
   restoreBackup = vi.fn(async () => ({ success: true }));
   services = {
     backupService: { restoreBackup },
@@ -58,12 +60,12 @@ beforeEach(() => {
   };
 });
 
-function postRestore(serverManager) {
+function postRestore(serverManager, body = {}) {
   services.serverManager = serverManager;
   return runRoute("/restore/:name", "post", {
     user: { role: "admin" },
     params: { name: "good.zip" },
-    body: {},
+    body,
     app: { get: (key) => services[key] },
   });
 }
@@ -99,6 +101,64 @@ describe("backup.js POST /restore/:name: an undetermined server state must refus
 
     expect(res.getStatusCode()).toBe(200);
     expect(restoreBackup).toHaveBeenCalledWith("good.zip", expect.anything());
+  });
+});
+
+describe("backup routes keep safety options under server control", () => {
+  it("ignores restore bypass flags from the request body and pins the selected profile", async () => {
+    const res = await postRestore(STOPPED_SERVER_MANAGER, {
+      expectedServerId: "server-a",
+      force: true,
+      createPreRestoreBackup: false,
+      activeServer: { id: "server-b" },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    expect(restoreBackup).toHaveBeenCalledWith("good.zip", {
+      io: services.io,
+      activeServer: { id: "server-a", serverName: "A" },
+    });
+  });
+
+  it("rejects a restore requested from another profile before touching the archive", async () => {
+    const res = await postRestore(STOPPED_SERVER_MANAGER, {
+      expectedServerId: "server-b",
+    });
+
+    expect(res.getStatusCode()).toBe(409);
+    expect(res.getBody().code).toBe("SERVER_PROFILE_CHANGED");
+    expect(restoreBackup).not.toHaveBeenCalled();
+  });
+
+  it("does not let a manual backup choose another server or skip restore locking", async () => {
+    const createBackup = vi.fn(async () => ({ success: true }));
+    services.backupService.createBackup = createBackup;
+    const res = await runRoute("/create", "post", {
+      user: { role: "admin" },
+      body: { expectedServerId: "server-a", activeServer: { id: "server-b" }, isPreRestore: true, includeDb: true },
+      app: { get: (key) => services[key] },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    expect(createBackup).toHaveBeenCalledWith({
+      io: services.io,
+      activeServer: { id: "server-a", serverName: "A" },
+      includeDb: true,
+    });
+  });
+
+  it("rejects deletion from a stale backup list", async () => {
+    const deleteBackup = vi.fn(async () => ({ success: true }));
+    services.backupService.deleteBackup = deleteBackup;
+    const res = await runRoute("/:name", "delete", {
+      user: { role: "admin" },
+      params: { name: "world.zip" },
+      body: { expectedServerId: "server-b" },
+      app: { get: (key) => services[key] },
+    });
+
+    expect(res.getStatusCode()).toBe(409);
+    expect(deleteBackup).not.toHaveBeenCalled();
   });
 });
 

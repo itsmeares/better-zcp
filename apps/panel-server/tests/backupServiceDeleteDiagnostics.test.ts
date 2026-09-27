@@ -91,4 +91,34 @@ describe("BackupService.deleteBackup() diagnostics", () => {
     expect(result.success).toBe(true);
     expect(fs.existsSync(path.join(backupsPath, "world_backup_1.zip"))).toBe(false);
   });
+
+  it("retention deletes from the backup's profile even when another profile has the same filename", async () => {
+    const a = { id: "A", zomboidDataPath: path.join(tmpDir, "A") };
+    const b = { id: "B", zomboidDataPath: path.join(tmpDir, "B") };
+    const aPath = await service.getBackupsPath(a);
+    const bPath = await service.getBackupsPath(b);
+    writeBackup(aPath, "same.zip");
+    writeBackup(bPath, "same.zip");
+    service.getSettings = async () => ({ maxBackups: 0 });
+
+    await service.cleanupOldBackups(a);
+
+    expect(fs.existsSync(path.join(aPath, "same.zip"))).toBe(false);
+    expect(fs.existsSync(path.join(bPath, "same.zip"))).toBe(true);
+  });
+
+  it("retention preserves another world's archive when profiles share a data folder", async () => {
+    const a = { id: "A", serverName: "World", zomboidDataPath: tmpDir };
+    const sharedPath = await service.getBackupsPath(a);
+    const own = "World_2026-09-01T00-00-00-000.zip";
+    const other = "World_Extra_2026-09-01T00-00-00-000.zip";
+    writeBackup(sharedPath, own);
+    writeBackup(sharedPath, other);
+    service.getSettings = async () => ({ maxBackups: 0 });
+
+    await service.cleanupOldBackups(a);
+
+    expect(fs.existsSync(path.join(sharedPath, own))).toBe(false);
+    expect(fs.existsSync(path.join(sharedPath, other))).toBe(true);
+  });
 });

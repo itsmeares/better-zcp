@@ -1964,6 +1964,7 @@ export const backupApi = {
 
   createBackup: (options?: {
     includeDb?: boolean;
+    expectedServerId?: string | number | null;
   }): Promise<{
     success: boolean;
     backup?: ServerBackupArchive;
@@ -1974,12 +1975,13 @@ export const backupApi = {
 
   deleteBackup: (
     name: string,
+    expectedServerId?: string | number | null,
   ): Promise<{ success: boolean; message?: string }> =>
-    apiRoute("DELETE", "/backup/:name", { name }),
+    apiRoute("DELETE", "/backup/:name", { name, expectedServerId }),
 
   restoreBackup: (
     name: string,
-    options?: { createPreRestoreBackup?: boolean },
+    options?: { expectedServerId?: string | number | null },
   ): Promise<{
     success: boolean;
     message?: string;
@@ -1989,6 +1991,7 @@ export const backupApi = {
 
   deleteOlderThan: (
     days: number,
+    expectedServerId?: string | number | null,
   ): Promise<{
     success: boolean;
     deleted?: number;
@@ -1996,7 +1999,7 @@ export const backupApi = {
     deletedNames?: string[];
     message?: string;
   }> =>
-    apiRoute("POST", "/backup/delete-older-than", { days }),
+    apiRoute("POST", "/backup/delete-older-than", { days, expectedServerId }),
 
   getDownloadUrl: (name: string): string =>
     `${API_BASE}/backup/download/${encodeURIComponent(name)}`,

@@ -288,6 +288,7 @@ export class BackupService {
 
       const serverDataPath = activeServer?.zomboidDataPath;
       const serverName = activeServer?.serverName;
+      if (activeServer && (!serverDataPath || !serverName)) return null;
       if (serverDataPath && serverName) {
         const savesPath = path.join(
           serverDataPath,
@@ -318,13 +319,8 @@ export class BackupService {
           if (caseInsensitiveMatch) {
             return path.join(baseSavesPath, caseInsensitiveMatch);
           }
-          if (folders.length > 0) {
-            log.warn(
-              `Could not find save folder matching "${serverName}", using first available: ${folders[0]}`,
-            );
-            return path.join(baseSavesPath, folders[0]);
-          }
         }
+        return savesPath;
       }
 
       const zomboidDataPath = await getSetting("zomboidDataPath");
@@ -354,7 +350,8 @@ export class BackupService {
           : activeServerOverride;
       let basePath;
 
-      if (activeServer?.zomboidDataPath) {
+      if (activeServer) {
+        if (!activeServer.zomboidDataPath) return null;
         basePath = activeServer.zomboidDataPath;
       } else {
         basePath = await getSetting("zomboidDataPath");
@@ -795,9 +792,9 @@ export class BackupService {
     }
   }
 
-  async deleteBackup(backupName: string): Promise<BackupResult> {
+  async deleteBackup(backupName: string, activeServerOverride?: any): Promise<BackupResult> {
     try {
-      const backupsPath = await this.getBackupsPath();
+      const backupsPath = await this.getBackupsPath(activeServerOverride);
       if (!backupsPath) {
         throw new Error("Backups folder not found");
       }
@@ -836,8 +833,15 @@ export class BackupService {
   async cleanupOldBackups(activeServerOverride?: any): Promise<void> {
     try {
       const settings = await this.getSettings();
-      const backups = await this.listBackups(activeServerOverride);
-      const prunable = backups.filter((b) => !b.name.startsWith("uploaded-"));
+      const activeServer = activeServerOverride === undefined
+        ? await getActiveServer()
+        : activeServerOverride;
+      const backups = await this.listBackups(activeServer);
+      const ownPrefix = activeServer?.serverName ? `${activeServer.serverName}_` : null;
+      const prunable = backups.filter((b) =>
+        !b.name.startsWith("uploaded-") &&
+        (!ownPrefix || (b.name.startsWith(ownPrefix) && /^\d{4}-\d{2}-\d{2}T/.test(b.name.slice(ownPrefix.length))))
+      );
 
       if (prunable.length <= settings.maxBackups) {
         return;
@@ -845,7 +849,7 @@ export class BackupService {
 
       const toDelete = prunable.slice(settings.maxBackups);
       for (const backup of toDelete) {
-        const deleted = await this.deleteBackup(backup.name);
+        const deleted = await this.deleteBackup(backup.name, activeServer);
         if (!deleted?.success) {
           log.warn(
             `Could not clean up old backup ${backup.name}: ${deleted?.message || "unknown error"}`,
@@ -859,12 +863,15 @@ export class BackupService {
     }
   }
 
-  async deleteBackupsOlderThan(days: number): Promise<BackupResult> {
+  async deleteBackupsOlderThan(days: number, activeServerOverride?: any): Promise<BackupResult> {
     if (typeof days !== "number" || !Number.isInteger(days) || days < 1) {
       return { success: false, message: "Invalid days parameter. Must be a whole number >= 1" };
     }
     try {
-      const backups = await this.listBackups();
+      const activeServer = activeServerOverride === undefined
+        ? await getActiveServer()
+        : activeServerOverride;
+      const backups = await this.listBackups(activeServer);
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
 
@@ -886,7 +893,7 @@ export class BackupService {
       const deletedNames: string[] = [];
 
       for (const backup of toDelete) {
-        const result = await this.deleteBackup(backup.name);
+        const result = await this.deleteBackup(backup.name, activeServer);
         if (result.success) {
           deletedCount++;
           deletedNames.push(backup.name);
@@ -912,13 +919,11 @@ export class BackupService {
 
   async getStatus(): Promise<Record<string, unknown>> {
     const settings = await this.getSettings();
-    const backups = await this.listBackups();
-    const savesPath = await this.getSavesPath();
-    const backupsPath = await this.getBackupsPath();
-
-    if (!this.lastBackup && backups.length > 0) {
-      this.lastBackup = backups[0];
-    }
+    const activeServer = await getActiveServer();
+    const backups = await this.listBackups(activeServer);
+    const savesPath = await this.getSavesPath(activeServer);
+    const backupsPath = await this.getBackupsPath(activeServer);
+    this.lastBackup = backups[0] ?? null;
 
     const lastScheduledAttempt = settings.enabled
       ? await getLatestScheduleExecutionByCommand("backup")
@@ -991,6 +996,16 @@ export class BackupService {
     };
 
     try {
+      const activeServer = options.activeServer === undefined
+        ? await getActiveServer()
+        : options.activeServer;
+      if (
+        activeServer?.id != null &&
+        this.serverManager?._serverId != null &&
+        String(activeServer.id) !== String(this.serverManager._serverId)
+      ) {
+        return { success: false, message: "The selected server changed. Retry the restore after it finishes loading." };
+      }
       if (options.force !== true) {
         if (!this.serverManager) {
           log.warn("Could not confirm server is stopped: no server manager wired");
@@ -1040,8 +1055,8 @@ export class BackupService {
 
       emitProgress("preparing", 5, "Preparing restore...");
 
-      const backupsPath = await this.getBackupsPath();
-      const savesPath = await this.getSavesPath();
+      const backupsPath = await this.getBackupsPath(activeServer);
+      const savesPath = await this.getSavesPath(activeServer);
 
       if (!backupsPath) {
         throw new Error("Could not determine backups folder path");
@@ -1067,10 +1082,10 @@ export class BackupService {
       log.info(`Starting restore from: ${safeName}`);
       log.info(`Destination: ${savesPath}`);
 
-      if (options.createPreRestoreBackup !== false) {
+      if (options.createPreRestoreBackup !== false && fs.existsSync(savesPath)) {
         log.info("Creating pre-restore backup...");
         emitProgress("pre-backup", 10, "Backing up current world before restoring...");
-        const preBackupResult = await this.createBackup({ isPreRestore: true, io });
+        const preBackupResult = await this.createBackup({ isPreRestore: true, io, activeServer });
         const skippedPreBackupFiles = preBackupResult.skippedFiles ?? [];
         const preBackupIncomplete =
           preBackupResult.success && skippedPreBackupFiles.length > 0;

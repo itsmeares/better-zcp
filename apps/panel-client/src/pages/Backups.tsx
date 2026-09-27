@@ -307,7 +307,7 @@ export default function Backups() {
       message: 'Starting backup...',
     })
     try {
-      const result = await backupApi.createBackup()
+      const result = await backupApi.createBackup({ expectedServerId: activeServerId })
       if (result.success && result.backup) {
         toast({
           title: 'Safehouse Snapshot Created',
@@ -433,7 +433,7 @@ export default function Backups() {
     setRestoringBackup(name)
     try {
       const result = await backupApi.restoreBackup(name, {
-        createPreRestoreBackup: true,
+        expectedServerId: activeServerId,
       })
       toast({
         title: 'Recovery Point Restored',
@@ -492,7 +492,7 @@ export default function Backups() {
       let failCount = 0
       for (const name of names) {
         try {
-          await backupApi.deleteBackup(name)
+          await backupApi.deleteBackup(name, activeServerId)
           successCount++
         } catch {
           failCount++
@@ -538,7 +538,7 @@ export default function Backups() {
     setDeleteOlderDialog(false)
     setDeletingOlder(true)
     try {
-      const result = await backupApi.deleteOlderThan(deleteOlderDays)
+      const result = await backupApi.deleteOlderThan(deleteOlderDays, activeServerId)
       toast({
         title: 'Old Backups Removed',
         description:

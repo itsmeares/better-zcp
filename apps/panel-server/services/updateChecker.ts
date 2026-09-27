@@ -28,6 +28,7 @@ type CommandResult = {
 
 type RconService = {
   connected?: boolean;
+  getPlayers?: () => Promise<{ success?: boolean; players?: unknown[] }>;
   serverMessage: (message: string, options?: { skipLog?: boolean }) => Promise<CommandResult>;
   save: (options?: { skipLog?: boolean }) => Promise<CommandResult>;
   quit: () => Promise<CommandResult>;
@@ -625,8 +626,24 @@ export class UpdateChecker {
         shouldRestart = true;
         phase = "before-stop";
         if (!configuredRconService.connected) fail("RCON_NOT_CONNECTED", "RCON is not connected, so the server cannot be stopped safely");
+        const players = await configuredRconService.getPlayers?.();
+        const onlinePlayers = players?.success && Array.isArray(players.players)
+          ? players.players
+          : fail("PLAYER_STATUS_UNKNOWN", "Could not verify whether players are online, so the automatic update was postponed");
+        if (onlinePlayers.length > 0) {
+          log.info(`Automatic server update postponed: ${onlinePlayers.length} player(s) online`);
+          return { success: false, message: "Players are online; the update will be checked again later" };
+        }
         const saved = await configuredRconService.save({ skipLog: true });
         if (!saved?.success) fail("SAVE_FAILED", `The world could not be saved (${saved?.error || "unknown error"}), so the update was abandoned rather than lose progress`, { reason: sanitizeError(saved?.error || "unknown error") });
+        const playersAfterSave = await configuredRconService.getPlayers?.();
+        const onlineAfterSave = playersAfterSave?.success && Array.isArray(playersAfterSave.players)
+          ? playersAfterSave.players
+          : fail("PLAYER_STATUS_UNKNOWN", "Could not verify whether players are online after saving, so the automatic update was postponed");
+        if (onlineAfterSave.length > 0) {
+          log.info("Automatic server update postponed: a player joined while saving");
+          return { success: false, message: "A player joined while saving; the update will be checked again later" };
+        }
         const quit = await configuredRconService.quit();
         if (!quit?.success) log.warn(`Quit command failed (${quit?.error || "unknown error"}); waiting to see whether the server stops anyway`);
         const deadline = Date.now() + 5 * 60 * 1000;
