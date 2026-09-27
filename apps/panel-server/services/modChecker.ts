@@ -204,7 +204,7 @@ export class ModChecker extends EventEmitter {
     this._lastReportedUpdateKey = "";
 
     this.restartWarningMinutes = 5;
-    this.delayIfPlayersOnline = false;
+    this.delayIfPlayersOnline = true;
     this.maxDelayMinutes = 30;
     this.lastUpdateDetected = null;
     this.pendingRestart = false;
@@ -727,11 +727,17 @@ export class ModChecker extends EventEmitter {
       return { success: false, retry: true, reason: "scheduler_unavailable" };
     }
 
-    if (this.delayIfPlayersOnline && this.serverManager) {
+    if (this.delayIfPlayersOnline) {
       try {
         const playerCount = await this.getOnlinePlayerCount();
 
-        if (playerCount !== null && playerCount > 0) {
+        if (playerCount === null) {
+          log.warn("Cannot verify player count before mod restart; retrying on the next check");
+          this.pendingRestart = false;
+          return { success: false, retry: true, reason: "player_count_unknown" };
+        }
+
+        if (playerCount > 0) {
           log.info(
             `${playerCount} players online, delaying restart (max ${this.maxDelayMinutes} min)`,
           );
@@ -757,6 +763,8 @@ export class ModChecker extends EventEmitter {
         }
       } catch (error: any) {
         log.warn(`Failed to check player count: ${error.message}`);
+        this.pendingRestart = false;
+        return { success: false, retry: true, reason: "player_count_unknown" };
       }
     }
 
@@ -796,6 +804,13 @@ export class ModChecker extends EventEmitter {
       try {
         const elapsed = Date.now() - startTime;
 
+        const playerCount = await this.getOnlinePlayerCount();
+
+        if (playerCount === null) {
+          log.warn("Player count unavailable (RCON); keeping mod restart on hold");
+          return;
+        }
+
         if (elapsed >= maxWaitMs) {
           log.info("Max delay exceeded, forcing restart");
           clearInterval(this.playerCheckInterval!);
@@ -815,14 +830,7 @@ export class ModChecker extends EventEmitter {
           return;
         }
 
-        const playerCount = await this.getOnlinePlayerCount();
-
-        if (playerCount === null) {
-          const remainingMin = Math.round((maxWaitMs - elapsed) / 60000);
-          log.warn(
-            `Player count unavailable (RCON); keeping restart on hold, ${remainingMin} min remaining`,
-          );
-        } else if (playerCount === 0) {
+        if (playerCount === 0) {
           log.info("No players online, triggering restart");
           clearInterval(this.playerCheckInterval!);
           this.playerCheckInterval = null;

@@ -17,7 +17,7 @@ it('sends Node API paths, query values, and request bodies', async () => {
   await serversApi.getLifecycleTemplate('one/two', 'systemd')
   await serversApi.update('one/two', { name: 'Renamed' })
   await modsApi.removeIgnoredModPair('A', 'B')
-  await backupApi.restoreBackup('archive.zip', { createPreRestoreBackup: true })
+  await backupApi.restoreBackup('archive.zip', { expectedServerId: 'server-a' })
 
   expect(requests).toEqual([
     {
@@ -34,7 +34,7 @@ it('sends Node API paths, query values, and request bodies', async () => {
     {
       url: '/api/backup/restore/archive.zip',
       method: 'POST',
-      body: { createPreRestoreBackup: true },
+      body: { expectedServerId: 'server-a' },
     },
   ])
 })

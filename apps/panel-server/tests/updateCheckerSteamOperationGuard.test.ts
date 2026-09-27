@@ -128,6 +128,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
     const io = { emit: vi.fn() };
     const rconService = {
       connected: true,
+      getPlayers: vi.fn(async () => ({ success: true, players: [] })),
       save: vi.fn(async () => ({ success: true })),
       quit: vi.fn(async () => ({ success: true })),
     };

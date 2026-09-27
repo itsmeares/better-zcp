@@ -25,6 +25,7 @@ describe("UpdateChecker.runAutoUpdate fails closed when process detection can't 
     const io = { emit: vi.fn() };
     const rconService = {
       connected: true,
+      getPlayers: vi.fn(async () => ({ success: true, players: [] })),
       save: vi.fn(async () => ({ success: true })),
       quit: vi.fn(async () => ({ success: true })),
     };
@@ -81,6 +82,7 @@ describe("UpdateChecker persists lastAutoUpdateResult so it survives past the li
     const io = { emit: vi.fn() };
     const rconService = {
       connected: true,
+      getPlayers: vi.fn(async () => ({ success: true, players: [] })),
       save: vi.fn(async () => ({ success: true })),
       quit: vi.fn(async () => ({ success: true })),
       ...rconOverrides,
@@ -140,6 +142,49 @@ describe("UpdateChecker persists lastAutoUpdateResult so it survives past the li
     await expect(checker.runAutoUpdate({ installed: { branch: "stable" } })).rejects.toThrow();
 
     expect(serverManager.startServer).not.toHaveBeenCalled();
+  });
+
+  it("postpones the automatic update while players are online without saving or stopping", async () => {
+    const { checker, rconService, serverManager } = buildChecker({
+      getServerProcessDetails: vi.fn(async () => ({ running: true, scanFailed: false })),
+      rconOverrides: { getPlayers: vi.fn(async () => ({ success: true, players: [{ name: "Alice" }] })) },
+    });
+
+    const result = await checker.runAutoUpdate({ installed: { branch: "stable" } });
+
+    expect(result).toMatchObject({ success: false, message: expect.stringMatching(/players are online/i) });
+    expect(rconService.save).not.toHaveBeenCalled();
+    expect(rconService.quit).not.toHaveBeenCalled();
+    expect(serverManager.startServer).not.toHaveBeenCalled();
+    expect(checker.autoUpdateRunning).toBe(false);
+  });
+
+  it("fails closed when player presence cannot be verified", async () => {
+    const { checker, rconService } = buildChecker({
+      getServerProcessDetails: vi.fn(async () => ({ running: true, scanFailed: false })),
+      rconOverrides: { getPlayers: vi.fn(async () => ({ success: false })) },
+    });
+
+    await expect(checker.runAutoUpdate({ installed: { branch: "stable" } })).rejects.toThrow(/could not verify whether players are online/i);
+    expect(rconService.save).not.toHaveBeenCalled();
+    expect(rconService.quit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the server running when a player joins during the save", async () => {
+    const { checker, rconService } = buildChecker({
+      getServerProcessDetails: vi.fn(async () => ({ running: true, scanFailed: false })),
+      rconOverrides: {
+        getPlayers: vi.fn()
+          .mockResolvedValueOnce({ success: true, players: [] })
+          .mockResolvedValueOnce({ success: true, players: [{ name: "Alice" }] }),
+      },
+    });
+
+    const result = await checker.runAutoUpdate({ installed: { branch: "stable" } });
+
+    expect(result).toMatchObject({ success: false, message: expect.stringMatching(/player joined/i) });
+    expect(rconService.save).toHaveBeenCalledOnce();
+    expect(rconService.quit).not.toHaveBeenCalled();
   });
 
   it("carries the world-save failure's own detail as a translatable param, not a raw message baked into `reason`", async () => {

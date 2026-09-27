@@ -393,7 +393,7 @@ export default function Mods() {
 
   const [restartSettingsOpen, setRestartSettingsOpen] = useState(false)
   const [restartWarningMinutes, setRestartWarningMinutes] = useState(5)
-  const [delayIfPlayersOnline, setDelayIfPlayersOnline] = useState(false)
+  const [delayIfPlayersOnline, setDelayIfPlayersOnline] = useState(true)
   const [maxDelayMinutes, setMaxDelayMinutes] = useState(30)
 
   const [conflicts, setConflicts] = useState<ConflictScanResult | null>(null)
@@ -595,7 +595,7 @@ export default function Mods() {
         setStatus(statusData)
         if (statusData) {
           setRestartWarningMinutes(statusData.restartWarningMinutes || 5)
-          setDelayIfPlayersOnline(statusData.delayIfPlayersOnline || false)
+          setDelayIfPlayersOnline(statusData.delayIfPlayersOnline ?? true)
           setMaxDelayMinutes(statusData.maxDelayMinutes || 30)
         }
       }

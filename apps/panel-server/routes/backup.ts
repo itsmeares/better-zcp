@@ -1,4 +1,4 @@
-import { Router } from "../http/apiRouter.ts";
+import { Router, type Request, type Response } from "../http/apiRouter.ts";
 import { randomUUID } from "node:crypto";
 import path from "path";
 import fs from "fs";
@@ -27,6 +27,22 @@ const log = createLogger("API:Backup");
 const router = Router();
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function rejectStaleProfile(
+  req: Request,
+  res: Response,
+  activeServer: Awaited<ReturnType<typeof getActiveServer>>,
+): boolean {
+  if (
+    req.body?.expectedServerId === undefined ||
+    String(req.body.expectedServerId ?? "") === String(activeServer?.id ?? "")
+  ) return false;
+  res.status(409).json({
+    error: "The active server changed. Reload the backup list before continuing.",
+    code: ErrorCode.SERVER_PROFILE_CHANGED,
+  });
+  return true;
 }
 
 function parseBackupBoolean(value: unknown): boolean | undefined {
@@ -192,8 +208,20 @@ router.post("/create", async (req, res) => {
     log.info("POST /create — creating manual backup");
     const backupService = req.app.get("backupService");
     const io = req.app.get("io");
+    const activeServer = await getActiveServer();
+    if (rejectStaleProfile(req, res, activeServer)) return;
+    const includeDb = req.body?.includeDb === undefined
+      ? false
+      : parseBackupBoolean(req.body.includeDb);
+    if (includeDb === undefined) {
+      return res.status(400).json({ success: false, error: "includeDb must be a boolean or 0/1" });
+    }
 
-    const result = await backupService.createBackup({ ...req.body, io });
+    const result = await backupService.createBackup({
+      io,
+      activeServer,
+      includeDb,
+    });
 
     if (result.success) {
       if (result.skippedFiles?.length > 0) {
@@ -219,7 +247,9 @@ router.delete("/:name", async (req, res) => {
   try {
     log.info(`DELETE /${req.params.name}`);
     const backupService = req.app.get("backupService");
-    const result = await backupService.deleteBackup(req.params.name);
+    const activeServer = await getActiveServer();
+    if (rejectStaleProfile(req, res, activeServer)) return;
+    const result = await backupService.deleteBackup(req.params.name, activeServer);
 
     if (result.success) {
       res.json(result);
@@ -281,7 +311,8 @@ router.post("/restore/:name", async (req, res) => {
     return res.status(409).json(lifecycleInProgressResponse());
   }
   try {
-    const activeServer = activeServerForLock;
+    const activeServer = await getActiveServer();
+    if (rejectStaleProfile(req, res, activeServer)) return;
     const backupService = req.app.get("backupService");
     const serverManager = req.app.get("serverManager");
 
@@ -327,10 +358,7 @@ router.post("/restore/:name", async (req, res) => {
     }
 
     const io = req.app.get("io");
-    const result = await backupService.restoreBackup(safeName, {
-      ...req.body,
-      io,
-    });
+    const result = await backupService.restoreBackup(safeName, { io, activeServer });
 
     if (result.success) {
       res.json(result);
@@ -368,7 +396,9 @@ router.post("/delete-older-than", async (req, res) => {
     }
 
     const backupService = req.app.get("backupService");
-    const result = await backupService.deleteBackupsOlderThan(days);
+    const activeServer = await getActiveServer();
+    if (rejectStaleProfile(req, res, activeServer)) return;
+    const result = await backupService.deleteBackupsOlderThan(days, activeServer);
 
     res.json(result);
   } catch (error) {

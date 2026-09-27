@@ -720,6 +720,18 @@ describe("online player count when RCON is unavailable", () => {
   it("reports unknown when there is no RCON service at all", async () => {
     await expect(withRcon(null).getOnlinePlayerCount()).resolves.toBeNull();
   });
+
+  it("defaults to waiting for players and retries when their count is unknown", async () => {
+    const checker = withRcon({ getPlayers: async () => ({ success: false }) });
+    checker.scheduler.performRestart = vi.fn();
+
+    const result = await checker.handleModUpdate([{ workshopId: "123", name: "Updated mod" }]);
+
+    expect(checker.delayIfPlayersOnline).toBe(true);
+    expect(result).toMatchObject({ success: false, retry: true, reason: "player_count_unknown" });
+    expect(checker.scheduler.performRestart).not.toHaveBeenCalled();
+    expect(checker.pendingRestart).toBe(false);
+  });
 });
 
 describe("backup restore guards against a running server", () => {

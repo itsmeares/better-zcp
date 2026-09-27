@@ -127,6 +127,8 @@ export class Scheduler {
   restartInProgress: boolean;
   restartCancelled: boolean;
   runningTasks: Set<any>;
+  pendingRestarts: Map<any, ReturnType<typeof setTimeout>>;
+  autoRestartRetryTimer: ReturnType<typeof setTimeout> | null;
   effectiveTimezone: string;
   configuredTimezone: string | null;
   timezoneFallback: Record<string, string> | null;
@@ -145,6 +147,8 @@ export class Scheduler {
     this.restartInProgress = false;
     this.restartCancelled = false;
     this.runningTasks = new Set();
+    this.pendingRestarts = new Map();
+    this.autoRestartRetryTimer = null;
     this.effectiveTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     this.configuredTimezone = null;
     this.timezoneFallback = null;
@@ -297,11 +301,15 @@ export class Scheduler {
       return false;
     }
 
+    const pending = this.pendingRestarts.get(task.id);
+    if (pending) clearTimeout(pending);
+    this.pendingRestarts.delete(task.id);
+
     if (this.jobs.has(task.id)) {
       this.jobs.get(task.id).stop();
     }
 
-    const job = cron.schedule(task.cron_expression, () => this.runTaskNow(task), {
+    const job = cron.schedule(task.cron_expression, () => this.runTaskNow(task, true), {
       timezone: this.effectiveTimezone,
     });
     job.on("execution:missed", (context: any) =>
@@ -326,7 +334,7 @@ export class Scheduler {
     return { scheduled: true, dstWarning };
   }
 
-  async runTaskNow(task: ScheduledTask): Promise<{ success: boolean; message: string }> {
+  async runTaskNow(task: ScheduledTask, retryWhenEmpty = false): Promise<{ success: boolean; message: string }> {
     if (this.runningTasks.has(task.id)) {
       log.debug(
         `Skipping duplicate execution of task ${task.name} (already running)`,
@@ -334,11 +342,17 @@ export class Scheduler {
       return { success: false, message: "Already running" };
     }
 
+    if (retryWhenEmpty) {
+      const pending = this.pendingRestarts.get(task.id);
+      if (pending) clearTimeout(pending);
+      this.pendingRestarts.delete(task.id);
+    }
+
     this.runningTasks.add(task.id);
     log.info(`Executing scheduled task: ${task.name}`);
     const startTime = Date.now();
     try {
-      await this.executeTask(task);
+      await this.executeTask(task, retryWhenEmpty);
       const duration = Date.now() - startTime;
       await updateTaskLastRun(task.id);
       const message = "Completed successfully";
@@ -401,7 +415,7 @@ export class Scheduler {
     };
   }
 
-  async executeTask(task: ScheduledTask): Promise<void> {
+  async executeTask(task: ScheduledTask, retryWhenEmpty = false): Promise<void> {
     const commandKind = classifyScheduledCommand(task.command);
 
     const { rconService, serverManager, cleanup } =
@@ -412,12 +426,16 @@ export class Scheduler {
         const result = await this.performRestart(null, {
           rconService,
           serverManager,
+          onlyWhenEmpty: true,
         });
-        if (
-          !result.success &&
-          result.message === "Restart already in progress"
-        ) {
-          throw new Error("Restart skipped - already in progress");
+        if (!result?.success) {
+          if (result?.deferred && retryWhenEmpty && this.jobs.has(task.id)) {
+            this.pendingRestarts.set(task.id, setTimeout(() => {
+              this.pendingRestarts.delete(task.id);
+              if (this.jobs.has(task.id)) void this.runTaskNow(task, true);
+            }, 60000));
+          }
+          throw new Error(result?.message || "Restart failed");
         }
       } else if (commandKind === "save") {
         const saved = await rconService.save({ skipLog: true });
@@ -603,6 +621,9 @@ export class Scheduler {
   }
 
   cancelTask(taskId: string | number): boolean {
+    const pending = this.pendingRestarts.get(taskId);
+    if (pending) clearTimeout(pending);
+    this.pendingRestarts.delete(taskId);
     if (this.jobs.has(taskId)) {
       this.jobs.get(taskId).stop();
       this.jobs.delete(taskId);
@@ -623,6 +644,10 @@ export class Scheduler {
   }
 
   stopAllJobs(): void {
+    for (const pending of this.pendingRestarts.values()) clearTimeout(pending);
+    this.pendingRestarts.clear();
+    if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
+    this.autoRestartRetryTimer = null;
     for (const [taskId, job] of this.jobs) {
       job.stop();
       log.debug(`Stopped scheduled task: ${taskId}`);
@@ -751,6 +776,10 @@ export class Scheduler {
   setupAutoRestart(): void {
     const enabled = process.env.AUTO_RESTART_ENABLED === "true";
     const cronExpression = process.env.AUTO_RESTART_CRON || "0 */6 * * *";
+    if (this.autoRestartJob) this.autoRestartJob.stop();
+    this.autoRestartJob = null;
+    if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
+    this.autoRestartRetryTimer = null;
     if (!enabled) {
       log.info("Auto-restart is disabled");
       return;
@@ -764,24 +793,25 @@ export class Scheduler {
       return;
     }
 
-    if (this.autoRestartJob) {
-      this.autoRestartJob.stop();
-      this.autoRestartJob = null;
-    }
-
-    this.autoRestartJob = cron.schedule(cronExpression, async () => {
+    const runAutoRestart = async () => {
+      if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
+      this.autoRestartRetryTimer = null;
       log.info("Executing scheduled auto-restart");
       try {
-        const result = await this.performRestart();
+        const result = await this.performRestart(null, { onlyWhenEmpty: true });
+        if (result?.deferred && this.autoRestartJob) {
+          this.autoRestartRetryTimer = setTimeout(() => void runAutoRestart(), 60000);
+        }
         if (!result?.success) {
-          log.error(
-            `Scheduled auto-restart did not complete: ${result?.message || "unknown error"}`,
-          );
+          const message = `Scheduled auto-restart did not complete: ${result?.message || "unknown error"}`;
+          if (result?.deferred) log.info(message);
+          else log.error(message);
         }
       } catch (err: unknown) {
         log.error(`Auto-restart cron tick failed: ${errorMessage(err)}`);
       }
-    }, { timezone: this.effectiveTimezone });
+    };
+    this.autoRestartJob = cron.schedule(cronExpression, runAutoRestart, { timezone: this.effectiveTimezone });
     this.autoRestartJob.on("execution:missed", (context: any) =>
       recordMissedExecution(null, "Auto Restart", "restart", context),
     );
@@ -835,11 +865,13 @@ export class Scheduler {
       rconService = this.rconService,
       serverManager = this.serverManager,
       label = "Auto Restart",
+      onlyWhenEmpty = false,
       lifecycleLock: providedLifecycleLock = null,
     }: {
       rconService?: any;
       serverManager?: any;
       label?: string;
+      onlyWhenEmpty?: boolean;
       lifecycleLock?: LifecycleLock | null;
     } = {},
   ): Promise<any> {
@@ -1008,6 +1040,25 @@ export class Scheduler {
         return { success: false, message: errorMsg };
       }
 
+      const deferForPlayers = async (): Promise<any | null> => {
+        if (!onlyWhenEmpty) return null;
+        let players;
+        try {
+          players = await rconService.getPlayers?.();
+        } catch (error: unknown) {
+          log.warn(`Could not check online players before restart: ${errorMessage(error)}`);
+        }
+        if (players?.success && Array.isArray(players.players) && players.players.length === 0) return null;
+        const message = players?.success && Array.isArray(players.players)
+          ? `${players.players.length} player(s) online; restart postponed until the server is empty`
+          : "Could not verify whether players are online; restart postponed";
+        log.info(message);
+        return { success: false, deferred: true, wasRunning: true, message };
+      };
+
+      const initialDeferral = await deferForPlayers();
+      if (initialDeferral) return initialDeferral;
+
       log.info("Auto-restart: RCON verified, sending warnings...");
 
       if (warningMinutes > 0) {
@@ -1056,12 +1107,16 @@ export class Scheduler {
         }
 
         await this.sleep(1000);
+        const finalDeferral = await deferForPlayers();
+        if (finalDeferral) return finalDeferral;
         await this._broadcastRestartMessage(
           getRestartWarningNotice(restartWarning, "restarting"),
           rconService,
         );
         await this.sleep(2000);
       } else {
+        const finalDeferral = await deferForPlayers();
+        if (finalDeferral) return finalDeferral;
         await this._broadcastRestartMessage(
           getRestartWarningNotice(restartWarning, "restarting"),
           rconService,
@@ -1087,6 +1142,8 @@ export class Scheduler {
         return { success: false, wasRunning: true, message: errorMsg };
       }
       await this.sleep(3000);
+      const postSaveDeferral = await deferForPlayers();
+      if (postSaveDeferral) return postSaveDeferral;
 
       const managed = await runManagedLifecycle("restart", {
         serverId: pinnedServerId,

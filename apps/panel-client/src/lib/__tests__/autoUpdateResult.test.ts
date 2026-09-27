@@ -26,6 +26,9 @@ describe('automatic update result copy', () => {
     expect(
       getAutoUpdateReasonMessage({ status: 'failed', reason: 'NEW_REASON' }),
     ).toBe('An unexpected error occurred during the automatic update.')
+    expect(
+      getAutoUpdateReasonMessage({ status: 'failed', reason: 'PLAYER_STATUS_UNKNOWN' }),
+    ).toMatch(/verify whether players were online/i)
   })
 
   it('shows the applied version on success', () => {
