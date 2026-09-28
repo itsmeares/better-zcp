@@ -1457,10 +1457,19 @@ export class BackupService {
       try {
         for (const replacement of replacements) {
           fs.mkdirSync(path.dirname(replacement.target), { recursive: true });
-          const mode = fs.existsSync(replacement.target)
-            ? fs.statSync(replacement.target).mode & 0o777
+          let existing: fs.Stats | null = null;
+          try {
+            existing = fs.lstatSync(replacement.target);
+          } catch (error: any) {
+            if (error.code !== "ENOENT") throw error;
+          }
+          if (existing?.isSymbolicLink()) {
+            throw new Error(`Restore target is a symbolic link and was left untouched: ${replacement.target}`);
+          }
+          const mode = existing
+            ? existing.mode & 0o777
             : replacement.target.endsWith(".lua") ? 0o644 : 0o600;
-          const retired = fs.existsSync(replacement.target)
+          const retired = existing
             ? `${replacement.target}.replaced-${Date.now()}-${process.pid}`
             : null;
           if (retired) fs.renameSync(replacement.target, retired);

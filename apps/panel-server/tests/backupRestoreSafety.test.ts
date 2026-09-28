@@ -468,6 +468,32 @@ describe("createBackup archive safety", () => {
     expect(updateServer).toHaveBeenCalledWith("profile-1", { name: "Original", rconPort: 27015 });
   });
 
+  it.skipIf(process.platform === "win32")("leaves a symlinked config target and live world untouched", async () => {
+    const configPath = path.join(root, "Server");
+    fs.mkdirSync(configPath, { recursive: true });
+    const iniPath = path.join(configPath, `${SERVER_NAME}.ini`);
+    const outsidePath = path.join(root, "outside.ini");
+    fs.writeFileSync(iniPath, "Mods=original\n");
+    fs.writeFileSync(outsidePath, "do not change\n");
+    const activeServer = { id: "profile-1", serverName: SERVER_NAME, zomboidDataPath: root, serverConfigPath: configPath };
+    const service = createService();
+    const created = await service.createBackup({ activeServer });
+    expect(created.success).toBe(true);
+    fs.unlinkSync(iniPath);
+    fs.symlinkSync(outsidePath, iniPath);
+    fs.writeFileSync(path.join(savesPath, "map_meta.bin"), "LIVE AFTER BACKUP");
+
+    const restored = await service.restoreBackup(created.backup.name, {
+      activeServer, createPreRestoreBackup: false,
+    });
+
+    expect(restored.success).toBe(false);
+    expect(restored.message).toMatch(/symbolic link/);
+    expect(fs.lstatSync(iniPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(outsidePath, "utf8")).toBe("do not change\n");
+    expect(fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8")).toBe("LIVE AFTER BACKUP");
+  });
+
   it("still resolves successfully when post-backup event logging fails", async () => {
     const service = createService();
     logServerEvent.mockRejectedValueOnce(new Error("database unavailable"));
