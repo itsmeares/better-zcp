@@ -59,6 +59,9 @@ describe("BackupService pruning under a degenerate (all-identical) fs birthtime"
     }
 
     const service = createService();
+    service.setServerManager({
+      getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
+    });
     const createResult = await service.createBackup({
       createPreRestoreBackup: false,
     });

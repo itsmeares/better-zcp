@@ -737,6 +737,7 @@ panelBridge.on("configured", ({ path }) => {
 });
 
 backupService.setServerManager(serverManager);
+backupService.setRconService(rconService);
 
 const updateChecker = new UpdateChecker(io, { rconService, serverManager });
 

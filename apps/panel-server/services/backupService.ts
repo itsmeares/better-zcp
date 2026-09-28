@@ -9,6 +9,7 @@ import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("Backup");
 import {
   getActiveServer,
+  updateServer,
   getSetting,
   setSetting,
   logServerEvent,
@@ -20,6 +21,7 @@ import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.ts";
 import { invalidateMapFolderScan } from "../utils/mapFolderScan.ts";
+import { acquireLifecycleLock, lifecycleInProgressResponse } from "./lifecycleCoordinator.ts";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
@@ -47,6 +49,10 @@ type BackupSettings = {
   maxBackups: number;
   includeDb: boolean;
 };
+const PORTABLE_PROFILE_KEYS = [
+  "name", "branch", "rconPort", "rconPassword", "serverPort",
+  "minMemory", "maxMemory", "useNoSteam", "useDebug", "useUpnp", "adminPassword",
+] as const;
 type BackupOptions = {
   io?: { emit: (event: string, payload: unknown) => void } | null;
   activeServer?: Record<string, any> | null;
@@ -55,6 +61,7 @@ type BackupOptions = {
   includeDb?: boolean;
   force?: boolean;
   createPreRestoreBackup?: boolean;
+  scheduled?: boolean;
 };
 type ProgressEmitter = (
   phase: string,
@@ -64,6 +71,7 @@ type ProgressEmitter = (
 ) => void;
 type BackupResult = {
   success: boolean;
+  deferred?: boolean;
   message?: string;
   backup?: BackupSummary | null;
   duration?: number;
@@ -265,6 +273,7 @@ export class BackupService {
   lastBackup: BackupSummary | null;
   backupHistory: unknown[];
   serverManager: any;
+  rconService: any;
 
   constructor() {
     this.backupInProgress = false;
@@ -272,11 +281,16 @@ export class BackupService {
     this.lastBackup = null;
     this.backupHistory = [];
     this.serverManager = null;
+    this.rconService = null;
   }
 
 
   setServerManager(serverManager: any): void {
     this.serverManager = serverManager;
+  }
+
+  setRconService(rconService: any): void {
+    this.rconService = rconService;
   }
 
   async getSavesPath(activeServerOverride?: any): Promise<string | null> {
@@ -432,10 +446,20 @@ export class BackupService {
 
   async createBackup(options: BackupOptions = {}): Promise<BackupResult> {
     if (this.backupInProgress) {
-      return { success: false, message: "Backup already in progress" };
+      return { success: false, deferred: options.scheduled, message: "Backup already in progress" };
     }
     if (this.restoreInProgress && !options.isPreRestore) {
-      return { success: false, message: "Restore in progress, please wait" };
+      return { success: false, deferred: options.scheduled, message: "Restore in progress, please wait" };
+    }
+
+    const activeServer = options.activeServer === undefined
+      ? await getActiveServer()
+      : options.activeServer;
+    const lifecycleLock = options.isPreRestore || options.isPreWipe
+      ? null
+      : acquireLifecycleLock("backup", activeServer?.serverName || null);
+    if (!lifecycleLock && !options.isPreRestore && !options.isPreWipe) {
+      return { success: false, deferred: options.scheduled, message: lifecycleInProgressResponse().error };
     }
 
     this.backupInProgress = true;
@@ -453,8 +477,81 @@ export class BackupService {
       }
     };
 
+    let restartAfterBackup = false;
+    let result: BackupResult = { success: false };
     try {
-      return await this._doCreateBackup(options, startTime, emitProgress);
+      if (!this.serverManager?.getServerProcessDetails) {
+        throw new Error("Cannot verify the server is stopped because process detection is unavailable");
+      }
+      if (activeServer?.id != null && this.serverManager._serverId != null &&
+          String(activeServer.id) !== String(this.serverManager._serverId)) {
+        throw new Error("The selected server changed. Retry the backup after it finishes loading.");
+      }
+      const processDetails = await this.serverManager.getServerProcessDetails();
+      if (!processDetails || processDetails.scanFailed) {
+        throw new Error("Cannot verify the server is stopped because process detection failed");
+      }
+      if (processDetails.running) {
+        if (options.isPreRestore || options.isPreWipe) {
+          throw new Error("The server must be stopped before creating a safety backup");
+        }
+        if (!this.rconService?.connected) {
+          if (options.scheduled) {
+            result = { success: false, deferred: true, message: "Scheduled full backup postponed: RCON is not connected" };
+            return result;
+          }
+          throw new Error("RCON is required to save and stop a running server before a full backup");
+        }
+        const scheduledPlayerDeferral = async (): Promise<string | null> => {
+          if (!options.scheduled) return null;
+          let players;
+          try {
+            players = await this.rconService.getPlayers();
+          } catch (error: unknown) {
+            log.warn(`Scheduled backup could not check players: ${errorMessage(error)}`);
+          }
+          if (!players?.success || !Array.isArray(players.players)) {
+            return "Scheduled full backup postponed: player count could not be verified";
+          }
+          if (players.players.length > 0) {
+            return `${players.players.length} player(s) online; full backup postponed until the server is empty`;
+          }
+          return null;
+        };
+        const initialDeferral = await scheduledPlayerDeferral();
+        if (initialDeferral) {
+          result = { success: false, deferred: true, message: initialDeferral };
+          return result;
+        }
+        emitProgress("preparing", 2, "Saving and stopping the server...");
+        const saved = await this.rconService.save({ retryOnConnectionError: false });
+        if (!saved?.success) throw new Error(`Server save failed: ${saved?.error || "unknown error"}`);
+        const postSaveDeferral = await scheduledPlayerDeferral();
+        if (postSaveDeferral) {
+          result = { success: false, deferred: true, message: postSaveDeferral };
+          return result;
+        }
+        restartAfterBackup = true;
+        const stopped = this.serverManager.usesManagedServiceLifecycle?.()
+          ? await this.serverManager.stopServer(false, { serverId: activeServer?.id ?? null })
+          : await this.rconService.quit({ retryOnConnectionError: false });
+        if (!stopped?.success || stopped.confirmed === false && this.serverManager.usesManagedServiceLifecycle?.()) {
+          throw new Error(`Server stop failed: ${stopped?.error || stopped?.message || "unknown error"}`);
+        }
+        const deadline = Date.now() + 60_000;
+        while (true) {
+          const state = await this.serverManager.getServerProcessDetails();
+          if (!state || state.scanFailed) throw new Error("Cannot verify that the server stopped after saving");
+          if (!state.running) break;
+          if (Date.now() >= deadline) throw new Error("Server did not stop within 60 seconds; no archive was created");
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+      result = await this._doCreateBackup({ ...options, activeServer }, startTime,
+        (phase, percent, message, extra) => {
+          if (restartAfterBackup && phase === "complete") return;
+          emitProgress(phase, percent, message, extra);
+        });
     } catch (error: unknown) {
       log.error(`Backup failed: ${errorMessage(error)}`);
       emitProgress(
@@ -462,10 +559,37 @@ export class BackupService {
         0,
         `Backup failed: ${sanitizeError(errorMessage(error))}`,
       );
-      return { success: false, message: sanitizeError(errorMessage(error)) };
+      result = { success: false, message: sanitizeError(errorMessage(error)) };
     } finally {
+      if (restartAfterBackup) {
+        try {
+          const state = await this.serverManager.getServerProcessDetails();
+          if (!state || state.scanFailed) {
+            result.success = false;
+            result.message = "Could not verify whether the server restarted after the backup; check its status before taking another action";
+            emitProgress("error", 0, result.message);
+          } else if (!state.running) {
+            emitProgress("finalizing", 98, "Restarting the server...");
+            const started = await this.serverManager.startServer({ serverId: activeServer?.id ?? null });
+            if (!started?.success) {
+              result.success = false;
+              result.message = `${result.backup ? `Backup ${result.backup.name} was created, but ` : "Backup failed and "}the server could not be restarted automatically: ${sanitizeError(started?.error || started?.message || "unknown error")}`;
+              emitProgress("error", 0, result.message);
+            } else if (result.success) {
+              emitProgress("complete", 100, "Full backup created and server restarted");
+            }
+          }
+        } catch (error: unknown) {
+          log.error(`Could not restart server after backup: ${errorMessage(error)}`);
+          result.success = false;
+          result.message = `${result.backup ? `Backup ${result.backup.name} was created, but ` : "Backup failed and "}the server could not be restarted automatically: ${sanitizeError(errorMessage(error))}`;
+          emitProgress("error", 0, result.message);
+        }
+      }
       this.backupInProgress = false;
+      lifecycleLock?.release();
     }
+    return result;
   }
 
   async _doCreateBackup(
@@ -501,6 +625,28 @@ export class BackupService {
       .replace(/[:.]/g, "-")
       .slice(0, 23);
     const serverName = activeServer?.serverName || "server";
+    const dataPath = activeServer?.zomboidDataPath || path.dirname(path.dirname(path.dirname(savesPath)));
+    const configPath = activeServer?.serverConfigPath || path.join(dataPath, "Server");
+    const portableFiles: Array<{ source: string; entry: string }> = [];
+    if (fs.existsSync(configPath)) {
+      for (const name of fs.readdirSync(configPath)) {
+        if (name !== `${serverName}.ini` &&
+            !(name.startsWith(`${serverName}_`) && /\.(?:ini|lua)$/i.test(name))) continue;
+        const source = path.join(configPath, name);
+        if (fs.lstatSync(source).isFile()) portableFiles.push({ source, entry: `Server/${name}` });
+      }
+    }
+    if (activeServer && !portableFiles.some((file) => file.entry === `Server/${serverName}.ini`)) {
+      throw new Error(`Server configuration file not found: ${path.join(configPath, `${serverName}.ini`)}`);
+    }
+    const playerDbPath = path.join(dataPath, "db");
+    for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+      const name = `${serverName}.db${suffix}`;
+      const source = path.join(playerDbPath, name);
+      if (fs.existsSync(source) && fs.lstatSync(source).isFile()) {
+        portableFiles.push({ source, entry: `db/${name}` });
+      }
+    }
     const baseBackupName = `${serverName}_${timestamp}`;
     let backupName = `${baseBackupName}.zip`;
     let backupPath = path.join(backupsPath, backupName);
@@ -528,6 +674,7 @@ export class BackupService {
       log.warn(`Failed to count files: ${errorMessage(err)}`);
       totalFiles = 1000;
     }
+    totalFiles += portableFiles.length + (activeServer ? 2 : 1);
 
     let dbPathToInclude = null;
     if (options.includeDb) {
@@ -689,6 +836,25 @@ export class BackupService {
             path.basename(savesPath),
           );
           skippedFiles.push(...skippedSaves);
+
+          for (const file of portableFiles) {
+            const result = await waitForArchiveEntry(archive, () =>
+              archive.file(file.source, { name: file.entry }),
+            );
+            if (result.skipped) skippedFiles.push(file.entry);
+          }
+
+          if (activeServer) {
+            const portableProfile = Object.fromEntries(PORTABLE_PROFILE_KEYS
+              .filter((key) => Object.hasOwn(activeServer, key))
+              .map((key) => [key, activeServer[key]]));
+            const profileResult = await waitForArchiveEntry(archive, () =>
+              archive.append(JSON.stringify({ schemaVersion: 1, server: { serverName, ...portableProfile } }, null, 2), {
+                name: "panel-server-profile.json",
+              }),
+            );
+            if (profileResult.skipped) skippedFiles.push("panel-server-profile.json");
+          }
 
           const snapshotResult = await waitForArchiveEntry(archive, () =>
             archive.append(JSON.stringify(serverSnapshot, null, 2), {
@@ -950,20 +1116,16 @@ export class BackupService {
 
   getBackupContentsInfo(): Record<string, unknown> {
     return {
-      description: "Server world save data",
+      description: "Portable full server backup",
       includes: [
-        "map_*.bin - World map chunk data",
-        "map_meta.bin - Map metadata",
-        "map_sand.bin - Sandbox settings snapshot",
-        "players/ - Player save files",
-        "vehicles.db - Vehicle data",
-        "reanimated.bin - Zombie data",
-        "worldstats.txt - World statistics",
-        "panel-server-snapshot.json - Safe server configuration snapshot",
-        "Other world-specific data files",
+        "{ServerName}/ - world and player saves",
+        "Server/{ServerName}.ini and Lua files - server settings and mod list",
+        "db/{ServerName}.db - player accounts and access levels, when present",
+        "panel-server-profile.json - portable panel server settings",
+        "panel-server-snapshot.json - server settings summary",
       ],
-      location: "Saves/Multiplayer/{ServerName}/",
-      note: "Backups contain the entire world state. Server must be stopped before restoring.",
+      location: "Zomboid data and server config folders",
+      note: "The server is saved and stopped for a consistent full backup, then restarted if it was running. Restoring requires the server to be stopped.",
     };
   }
 
@@ -1226,41 +1388,137 @@ export class BackupService {
         );
       }
 
-      emitProgress("finalizing", 85, "Swapping in the restored world...");
-
-      const retiredPath = `${savesPath}.replaced-${Date.now()}`;
-      let retired = false;
-
-      if (fs.existsSync(savesPath)) {
-        fs.renameSync(savesPath, retiredPath);
-        retired = true;
+      const dataPath = activeServer?.zomboidDataPath || path.dirname(path.dirname(path.dirname(savesPath)));
+      const configPath = activeServer?.serverConfigPath || path.join(dataPath, "Server");
+      const profilePath = path.join(stagingPath, "panel-server-profile.json");
+      let restoredProfile: Record<string, any> | null = null;
+      const extraFiles: Array<{ staged: string; target: string }> = [];
+      if (fs.existsSync(profilePath)) {
+        const manifest = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+        const sourceName = manifest?.server?.serverName;
+        if (manifest?.schemaVersion !== 1 || typeof sourceName !== "string" ||
+            !sourceName || sourceName === "." || sourceName === ".." ||
+            /[\\/]/.test(sourceName) || path.basename(sourceName) !== sourceName) {
+          throw new Error("Backup contains an invalid panel server profile; live files were left untouched");
+        }
+        const profile = manifest.server as Record<string, any>;
+        restoredProfile = profile;
+        for (const key of PORTABLE_PROFILE_KEYS) {
+          if (!Object.hasOwn(profile, key)) continue;
+          const value = profile[key];
+          const valid = ["rconPort", "serverPort", "minMemory", "maxMemory"].includes(key)
+            ? Number.isInteger(value) && value > 0 && value <= 65535
+            : ["useNoSteam", "useDebug", "useUpnp"].includes(key)
+              ? typeof value === "boolean"
+              : typeof value === "string" && value.length <= 4096;
+          if (!valid) throw new Error(`Backup contains an invalid panel setting: ${key}`);
+        }
+        const targetName = activeServer?.serverName || path.basename(savesPath);
+        if (path.basename(targetName) !== targetName) {
+          throw new Error("The selected server name is not a safe file name");
+        }
+        const stagedConfigPath = path.join(stagingPath, "Server");
+        if (fs.existsSync(stagedConfigPath)) {
+          for (const name of fs.readdirSync(stagedConfigPath)) {
+            if (name !== `${sourceName}.ini` &&
+                !(name.startsWith(`${sourceName}_`) && /\.(?:ini|lua)$/i.test(name))) continue;
+            const staged = path.join(stagedConfigPath, name);
+            if (!fs.lstatSync(staged).isFile()) continue;
+            const targetNameForFile = `${targetName}${name.slice(sourceName.length)}`;
+            extraFiles.push({ staged, target: path.join(configPath, targetNameForFile) });
+          }
+        }
+        if (!extraFiles.some((file) => file.target === path.join(configPath, `${targetName}.ini`))) {
+          throw new Error("Full backup is missing its server configuration file; live files were left untouched");
+        }
+        for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+          const staged = path.join(stagingPath, "db", `${sourceName}.db${suffix}`);
+          if (fs.existsSync(staged) && fs.lstatSync(staged).isFile()) {
+            extraFiles.push({ staged, target: path.join(dataPath, "db", `${targetName}.db${suffix}`) });
+          }
+        }
       }
 
+      emitProgress("finalizing", 85, "Swapping in the restored world...");
+      const replacements: Array<{ staged: string | null; target: string }> = [
+        { staged: stagedWorldPath, target: savesPath }, ...extraFiles,
+      ];
+      if (restoredProfile && extraFiles.some((file) => file.target === path.join(dataPath, "db", `${activeServer?.serverName || path.basename(savesPath)}.db`))) {
+        const targetName = activeServer?.serverName || path.basename(savesPath);
+        for (const suffix of ["-wal", "-shm", "-journal"]) {
+          const target = path.join(dataPath, "db", `${targetName}.db${suffix}`);
+          if (!extraFiles.some((file) => file.target === target) && fs.existsSync(target)) {
+            replacements.push({ staged: null, target });
+          }
+        }
+      }
+      const applied: Array<{ target: string; retired: string | null }> = [];
+      let profileUpdated = false;
       try {
-        fs.renameSync(stagedWorldPath, savesPath);
-      } catch (swapError: unknown) {
-        if (retired) {
+        for (const replacement of replacements) {
+          fs.mkdirSync(path.dirname(replacement.target), { recursive: true });
+          const mode = fs.existsSync(replacement.target)
+            ? fs.statSync(replacement.target).mode & 0o777
+            : replacement.target.endsWith(".lua") ? 0o644 : 0o600;
+          const retired = fs.existsSync(replacement.target)
+            ? `${replacement.target}.replaced-${Date.now()}-${process.pid}`
+            : null;
+          if (retired) fs.renameSync(replacement.target, retired);
           try {
-            fs.renameSync(retiredPath, savesPath);
+            if (replacement.staged) fs.renameSync(replacement.staged, replacement.target);
+          } catch (error: unknown) {
+            if (retired) {
+              try {
+                fs.renameSync(retired, replacement.target);
+              } catch (rollbackError: unknown) {
+                throw new Error(`Restore failed and the previous file could not be put back. It is preserved at ${retired}: ${errorMessage(rollbackError)}`);
+              }
+            }
+            throw error;
+          }
+          applied.push({ target: replacement.target, retired });
+          if (replacement.staged && replacement.target !== savesPath) {
+            fs.chmodSync(replacement.target, mode);
+          }
+        }
+        if (restoredProfile && activeServer?.id != null) {
+          const updates = Object.fromEntries(PORTABLE_PROFILE_KEYS
+            .filter((key) => Object.hasOwn(restoredProfile, key))
+            .map((key) => [key, restoredProfile[key]]));
+          await updateServer(activeServer.id, updates);
+          profileUpdated = true;
+          await flushWrites();
+          await this.serverManager?.reloadConfig?.(activeServer.id);
+          await this.rconService?.reloadConfig?.();
+        }
+      } catch (swapError: unknown) {
+        if (profileUpdated && activeServer?.id != null) {
+          try {
+            const previous = Object.fromEntries(PORTABLE_PROFILE_KEYS
+              .filter((key) => Object.hasOwn(activeServer, key))
+              .map((key) => [key, activeServer[key]]));
+            await updateServer(activeServer.id, previous);
+            await flushWrites();
           } catch (rollbackError: unknown) {
-            log.error(
-              `Restore rollback failed - previous save is at ${retiredPath}: ${errorMessage(rollbackError)}`,
-            );
-            throw new Error(
-              `Restore failed and the previous save could not be put back automatically. It is preserved at ${retiredPath}.`,
-            );
+            log.error(`Could not roll back panel profile after restore failure: ${errorMessage(rollbackError)}`);
+          }
+        }
+        for (const entry of applied.reverse()) {
+          try {
+            fs.rmSync(entry.target, { recursive: true, force: true });
+            if (entry.retired) fs.renameSync(entry.retired, entry.target);
+          } catch (rollbackError: unknown) {
+            log.error(`Restore rollback failed; previous data is at ${entry.retired}: ${errorMessage(rollbackError)}`);
           }
         }
         throw swapError;
       }
-
-      if (retired) {
+      for (const entry of applied) {
+        if (!entry.retired) continue;
         try {
-          fs.rmSync(retiredPath, { recursive: true, force: true });
+          fs.rmSync(entry.retired, { recursive: true, force: true });
         } catch (cleanupError: unknown) {
-          log.warn(
-            `Restored successfully but could not remove ${retiredPath}: ${errorMessage(cleanupError)}`,
-          );
+          log.warn(`Could not remove replaced file ${entry.retired}: ${errorMessage(cleanupError)}`);
         }
       }
 
