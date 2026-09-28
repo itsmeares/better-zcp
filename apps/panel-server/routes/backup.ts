@@ -228,7 +228,7 @@ router.post("/create", async (req, res) => {
         res.json({
           ...result,
           warnings: [
-            `${result.skippedFiles.length} file(s) could not be included in the backup: ${result.skippedFiles.join(", ")}. This is usually a temp, log, or lock file the running server rewrote mid-backup, or a symbolic link that was deliberately not followed -- check that the backup still restores correctly if any of these look like save data.`,
+            `${result.skippedFiles.length} file(s) could not be included in the backup: ${result.skippedFiles.join(", ")}. Check the archive before relying on it; symbolic links are deliberately not followed.`,
           ],
         });
       } else {

@@ -6,12 +6,15 @@ import archiver from "archiver";
 import { spawnSync } from "child_process";
 
 const logServerEvent = vi.fn(async () => {});
+const updateServer = vi.fn(async () => ({}));
 
 vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
   logServerEvent,
+  updateServer,
+  flushWrites: vi.fn(async () => {}),
 }));
 
 const { invalidateMapFolderScanMock } = vi.hoisted(() => ({
@@ -74,6 +77,7 @@ beforeEach(() => {
   invalidateMapFolderScanMock.mockClear();
   logServerEvent.mockReset();
   logServerEvent.mockResolvedValue(undefined);
+  updateServer.mockClear();
 });
 
 afterEach(() => {
@@ -381,6 +385,115 @@ describe("restoreBackup archive safety", () => {
 });
 
 describe("createBackup archive safety", () => {
+  it("saves and stops a running server, then restarts it after creating a full backup", async () => {
+    const service = createService();
+    let running = true;
+    const save = vi.fn(async () => ({ success: true }));
+    const quit = vi.fn(async () => { running = false; return { success: true }; });
+    const startServer = vi.fn(async () => { running = true; return { success: true }; });
+    service.setServerManager({
+      getServerProcessDetails: async () => ({ running, scanFailed: false }),
+      startServer,
+    });
+    service.setRconService({ connected: true, save, quit });
+
+    const result = await service.createBackup();
+
+    expect(result.success).toBe(true);
+    expect(running).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(1);
+    expect(startServer).toHaveBeenCalledTimes(1);
+    expect(fs.existsSync(result.backup.path)).toBe(true);
+  });
+
+  it("postpones a scheduled full backup when a player joins during the save", async () => {
+    const service = createService();
+    service.setServerManager({
+      getServerProcessDetails: async () => ({ running: true, scanFailed: false }),
+    });
+    const save = vi.fn(async () => ({ success: true }));
+    const quit = vi.fn(async () => ({ success: true }));
+    const getPlayers = vi.fn()
+      .mockResolvedValueOnce({ success: true, players: [] })
+      .mockResolvedValueOnce({ success: true, players: [{ name: "new-player" }] });
+    service.setRconService({ connected: true, getPlayers, save, quit });
+
+    const result = await service.createBackup({ scheduled: true });
+
+    expect(result).toMatchObject({ success: false, deferred: true });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(quit).not.toHaveBeenCalled();
+    expect(fs.readdirSync(backupsPath)).toEqual([]);
+  });
+
+  it("restores config, account DB, and panel profile from a full archive", async () => {
+    const configPath = path.join(root, "Server");
+    const accountPath = path.join(root, "db");
+    fs.mkdirSync(configPath, { recursive: true });
+    fs.mkdirSync(accountPath, { recursive: true });
+    const iniPath = path.join(configPath, `${SERVER_NAME}.ini`);
+    const dbPath = path.join(accountPath, `${SERVER_NAME}.db`);
+    const otherIni = path.join(configPath, "OtherServer.ini");
+    const otherDb = path.join(accountPath, "OtherServer.db");
+    fs.writeFileSync(iniPath, "Mods=example\n");
+    fs.writeFileSync(dbPath, "account bytes");
+    fs.chmodSync(iniPath, 0o600);
+    fs.chmodSync(dbPath, 0o600);
+    fs.writeFileSync(otherIni, "Mods=other\n");
+    fs.writeFileSync(otherDb, "other accounts");
+    const activeServer = {
+      id: "profile-1", serverName: SERVER_NAME, zomboidDataPath: root,
+      serverConfigPath: configPath, name: "Original", rconPort: 27015,
+    };
+    const service = createService();
+    const created = await service.createBackup({ activeServer });
+    expect(created.success).toBe(true);
+    fs.writeFileSync(iniPath, "Mods=changed\n");
+    fs.writeFileSync(dbPath, "changed accounts");
+    fs.writeFileSync(`${dbPath}-wal`, "stale changes");
+
+    const restored = await service.restoreBackup(created.backup.name, { activeServer });
+
+    expect(restored.success).toBe(true);
+    expect(fs.readFileSync(iniPath, "utf8")).toBe("Mods=example\n");
+    expect(fs.readFileSync(dbPath, "utf8")).toBe("account bytes");
+    if (process.platform !== "win32") {
+      expect(fs.statSync(iniPath).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
+    }
+    expect(fs.existsSync(`${dbPath}-wal`)).toBe(false);
+    expect(fs.readFileSync(otherIni, "utf8")).toBe("Mods=other\n");
+    expect(fs.readFileSync(otherDb, "utf8")).toBe("other accounts");
+    expect(updateServer).toHaveBeenCalledWith("profile-1", { name: "Original", rconPort: 27015 });
+  });
+
+  it.skipIf(process.platform === "win32")("leaves a symlinked config target and live world untouched", async () => {
+    const configPath = path.join(root, "Server");
+    fs.mkdirSync(configPath, { recursive: true });
+    const iniPath = path.join(configPath, `${SERVER_NAME}.ini`);
+    const outsidePath = path.join(root, "outside.ini");
+    fs.writeFileSync(iniPath, "Mods=original\n");
+    fs.writeFileSync(outsidePath, "do not change\n");
+    const activeServer = { id: "profile-1", serverName: SERVER_NAME, zomboidDataPath: root, serverConfigPath: configPath };
+    const service = createService();
+    const created = await service.createBackup({ activeServer });
+    expect(created.success).toBe(true);
+    fs.unlinkSync(iniPath);
+    fs.symlinkSync(outsidePath, iniPath);
+    fs.writeFileSync(path.join(savesPath, "map_meta.bin"), "LIVE AFTER BACKUP");
+
+    const restored = await service.restoreBackup(created.backup.name, {
+      activeServer, createPreRestoreBackup: false,
+    });
+
+    expect(restored.success).toBe(false);
+    expect(restored.message).toMatch(/symbolic link/);
+    expect(fs.lstatSync(iniPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(outsidePath, "utf8")).toBe("do not change\n");
+    expect(fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8")).toBe("LIVE AFTER BACKUP");
+  });
+
   it("still resolves successfully when post-backup event logging fails", async () => {
     const service = createService();
     logServerEvent.mockRejectedValueOnce(new Error("database unavailable"));

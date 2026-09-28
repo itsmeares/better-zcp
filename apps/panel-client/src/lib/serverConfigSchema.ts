@@ -1188,7 +1188,7 @@ export const INI_SCHEMA: IniSetting[] = [
     type: 'number',
     min: 0,
     max: 1500,
-    default: 0,
+    default: 60,
     category: 'backups'
   },
 

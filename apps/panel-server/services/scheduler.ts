@@ -123,6 +123,7 @@ export class Scheduler {
   jobLabels: Map<any, string>;
   autoRestartJob: any;
   backupJob: any;
+  backupRetryTimer: ReturnType<typeof setTimeout> | null;
   modUpdateRestartPending: boolean;
   restartInProgress: boolean;
   restartCancelled: boolean;
@@ -143,6 +144,7 @@ export class Scheduler {
     this.jobLabels = new Map();
     this.autoRestartJob = null;
     this.backupJob = null;
+    this.backupRetryTimer = null;
     this.modUpdateRestartPending = false;
     this.restartInProgress = false;
     this.restartCancelled = false;
@@ -648,6 +650,8 @@ export class Scheduler {
     this.pendingRestarts.clear();
     if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
     this.autoRestartRetryTimer = null;
+    if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
+    this.backupRetryTimer = null;
     for (const [taskId, job] of this.jobs) {
       job.stop();
       log.debug(`Stopped scheduled task: ${taskId}`);
@@ -669,6 +673,8 @@ export class Scheduler {
   }
 
   async setupBackupSchedule(): Promise<void> {
+    if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
+    this.backupRetryTimer = null;
     if (this.backupJob) {
       this.backupJob.stop();
       this.backupJob = null;
@@ -697,7 +703,20 @@ export class Scheduler {
         return;
       }
 
-      this.backupJob = cron.schedule(settings.schedule, async () => {
+      const queueRetry = (serverId: string | number | null) => {
+        if (this.backupRetryTimer) return;
+        this.backupRetryTimer = setTimeout(() => {
+          this.backupRetryTimer = null;
+          void runBackup(serverId).catch((error: unknown) =>
+            log.error(`Scheduled backup retry failed: ${errorMessage(error)}`));
+        }, 5 * 60_000);
+      };
+      const runBackup = async (expectedServerId?: string | number | null) => {
+        const activeServer = await getActiveServer();
+        if (expectedServerId != null && String(activeServer?.id ?? "") !== String(expectedServerId)) {
+          log.info("Deferred backup cancelled because the active server changed");
+          return;
+        }
         if (this.restartInProgress) {
           log.warn(
             "Scheduled backup skipped: a restart is currently in progress (would risk archiving a save mid-write)",
@@ -710,6 +729,7 @@ export class Scheduler {
             "Skipped: a restart was in progress",
             0,
           );
+          queueRetry(activeServer?.id ?? null);
           return;
         }
         log.info("Executing scheduled backup");
@@ -717,6 +737,8 @@ export class Scheduler {
         try {
           const result = await this.backupService.createBackup({
             includeDb: settings.includeDb,
+            scheduled: true,
+            activeServer,
           });
           const duration = Date.now() - startTime;
           if (result.success) {
@@ -741,7 +763,12 @@ export class Scheduler {
               result.message,
               duration,
             );
-            log.error(`Scheduled backup failed: ${result.message}`);
+            if (result.deferred) {
+              log.info(`Scheduled backup postponed: ${result.message}`);
+              queueRetry(activeServer?.id ?? null);
+            } else {
+              log.error(`Scheduled backup failed: ${result.message}`);
+            }
           }
         } catch (error: unknown) {
           const duration = Date.now() - startTime;
@@ -755,6 +782,11 @@ export class Scheduler {
           );
           log.error(`Scheduled backup error: ${errorMessage(error)}`);
         }
+      };
+      this.backupJob = cron.schedule(settings.schedule, async () => {
+        if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
+        this.backupRetryTimer = null;
+        await runBackup();
       }, { timezone: this.effectiveTimezone });
       this.backupJob.on("execution:missed", (context: any) =>
         recordMissedExecution(null, "Scheduled Backup", "backup", context),

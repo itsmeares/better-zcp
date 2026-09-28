@@ -1970,6 +1970,7 @@ export const backupApi = {
     backup?: ServerBackupArchive;
     duration?: number;
     message?: string;
+    warnings?: string[];
   }> =>
     apiRoute("POST", "/backup/create", options || {}),
 

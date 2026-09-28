@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   Archive,
   Download,
@@ -155,6 +156,7 @@ export default function Backups() {
   const [selectedBackups, setSelectedBackups] = useState<Set<string>>(new Set())
 
   const [showSettings, setShowSettings] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [backupSchedule, setBackupSchedule] = useState('0 */6 * * *')
   const [backupMaxCount, setBackupMaxCount] = useState(10)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -310,14 +312,11 @@ export default function Backups() {
       const result = await backupApi.createBackup({ expectedServerId: activeServerId })
       if (result.success && result.backup) {
         toast({
-          title: 'Safehouse Snapshot Created',
-          description:
-            'Stored ' +
-            String(result.backup.name) +
-            ' in ' +
-            String(result.duration?.toFixed(1)) +
-            's',
-          variant: 'success' as const,
+          title: result.warnings?.length ? 'Backup needs review' : 'Full Backup Created',
+          description: result.warnings?.join(' ') ||
+            'Stored ' + String(result.backup.name) + ' in ' +
+            String(result.duration?.toFixed(1)) + 's',
+          variant: result.warnings?.length ? 'destructive' : 'success',
         })
         await fetchBackups()
         await fetchBackupStatus()
@@ -689,14 +688,14 @@ export default function Backups() {
   return (
     <div className="space-y-6 page-transition">
       <PageHeader
-        title={'World Backups'}
-        description={'Create, restore, and manage your server world backups'}
+        title={'Full Backups'}
+        description={'Portable archives of the world, player accounts, server config, and panel profile'}
         icon={<Archive className="w-5 h-5 text-primary" />}
         actions={
           <>
             <DisabledReason reason={null}>
               <Button
-                onClick={handleCreateBackup}
+                onClick={() => setCreateDialogOpen(true)}
                 disabled={
                   creatingBackup ||
                   restoringBackup !== null ||
@@ -711,7 +710,7 @@ export default function Backups() {
                 ) : (
                   <Archive className="w-4 h-4" />
                 )}
-                {creatingBackup ? 'Creating...' : 'Create Backup'}
+                {creatingBackup ? 'Creating...' : 'Create Full Backup'}
               </Button>
             </DisabledReason>
             <input
@@ -772,6 +771,31 @@ export default function Backups() {
           </>
         }
       />
+
+      <AlertDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{'Create full backup'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {'If the server is running, the panel will save and stop it, create a consistent archive, then start it again. Players will be disconnected. The archive contains server credentials.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreateBackup}>{'Create backup'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Alert>
+        <Archive className="h-4 w-4" />
+        <AlertTitle>{'Recovery snapshots while the server runs'}</AlertTitle>
+        <AlertDescription>
+          {'Project Zomboid creates its own rotating snapshots. Set the interval and count under '}
+          <Link className="underline" to="/server-config">{'Server Config → Backups'}</Link>
+          {'. New servers default to one snapshot per hour and five copies. Full backups below briefly stop the server.'}
+        </AlertDescription>
+      </Alert>
 
       {loadError && (
         <Alert variant="destructive">
@@ -951,7 +975,7 @@ export default function Backups() {
               {'Backup Settings'}
             </CardTitle>
             <CardDescription>
-              {'Configure scheduled backup settings.'}
+              {'Scheduled full backups wait for an empty server, then save, stop, archive, and restart it. Occupied servers are checked again every five minutes.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1001,7 +1025,7 @@ export default function Backups() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {'How often to automatically create backups'}
+                  {'When to start a full backup; a busy server waits until players leave.'}
                 </p>
               </div>
               <div className="space-y-2">
@@ -1166,13 +1190,13 @@ export default function Backups() {
           ) : backups.length === 0 ? (
             <EmptyState
               type="noData"
-              title={'No safety net'}
+              title={'No full backups yet'}
               description={
-                'Create a backup before changing saves, mods, or server settings — one bad update away from lost progress.'
+                'Create a portable archive before changing saves, mods, or server settings.'
               }
               action={{
-                label: 'Create Backup',
-                onClick: handleCreateBackup,
+                label: 'Create Full Backup',
+                onClick: () => setCreateDialogOpen(true),
                 variant: 'default',
               }}
             />
@@ -1427,7 +1451,7 @@ export default function Backups() {
               {'Restore Backup'}
               <HelpTip label={'Restore Backup'}>
                 {
-                  "Restoring only replaces this world's save files — your server settings, mods, and workshop items are untouched."
+                  'New full backups also restore server config, player accounts, and portable panel profile settings. Older world-only archives still restore the world only.'
                 }
               </HelpTip>
             </AlertDialogTitle>
@@ -1444,7 +1468,7 @@ export default function Backups() {
                   <span className="font-medium text-destructive">
                     {'replace'}
                   </span>
-                  {' the current world data.'}
+                  {' the current world, plus config and player account data when present in the archive.'}
                 </>
               </p>
               <ul className="list-disc list-inside text-sm space-y-1 mt-2">
