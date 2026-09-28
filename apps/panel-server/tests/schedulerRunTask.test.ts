@@ -126,6 +126,27 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     expect(rconService.quit).not.toHaveBeenCalled();
   });
 
+  it("does not save or stop a server when a required forced warning is rejected", async () => {
+    const rconService = {
+      connected: true,
+      execute: vi.fn().mockResolvedValue({ success: true }),
+      serverMessage: vi.fn().mockResolvedValue({ success: false, rejected: true }),
+      save: vi.fn(),
+      quit: vi.fn(),
+    };
+    const serverManager = {
+      _serverId: "server-a",
+      serverName: "Test",
+      getServerProcessDetails: vi.fn().mockResolvedValue({ running: true, scanFailed: false }),
+    };
+    const scheduler = new Scheduler(rconService, serverManager);
+
+    await expect(scheduler.performRestart(1, { requireWarnings: true }))
+      .rejects.toThrow("Could not warn online players");
+    expect(rconService.save).not.toHaveBeenCalled();
+    expect(rconService.quit).not.toHaveBeenCalled();
+  });
+
   it("routes 'save' through rconService.save()", async () => {
     const { scheduler, rconService } = makeScheduler();
 

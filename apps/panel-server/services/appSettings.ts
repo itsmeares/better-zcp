@@ -11,7 +11,7 @@ import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("AppSettings");
 
-const MOD_RESTART_DELAY_MIN = 0;
+const MOD_RESTART_DELAY_MIN = 1;
 const MOD_RESTART_DELAY_MAX = 30;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MAX = 60;

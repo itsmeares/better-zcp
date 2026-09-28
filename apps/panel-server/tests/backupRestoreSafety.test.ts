@@ -427,6 +427,29 @@ describe("createBackup archive safety", () => {
     expect(fs.readdirSync(backupsPath)).toEqual([]);
   });
 
+  it("creates the full archive after the scheduler has completed an explicit player countdown", async () => {
+    const service = createService();
+    let running = true;
+    const save = vi.fn(async () => ({ success: true }));
+    const quit = vi.fn(async () => { running = false; return { success: true }; });
+    const startServer = vi.fn(async () => { running = true; return { success: true }; });
+    const getPlayers = vi.fn(async () => ({ success: true, players: [{ name: "online" }] }));
+    service.setServerManager({
+      getServerProcessDetails: async () => ({ running, scanFailed: false }),
+      startServer,
+    });
+    service.setRconService({ connected: true, getPlayers, save, quit });
+
+    const result = await service.createBackup({ scheduled: true, allowOccupiedScheduled: true });
+
+    expect(result.success).toBe(true);
+    expect(getPlayers).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+    expect(startServer).toHaveBeenCalledOnce();
+    expect(running).toBe(true);
+  });
+
   it("restores config, account DB, and panel profile from a full archive", async () => {
     const configPath = path.join(root, "Server");
     const accountPath = path.join(root, "db");

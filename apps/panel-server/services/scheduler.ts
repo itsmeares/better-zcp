@@ -124,7 +124,7 @@ export class Scheduler {
   autoRestartJob: any;
   backupJob: any;
   backupRetryTimer: ReturnType<typeof setTimeout> | null;
-  modUpdateRestartPending: boolean;
+  backupScheduleGeneration: number;
   restartInProgress: boolean;
   restartCancelled: boolean;
   runningTasks: Set<any>;
@@ -145,7 +145,7 @@ export class Scheduler {
     this.autoRestartJob = null;
     this.backupJob = null;
     this.backupRetryTimer = null;
-    this.modUpdateRestartPending = false;
+    this.backupScheduleGeneration = 0;
     this.restartInProgress = false;
     this.restartCancelled = false;
     this.runningTasks = new Set();
@@ -652,6 +652,7 @@ export class Scheduler {
     this.autoRestartRetryTimer = null;
     if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
     this.backupRetryTimer = null;
+    this.backupScheduleGeneration++;
     for (const [taskId, job] of this.jobs) {
       job.stop();
       log.debug(`Stopped scheduled task: ${taskId}`);
@@ -673,6 +674,7 @@ export class Scheduler {
   }
 
   async setupBackupSchedule(): Promise<void> {
+    const generation = ++this.backupScheduleGeneration;
     if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
     this.backupRetryTimer = null;
     if (this.backupJob) {
@@ -703,8 +705,11 @@ export class Scheduler {
         return;
       }
 
+      let pendingSince: number | null = null;
+      let running = false;
+
       const queueRetry = (serverId: string | number | null) => {
-        if (this.backupRetryTimer) return;
+        if (this.backupRetryTimer || generation !== this.backupScheduleGeneration) return;
         this.backupRetryTimer = setTimeout(() => {
           this.backupRetryTimer = null;
           void runBackup(serverId).catch((error: unknown) =>
@@ -712,80 +717,113 @@ export class Scheduler {
         }, 5 * 60_000);
       };
       const runBackup = async (expectedServerId?: string | number | null) => {
-        const activeServer = await getActiveServer();
-        if (expectedServerId != null && String(activeServer?.id ?? "") !== String(expectedServerId)) {
-          log.info("Deferred backup cancelled because the active server changed");
-          return;
-        }
-        if (this.restartInProgress) {
-          log.warn(
-            "Scheduled backup skipped: a restart is currently in progress (would risk archiving a save mid-write)",
-          );
-          await recordScheduleExecution(
-            null,
-            "Scheduled Backup",
-            "backup",
-            false,
-            "Skipped: a restart was in progress",
-            0,
-          );
-          queueRetry(activeServer?.id ?? null);
-          return;
-        }
-        log.info("Executing scheduled backup");
-        const startTime = Date.now();
+        if (running || generation !== this.backupScheduleGeneration) return;
+        running = true;
         try {
-          const result = await this.backupService.createBackup({
-            includeDb: settings.includeDb,
-            scheduled: true,
-            activeServer,
-          });
-          const duration = Date.now() - startTime;
-          if (result.success) {
-            const skipNote = result.skippedFiles?.length
-              ? ` (${result.skippedFiles.length} file(s) not included -- a temp/log/lock file rewritten mid-backup, or a symbolic link deliberately not followed: ${result.skippedFiles.join(", ")})`
-              : "";
-            await recordScheduleExecution(
-              null,
-              "Scheduled Backup",
-              "backup",
-              true,
-              `Created: ${result.backup.name}${skipNote}`,
-              duration,
+          const activeServer = await getActiveServer();
+          if (expectedServerId != null && String(activeServer?.id ?? "") !== String(expectedServerId)) {
+            log.info("Deferred backup cancelled because the active server changed");
+            pendingSince = null;
+            return;
+          }
+          pendingSince ??= Date.now();
+          if (this.restartInProgress) {
+            log.warn(
+              "Scheduled backup skipped: a restart is currently in progress (would risk archiving a save mid-write)",
             );
-            log.info(`Scheduled backup completed: ${result.backup.name}${skipNote}`);
-          } else {
             await recordScheduleExecution(
               null,
               "Scheduled Backup",
               "backup",
               false,
-              result.message,
+              "Skipped: a restart was in progress",
+              0,
+            );
+            queueRetry(activeServer?.id ?? null);
+            return;
+          }
+          log.info("Executing scheduled backup");
+          const startTime = Date.now();
+          try {
+            let allowOccupiedScheduled = false;
+            if (settings.forceAfterMinutes != null &&
+                Date.now() - pendingSince >= (settings.forceAfterMinutes - settings.forceWarningMinutes) * 60_000) {
+              let players;
+              try { players = await this.rconService?.getPlayers?.(); } catch { /* backup service will defer */ }
+              if (players?.success && Array.isArray(players.players) && players.players.length > 0) {
+                allowOccupiedScheduled = await this.warnForForcedBackup(
+                  activeServer?.id ?? null, settings.forceWarningMinutes, generation,
+                );
+                if (!allowOccupiedScheduled) {
+                  if (generation !== this.backupScheduleGeneration) return;
+                  await recordScheduleExecution(null, "Scheduled Backup", "backup", false,
+                    "Forced backup postponed: player warning or schedule verification failed", Date.now() - startTime);
+                  queueRetry(activeServer?.id ?? null);
+                  return;
+                }
+              }
+            }
+            if (generation !== this.backupScheduleGeneration) return;
+            const result = await this.backupService.createBackup({
+              includeDb: settings.includeDb,
+              scheduled: true,
+              allowOccupiedScheduled,
+              activeServer,
+            });
+            const duration = Date.now() - startTime;
+            if (result.success) {
+              const skipNote = result.skippedFiles?.length
+                ? ` (${result.skippedFiles.length} file(s) not included -- a temp/log/lock file rewritten mid-backup, or a symbolic link deliberately not followed: ${result.skippedFiles.join(", ")})`
+                : "";
+              await recordScheduleExecution(
+                null,
+                "Scheduled Backup",
+                "backup",
+                true,
+                `Created: ${result.backup.name}${skipNote}`,
+                duration,
+              );
+              log.info(`Scheduled backup completed: ${result.backup.name}${skipNote}`);
+              pendingSince = null;
+            } else {
+              await recordScheduleExecution(
+                null,
+                "Scheduled Backup",
+                "backup",
+                false,
+                result.message,
+                duration,
+              );
+              if (result.deferred) {
+                log.info(`Scheduled backup postponed: ${result.message}`);
+                queueRetry(activeServer?.id ?? null);
+              } else {
+                log.error(`Scheduled backup failed: ${result.message}`);
+                pendingSince = null;
+              }
+            }
+          } catch (error: unknown) {
+            const duration = Date.now() - startTime;
+            await recordScheduleExecution(
+              null,
+              "Scheduled Backup",
+              "backup",
+              false,
+              errorMessage(error),
               duration,
             );
-            if (result.deferred) {
-              log.info(`Scheduled backup postponed: ${result.message}`);
-              queueRetry(activeServer?.id ?? null);
-            } else {
-              log.error(`Scheduled backup failed: ${result.message}`);
-            }
+            log.error(`Scheduled backup error: ${errorMessage(error)}`);
+            pendingSince = null;
           }
         } catch (error: unknown) {
-          const duration = Date.now() - startTime;
-          await recordScheduleExecution(
-            null,
-            "Scheduled Backup",
-            "backup",
-            false,
-            errorMessage(error),
-            duration,
-          );
-          log.error(`Scheduled backup error: ${errorMessage(error)}`);
+          pendingSince = null;
+          log.error(`Scheduled backup could not read its target: ${errorMessage(error)}`);
+        } finally {
+          running = false;
         }
       };
       this.backupJob = cron.schedule(settings.schedule, async () => {
-        if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
-        this.backupRetryTimer = null;
+        if (this.backupRetryTimer) return;
         await runBackup();
       }, { timezone: this.effectiveTimezone });
       this.backupJob.on("execution:missed", (context: any) =>
@@ -802,6 +840,44 @@ export class Scheduler {
       if (dstWarning) log.warn(dstWarning);
     } catch (error: unknown) {
       log.error(`Failed to setup backup schedule: ${errorMessage(error)}`);
+    }
+  }
+
+  async warnForForcedBackup(
+    serverId: string | number | null,
+    warningMinutes: number,
+    generation: number,
+  ): Promise<boolean> {
+    try {
+      const stillCurrent = async () =>
+        generation === this.backupScheduleGeneration &&
+        !this.restartInProgress &&
+        !this.backupService?.backupInProgress &&
+        !this.backupService?.restoreInProgress &&
+        String((await getActiveServer())?.id ?? "") === String(serverId ?? "");
+      const minutes = [...new Set([warningMinutes, 10, 5, 3, 2, 1])]
+        .filter((minute) => minute <= warningMinutes).sort((a, b) => b - a);
+      let previous = warningMinutes;
+      for (const minute of minutes) {
+        await this.sleep((previous - minute) * 60_000);
+        if (!(await stillCurrent())) return false;
+        const warned = await this.rconService?.serverMessage?.(
+          `Full backup in ${minute} minute(s). The server will save, stop and restart.`,
+        );
+        if (!warned?.success || warned.rejected) return false;
+        previous = minute;
+      }
+      await this.sleep(30_000);
+      if (!(await stillCurrent())) return false;
+      const warned = await this.rconService?.serverMessage?.(
+        "Full backup in 30 seconds. The server will save, stop and restart.",
+      );
+      if (!warned?.success || warned.rejected) return false;
+      await this.sleep(30_000);
+      return stillCurrent();
+    } catch (error: unknown) {
+      log.warn(`Forced backup warning failed: ${errorMessage(error)}`);
+      return false;
     }
   }
 
@@ -861,10 +937,12 @@ export class Scheduler {
   async _broadcastRestartMessage(
     text: string,
     rconService: any = this.rconService,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    let delivered = false;
     try {
       const r = await rconService.serverMessage(text, { skipLog: true });
-      if (!r?.success) {
+      delivered = r?.success === true && r.rejected !== true;
+      if (!delivered) {
         log.warn(
           `Restart broadcast (RCON) failed: ${r?.error || r?.response || "unknown"}`,
         );
@@ -873,7 +951,7 @@ export class Scheduler {
       log.warn(`Restart broadcast (RCON) threw: ${errorMessage(err)}`);
     }
 
-    if (rconService !== this.rconService) return;
+    if (rconService !== this.rconService) return delivered;
     try {
       if (
         panelBridge &&
@@ -889,6 +967,7 @@ export class Scheduler {
     } catch (err: unknown) {
       log.debug(`Restart broadcast (bridge) threw: ${errorMessage(err)}`);
     }
+    return delivered;
   }
 
   async performRestart(
@@ -898,12 +977,14 @@ export class Scheduler {
       serverManager = this.serverManager,
       label = "Auto Restart",
       onlyWhenEmpty = false,
+      requireWarnings = false,
       lifecycleLock: providedLifecycleLock = null,
     }: {
       rconService?: any;
       serverManager?: any;
       label?: string;
       onlyWhenEmpty?: boolean;
+      requireWarnings?: boolean;
       lifecycleLock?: LifecycleLock | null;
     } = {},
   ): Promise<any> {
@@ -1091,6 +1172,11 @@ export class Scheduler {
       const initialDeferral = await deferForPlayers();
       if (initialDeferral) return initialDeferral;
 
+      const broadcast = async (message: string) => {
+        const delivered = await this._broadcastRestartMessage(message, rconService);
+        if (requireWarnings && !delivered) throw new Error("Could not warn online players; restart cancelled");
+      };
+
       log.info("Auto-restart: RCON verified, sending warnings...");
 
       if (warningMinutes > 0) {
@@ -1103,9 +1189,8 @@ export class Scheduler {
             );
             return { success: false, message: "Restart cancelled" };
           }
-          await this._broadcastRestartMessage(
+          await broadcast(
             formatRestartWarning(restartWarning, i, "minute"),
-            rconService,
           );
 
           if (i > 1) {
@@ -1132,26 +1217,23 @@ export class Scheduler {
             );
             return { success: false, message: "Restart cancelled" };
           }
-          await this._broadcastRestartMessage(
+          await broadcast(
             formatRestartWarning(restartWarning, tick.count, "second"),
-            rconService,
           );
         }
 
         await this.sleep(1000);
         const finalDeferral = await deferForPlayers();
         if (finalDeferral) return finalDeferral;
-        await this._broadcastRestartMessage(
+        await broadcast(
           getRestartWarningNotice(restartWarning, "restarting"),
-          rconService,
         );
         await this.sleep(2000);
       } else {
         const finalDeferral = await deferForPlayers();
         if (finalDeferral) return finalDeferral;
-        await this._broadcastRestartMessage(
+        await broadcast(
           getRestartWarningNotice(restartWarning, "restarting"),
-          rconService,
         );
         await this.sleep(2000);
       }
@@ -1488,37 +1570,6 @@ export class Scheduler {
     }
   }
 
-  async triggerModUpdateRestart(): Promise<void> {
-    if (this.modUpdateRestartPending) {
-      log.info("Mod update restart already pending");
-      return;
-    }
-
-    this.modUpdateRestartPending = true;
-    log.info("Mod update detected - scheduling restart");
-
-    try {
-      const warned = await this.rconService.serverMessage(
-        "🔧 Mod updates detected! Server will restart in 5 minutes.",
-      );
-      if (!warned?.success) {
-        log.warn(
-          `Could not warn players about the mod-update restart: ${warned?.error || "unknown error"}`,
-        );
-      }
-      const result = await this.performRestart(5);
-      if (!result?.success) {
-        log.error(
-          `Mod-update restart did not complete: ${result?.message || "unknown error"}`,
-        );
-      }
-      this.modUpdateRestartPending = false;
-    } catch (error: unknown) {
-      this.modUpdateRestartPending = false;
-      throw error;
-    }
-  }
-
   getStatus(): Record<string, any> {
     const tasks: Array<{ id: any; running: true }> = [];
     for (const [id] of this.jobs) {
@@ -1529,7 +1580,6 @@ export class Scheduler {
       activeTasks: tasks.length,
       autoRestartEnabled: !!this.autoRestartJob,
       backupScheduleEnabled: !!this.backupJob,
-      modUpdateRestartPending: this.modUpdateRestartPending,
       nextRun: this.getNextRun(),
       timezone: this.effectiveTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       configuredTimezone: this.configuredTimezone,

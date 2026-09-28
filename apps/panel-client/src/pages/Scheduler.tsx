@@ -4,7 +4,6 @@ import {
   Plus,
   Trash2,
   RotateCcw,
-  Calendar,
   History,
   CheckCircle2,
   XCircle,
@@ -391,7 +390,6 @@ export default function Scheduler() {
   const [status, setStatus] = useState<{
     activeTasks: number
     autoRestartEnabled: boolean
-    modUpdateRestartPending: boolean
     timezone?: string
     configuredTimezone?: string | null
     timezoneFallback?: { configured: string; effective: string } | null
@@ -1487,7 +1485,6 @@ export default function Scheduler() {
             tasks.filter(
               (t) => t.enabled && t.command.toLowerCase() === 'restart',
             ).length > 0
-          const modRestartPending = !!status?.modUpdateRestartPending
           const tiles = [
             {
               icon: <Clock className="w-4 h-4" />,
@@ -1509,22 +1506,11 @@ export default function Scheduler() {
                   : String(restartCount) + ' restart tasks',
               tone: restartActive ? 'primary' : 'muted',
             },
-            {
-              icon: <Calendar className="w-4 h-4" />,
-              label: 'Mod Update Restart',
-              value: modRestartPending ? 'Pending' : 'None',
-              sub: 'Auto-restart on mod updates',
-              tone: modRestartPending ? 'warning' : 'muted',
-            },
           ] as const
           const toneClasses = {
             primary: {
               tile: 'border-primary/30 bg-primary/[0.06] text-primary',
               value: 'text-foreground',
-            },
-            warning: {
-              tile: 'border-warning/40 bg-warning/10 text-warning',
-              value: 'text-warning',
             },
             muted: {
               tile: 'border-border/55 bg-muted/30 text-muted-foreground',
@@ -1532,7 +1518,7 @@ export default function Scheduler() {
             },
           }
           return (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {tiles.map((tile) => {
                 const cls = toneClasses[tile.tone]
                 return (

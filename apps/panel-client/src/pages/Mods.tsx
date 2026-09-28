@@ -392,9 +392,9 @@ export default function Mods() {
   const discoverAbortRef = useRef<AbortController | null>(null)
 
   const [restartSettingsOpen, setRestartSettingsOpen] = useState(false)
-  const [restartWarningMinutes, setRestartWarningMinutes] = useState(5)
-  const [delayIfPlayersOnline, setDelayIfPlayersOnline] = useState(true)
-  const [maxDelayMinutes, setMaxDelayMinutes] = useState(30)
+  const [restartWarningMinutes, setRestartWarningMinutes] = useState(15)
+  const [forceAfterDeadline, setForceAfterDeadline] = useState(false)
+  const [maxDelayMinutes, setMaxDelayMinutes] = useState(60)
 
   const [conflicts, setConflicts] = useState<ConflictScanResult | null>(null)
   const [conflictsLoading, setConflictsLoading] = useState(false)
@@ -594,9 +594,9 @@ export default function Mods() {
         const statusData = results[1].value
         setStatus(statusData)
         if (statusData) {
-          setRestartWarningMinutes(statusData.restartWarningMinutes || 5)
-          setDelayIfPlayersOnline(statusData.delayIfPlayersOnline ?? true)
-          setMaxDelayMinutes(statusData.maxDelayMinutes || 30)
+          setRestartWarningMinutes(statusData.restartWarningMinutes ?? 15)
+          setForceAfterDeadline(statusData.forceAfterDeadline === true)
+          setMaxDelayMinutes(statusData.maxDelayMinutes ?? 60)
         }
       }
       if (results[2].status === 'fulfilled') {
@@ -2186,7 +2186,7 @@ export default function Mods() {
     try {
       await modsApi.setRestartOptions({
         warningMinutes: restartWarningMinutes,
-        delayIfPlayersOnline: delayIfPlayersOnline,
+        forceAfterDeadline,
         maxDelayMinutes: maxDelayMinutes,
       })
       toast({
@@ -2985,9 +2985,9 @@ export default function Mods() {
                       title={'Choose Project Zomboid server folder'}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {'Waiting for players to leave before restarting (max ' +
-                        String(status.maxDelayMinutes) +
-                        ' min)'}
+                      {status.forceAfterDeadline
+                        ? 'Waiting for players to leave. The warning countdown starts before the selected deadline.'
+                        : 'Waiting for players to leave before restarting.'}
                     </p>
                   </div>
                 </div>
@@ -3972,80 +3972,56 @@ export default function Mods() {
                       <div className="space-y-4">
                         <div>
                           <Label htmlFor="restart-warning-minutes">
-                            {'Warning Time (minutes)'}
+                            {'Warning countdown (minutes)'}
                           </Label>
                           <NumberInput
                             id="restart-warning-minutes"
-                            min={0}
+                            min={1}
                             max={30}
                             value={restartWarningMinutes}
                             onChange={setRestartWarningMinutes}
                           />
                           <p className="text-xs text-muted-foreground mt-1">
                             {
-                              'How long to wait before restarting after detecting updates'
+                              'Warning countdown for a forced restart. An empty server restarts without a countdown.'
                             }
                           </p>
                         </div>
 
                         <div className="flex items-center justify-between rounded-lg border border-border/70 bg-card/65 p-3">
                           <div className="space-y-1">
-                            <Label>{'Delay if Players Online'}</Label>
+                            <Label htmlFor="force-mod-restart">{'Force restart at deadline'}</Label>
                             <p className="text-xs text-muted-foreground">
-                              {
-                                'Wait for all players to leave before restarting'
-                              }
+                              {'Off by default. With this on, players are warned before the deadline.'}
                             </p>
                           </div>
                           <Switch
-                            checked={delayIfPlayersOnline}
-                            onCheckedChange={setDelayIfPlayersOnline}
+                            id="force-mod-restart"
+                            checked={forceAfterDeadline}
+                            onCheckedChange={setForceAfterDeadline}
                           />
                         </div>
 
-                        {delayIfPlayersOnline && (
+                        {forceAfterDeadline && (
                           <div>
                             <Label htmlFor="restart-max-delay">
-                              {'Maximum Delay (minutes)'}
+                              {'Restart deadline (minutes)'}
                             </Label>
                             <NumberInput
                               id="restart-max-delay"
-                              min={5}
+                              min={15}
                               max={120}
                               value={maxDelayMinutes}
                               onChange={setMaxDelayMinutes}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                               {
-                                'Force restart after this time even if players are online'
+                                'Minutes from update detection to the restart. The warning countdown begins before this deadline.'
                               }
                             </p>
                           </div>
                         )}
 
-                        <div className="rounded-lg border border-border/70 bg-secondary/40 p-3">
-                          <p className="text-sm font-medium mb-2">
-                            {'Current Settings'}
-                          </p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            <p>
-                              {'• Warning time: ' +
-                                String(restartWarningMinutes) +
-                                ' minutes'}
-                            </p>
-                            <p>
-                              {'• Delay for players: ' +
-                                String(delayIfPlayersOnline ? 'Yes' : 'No')}
-                            </p>
-                            {delayIfPlayersOnline && (
-                              <p>
-                                {'• Max delay: ' +
-                                  String(maxDelayMinutes) +
-                                  ' minutes'}
-                              </p>
-                            )}
-                          </div>
-                        </div>
                       </div>
                       <DialogFooter className="flex-col sm:flex-row gap-2">
                         <Button

@@ -683,7 +683,6 @@ export interface RestartWarningSettings {
 export interface SchedulerStatus {
   activeTasks: number;
   autoRestartEnabled: boolean;
-  modUpdateRestartPending: boolean;
   timezone?: string;
   configuredTimezone?: string | null;
   timezoneFallback?: { configured: string; effective: string } | null;
@@ -792,7 +791,7 @@ export const modsApi = {
     apiRoute("POST", "/mods/auto-restart", { enabled }),
   setRestartOptions: (options: {
     warningMinutes?: number;
-    delayIfPlayersOnline?: boolean;
+    forceAfterDeadline?: boolean;
     maxDelayMinutes?: number;
     checkInterval?: number;
   }) =>
@@ -1905,6 +1904,8 @@ export interface BackupSettings {
   schedule: string;
   maxBackups: number;
   includeDb: boolean;
+  forceAfterMinutes: number | null;
+  forceWarningMinutes: number;
 }
 
 export interface BackupStatus extends BackupSettings {
