@@ -26,7 +26,7 @@ describe("all-in-one host update", () => {
         encoding: "utf8",
       });
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("Save and stop it from the panel before updating.");
+      expect(result.stderr).toContain("Save and stop it from the panel before splitting the containers.");
       expect(fs.readFileSync(path.join(state, "build", "source", "marker"), "utf8")).toBe("original");
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

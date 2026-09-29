@@ -9,6 +9,7 @@ import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { sanitizeIniValue } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
+import { isBundledGameProfile } from "./managedContainer.ts";
 
 const log = createLogger("ServerLaunch");
 const isWindows = process.platform === "win32";
@@ -348,7 +349,7 @@ fi
 INSTDIR="$(dirname "$0")"
 export LD_LIBRARY_PATH="\${INSTDIR}/natives/:\${INSTDIR}/natives/linux64/:\${INSTDIR}/linux64/:\${INSTDIR}:\${INSTDIR}/jre64/lib/amd64:\${INSTDIR}/jre64/lib/x86_64:/usr/lib64:\${LD_LIBRARY_PATH}"
 
-"$JAVA_CMD" ${linuxJvmArgs.join(" ")} -Djava.library.path=natives/:natives/linux64/:linux64/:. -cp "$PZ_CLASSPATH" zombie.network.GameServer ${gameArgs.join(" ")}
+exec "$JAVA_CMD" ${linuxJvmArgs.join(" ")} -Djava.library.path=natives/:natives/linux64/:linux64/:. -cp "$PZ_CLASSPATH" zombie.network.GameServer ${gameArgs.join(" ")}
 `;
 
   return { bat: batchContent, sh: shellContent };
@@ -455,6 +456,7 @@ export async function refreshLaunchTargetBeforeStart(
   activeServer: AnyRecord | null,
   { managedHandled = false }: { managedHandled?: boolean } = {},
 ) {
+  if (process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(activeServer)) managedHandled = false;
   try {
     const rconReady = await ensureRconConfigured();
     if (rconReady) {

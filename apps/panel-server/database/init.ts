@@ -1580,6 +1580,19 @@ export function normalizeServerMemory(
     minMemory: normalizeMemoryGb(server.minMemory, 4),
     maxMemory: normalizeMemoryGb(server.maxMemory, 8),
   };
+  if (
+    process.env.PANEL_DOCKER_INSTALL_KIND === "split" &&
+    installPath === "/pz-server" &&
+    zomboidDataPath === "/zomboid" &&
+    !server.dockerContainerName &&
+    !server.dockerContainerId &&
+    /^[A-Za-z0-9_-]+$/.test(String(server.id))
+  ) {
+    normalized.dockerContainerName = `zomboid-game-${server.id}`;
+    if (!server.rconHost || ["127.0.0.1", "localhost"].includes(server.rconHost)) {
+      normalized.rconHost = normalized.dockerContainerName;
+    }
+  }
   delete normalized.isRemote;
   delete normalized.remoteConfigConfigured;
   return normalized;

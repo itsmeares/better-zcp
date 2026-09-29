@@ -17,6 +17,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/server.ts");
+const { setDockerClient } = await import("../services/managedContainer.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -55,12 +56,33 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setDockerClient(null);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
 const isWindows = process.platform === "win32";
 
 describe("POST /api/server/steam-update concurrency guard", () => {
+  it("refuses to update a shared install while a different game container is running", async () => {
+    getServersMock.mockResolvedValue([
+      { id: "a", name: "World A", installPath, dockerContainerName: "zomboid-game-a" },
+      { id: "b", name: "World B", installPath, dockerContainerName: "zomboid-game-b" },
+    ]);
+    const inspectManagedContainer = vi.fn(async (name) => ({ State: { Running: name === "zomboid-game-b" } }));
+    setDockerClient({ enabled: true, available: true, inspectManagedContainer, runManagedAction: vi.fn() });
+    const serverManager = { getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })) };
+    const response = createResponse();
+
+    await getSteamUpdateHandler()({
+      app: { get: (key) => key === "serverManager" ? serverManager : { emit: vi.fn() } },
+      body: { steamcmdPath, installPath, branch: "stable" },
+    }, response);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: "STEAM_UPDATE_SERVER_RUNNING" }));
+    expect(serverManager.getServerProcessDetails).not.toHaveBeenCalled();
+    expect(inspectManagedContainer).toHaveBeenCalledWith("zomboid-game-b");
+  });
   it.skipIf(isWindows)("a second update for the SAME install path, suspended inside saveAndResolveSteamCmdExe while the first claims and spawns, is refused with 409 once it resumes", async () => {
     const serverManager = {
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),

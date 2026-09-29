@@ -12,7 +12,8 @@ STEAM_HOME=/home/steam
 STEAMCMD=/home/steam/steamcmd/steamcmd.sh
 PZ_APPID=380870
 
-chown -R ${STEAM_UID}:${STEAM_GID} /pz-server /zomboid /app/data /app/logs "$STEAM_HOME" 2>/dev/null || true
+chown -R ${STEAM_UID}:${STEAM_GID} /app/data /app/logs "$STEAM_HOME" 2>/dev/null || true
+chown ${STEAM_UID}:${STEAM_GID} /pz-server /zomboid
 
 if [ ! -x "$STEAMCMD" ]; then
   echo "[entrypoint] ERROR: steamcmd not found at $STEAMCMD" >&2
@@ -26,8 +27,17 @@ else
   echo "[entrypoint] Existing PZ install found in /pz-server."
 fi
 
-chown -R ${STEAM_UID}:${STEAM_GID} /pz-server
 chmod +x /pz-server/start-server.sh 2>/dev/null || true
+
+if [ -S /var/run/docker.sock ]; then
+  socket_gid="$(stat -c '%g' /var/run/docker.sock)"
+  socket_group="$(getent group "$socket_gid" | cut -d: -f1 || true)"
+  if [ -z "$socket_group" ]; then
+    groupadd -g "$socket_gid" paneldocker
+    socket_group=paneldocker
+  fi
+  usermod -aG "$socket_group" steam
+fi
 
 cd /app
 exec su steam -s /bin/bash -c "export HOME='$STEAM_HOME'; cd /app && exec node --experimental-strip-types apps/panel-server/index.ts"

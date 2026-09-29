@@ -965,6 +965,9 @@ export class ServerManager {
     try {
       if (serverId !== this._serverId) await this.reloadConfig(serverId);
       await this.loadConfig(serverId);
+      if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") {
+        throw new Error("This Docker stack starts game servers in separate containers. Check the server profile's data path and Docker container mapping.");
+      }
 
       const installPathForSteamCheck =
         this._serverRecord?.installPath || this.serverPath;

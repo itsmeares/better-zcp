@@ -188,21 +188,24 @@ Every path above ends the same way: a browser tab open to the panel's setup scre
 
 ### macOS
 
-There's no native macOS binary. Run the panel with Docker Desktop or OrbStack — see the macOS row in [docs/install/docker.md](docs/install/docker.md)'s own chooser table, which points you at the fastest of its four Docker paths. Project Zomboid server hosting itself needs Linux or a hosting provider; the panel can still run on your Mac.
+There's no native macOS binary. Run the panel with Docker Desktop or OrbStack
+and connect it to a PZ server on Linux; see the macOS row in
+[docs/install/docker.md](docs/install/docker.md). The managed stack installer
+requires an amd64 Linux Docker host.
 
 ### Docker and Unraid
 
 The fastest path to a fully working setup — panel **and** a new Project
-Zomboid server — is the all-in-one installer:
+Zomboid server — is the Docker stack installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
 ```
 
-It checks Docker, creates persistent configuration, pulls the
-prebuilt release image, installs PZ, detects the LAN address, and publishes
-the required UDP ports `16261` and `16262`, and prints the panel URL near the end
-once the health check passes.
+It checks Docker, creates persistent configuration, pulls the release image,
+installs PZ, and starts the panel. Each server profile gets its own game
+container when started. The panel can start and stop those containers; its
+Docker socket mount grants it host-level Docker control.
 
 If PZ already runs on the host, in another container, or on another machine,
 use the panel-only image instead:

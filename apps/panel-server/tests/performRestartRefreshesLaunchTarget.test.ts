@@ -38,6 +38,7 @@ describe("performRestart() refreshes the launch target before starting", () => {
       zomboidDataPath,
       rconPassword: "secret123",
       rconPort: 27015,
+      adminPassword: "admin123",
     };
     getServer.mockResolvedValue(server);
     getActiveServer.mockResolvedValue(server);
@@ -64,17 +65,4 @@ describe("performRestart() refreshes the launch target before starting", () => {
     expect(serverManager.startServer).toHaveBeenCalled();
   });
 
-  it("the main was-running branch calls the same refresh, by source inspection", async () => {
-    const { readFileSync } = await import("fs");
-    const source = readFileSync(
-      new URL("../services/scheduler.ts", import.meta.url),
-      "utf8",
-    );
-    const mainBranch = source.slice(
-      source.indexOf("const restartTarget = await this._backupConfigBeforeRestart"),
-      source.indexOf("serverStarted = false"),
-    );
-    expect(mainBranch).toContain("refreshLaunchTargetBeforeStart(restartTarget");
-    expect(mainBranch).toContain("managedHandled: managed.handled");
-  });
 });

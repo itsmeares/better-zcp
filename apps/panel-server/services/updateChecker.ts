@@ -3,8 +3,8 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Updates");
-import { getSetting, setSetting, getActiveServer } from "../database/init.ts";
-import { resolveManagedContainer } from "./managedContainer.ts";
+import { getSetting, setSetting, getActiveServer, getServers } from "../database/init.ts";
+import { getDockerClient, isBundledGameProfile, resolveDockerHostSignal, resolveManagedContainer, runManagedLifecycle } from "./managedContainer.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import {
   hasActiveSteamOperation,
@@ -586,6 +586,7 @@ export class UpdateChecker {
     }
 
     let shouldRestart = false;
+    let bundledGame = false;
     let normalizedInstallPath = null;
   let targetServerId: string | null = null;
     let phase: "not-started" | "before-stop" | "updating" = "not-started";
@@ -613,14 +614,32 @@ export class UpdateChecker {
       }
       const configuredActiveServer = activeServer as NonNullable<typeof activeServer>;
       targetServerId = (activeServer?.id as string | null | undefined) ?? null;
-      const steamcmdPath = await getSetting("steamcmdPath");
+      bundledGame = process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(configuredActiveServer);
+      const steamcmdPath = (await getSetting("steamcmdPath")) || (bundledGame ? "/home/steam/steamcmd" : null);
       const managed = await resolveManagedContainer({ serverId: activeServer?.id });
-      if (managed.handled) {
-        fail("MANAGED_CONTAINER", "This server runs in a panel-managed Docker container. Update the container image instead — the panel does not run SteamCMD against a managed container.");
+      if (managed.handled && !bundledGame) {
+        fail("MANAGED_CONTAINER", "This server runs in an external managed container. Update its game install through that container's owner.");
       }
       if (!activeServer?.installPath || !steamcmdPath) fail("NOT_CONFIGURED", "SteamCMD path or server install path is not configured");
 
-      const initialDetails = await configuredServerManager.getServerProcessDetails();
+      const readTargetState = async () => bundledGame
+        ? await resolveDockerHostSignal(configuredActiveServer, getDockerClient())
+        : await configuredServerManager.getServerProcessDetails();
+      const checkSharedInstall = async () => {
+        if (!bundledGame) return;
+        const peers = await getServers();
+        for (const peer of peers) {
+          if (String(peer.id) === String(configuredActiveServer.id) ||
+              path.resolve(peer.installPath || "") !== path.resolve(String(configuredActiveServer.installPath))) continue;
+          const state = await resolveDockerHostSignal(peer, getDockerClient());
+          if (state.scanFailed || state.running) {
+            fail("SHARED_INSTALL_BUSY", `Another server (${peer.name || peer.serverName}) uses this game install and is running or cannot be checked`);
+          }
+        }
+      };
+      await checkSharedInstall();
+
+      const initialDetails = await readTargetState();
       if (initialDetails.scanFailed) fail("INITIAL_SCAN_FAILED", "Could not verify whether the server is running, so the automatic update was abandoned for safety");
       if (initialDetails.running) {
         shouldRestart = true;
@@ -644,11 +663,14 @@ export class UpdateChecker {
           log.info("Automatic server update postponed: a player joined while saving");
           return { success: false, message: "A player joined while saving; the update will be checked again later" };
         }
-        const quit = await configuredRconService.quit();
-        if (!quit?.success) log.warn(`Quit command failed (${quit?.error || "unknown error"}); waiting to see whether the server stops anyway`);
+        const quit = bundledGame
+          ? await runManagedLifecycle("stop", { serverId: targetServerId })
+          : await configuredRconService.quit();
+        if (bundledGame && quit?.success) phase = "updating";
+        if (!quit?.success) log.warn(`Stop command failed (${quit?.error || "unknown error"}); waiting to see whether the server stops anyway`);
         const deadline = Date.now() + 5 * 60 * 1000;
         while (true) {
-          const details = await configuredServerManager.getServerProcessDetails();
+          const details = await readTargetState();
           if (details.scanFailed) fail("STOP_SCAN_FAILED", "Lost the ability to verify the server had stopped, so the automatic update was abandoned for safety");
           if (!details.running) break;
           if (Date.now() >= deadline) fail("STOP_TIMEOUT", "Server did not stop within 5 minutes");
@@ -657,6 +679,7 @@ export class UpdateChecker {
       }
 
       phase = "updating";
+      await checkSharedInstall();
       const steamcmdExe = process.platform === "win32"
         ? path.join(steamcmdPath, "steamcmd.exe")
         : fs.existsSync(path.join(steamcmdPath, "steamcmd.sh"))
@@ -781,9 +804,9 @@ export class UpdateChecker {
       if (normalizedInstallPath) clearActiveSteamOperation(normalizedInstallPath);
       if (shouldRestart && phase !== "before-stop") {
         try {
-          const started = await this.serverManager!.startServer({
-            serverId: targetServerId,
-          });
+          const started = bundledGame
+            ? await runManagedLifecycle("start", { serverId: targetServerId })
+            : await this.serverManager!.startServer({ serverId: targetServerId });
           if (started?.success) {
             await this._patchAutoUpdateResultServerUp(true);
           } else {

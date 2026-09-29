@@ -11,13 +11,25 @@ const DEFAULT_LOG_TAIL_LINES = 500;
 const MAX_LOG_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 interface DockerContainer {
+  Id?: string;
+  Image?: string;
   State?: { Running?: boolean };
   Labels?: Record<string, string>;
+  Mounts?: Array<{ Type?: string; Name?: string; Destination?: string }>;
+  NetworkSettings?: { Networks?: Record<string, unknown> };
   Config?: {
+    Image?: string;
     Labels?: Record<string, string>;
     StopTimeout?: unknown;
     Tty?: boolean;
   };
+}
+
+interface BundledGameProfile {
+  id: string | number;
+  serverName: string;
+  serverPort: number;
+  dockerContainerName: string;
 }
 
 interface DockerStats {
@@ -207,18 +219,108 @@ export class DockerClient {
 
   async inspectManagedContainer(
     containerId: string,
-  ): Promise<DockerContainer | null> {
-    if (!this.available) return null;
-    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(containerId)) return null;
+  ): Promise<DockerContainer | null | undefined> {
+    if (!this.available) return undefined;
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(containerId)) return undefined;
     try {
       const container = await this._requestJson(
         "GET",
         `/containers/${encodeURIComponent(containerId)}/json`,
       );
-      return isManagedContainer(container) ? container : null;
-    } catch {
-      return null;
+      if (!isManagedContainer(container)) {
+        this.lastError = "Container is not managed by this panel";
+        return undefined;
+      }
+      this.lastError = null;
+      return container as DockerContainer;
+    } catch (error) {
+      this.lastError = errorMessage(error) === "Docker API returned 404" ? null : errorMessage(error);
+      return this.lastError ? undefined : null;
     }
+  }
+
+  async ensureBundledGameContainer(profile: BundledGameProfile): Promise<void> {
+    if (!this.available || process.env.PANEL_DOCKER_INSTALL_KIND !== "split") {
+      throw new Error("Bundled Docker game control is unavailable");
+    }
+    const name = `zomboid-game-${profile.id}`;
+    const port = Number(profile.serverPort);
+    if (
+      profile.dockerContainerName !== name ||
+      !/^[A-Za-z0-9_-]+$/.test(String(profile.id)) ||
+      !/^[A-Za-z0-9_-][A-Za-z0-9_ -]*$/.test(profile.serverName) ||
+      !Number.isInteger(port) || port < 1 || port > 65534
+    ) {
+      throw new Error("Invalid bundled game profile");
+    }
+    const panel = await this._requestJson("GET", `/containers/${encodeURIComponent(process.env.HOSTNAME || "")}/json`) as DockerContainer;
+    const install = panel.Mounts?.find((mount) => mount.Destination === "/pz-server" && mount.Type === "volume")?.Name;
+    const data = panel.Mounts?.find((mount) => mount.Destination === "/zomboid" && mount.Type === "volume")?.Name;
+    const network = Object.keys(panel.NetworkSettings?.Networks || {})[0];
+    const image = panel.Config?.Image;
+    if (!install || !data || !network || !image) {
+      throw new Error("The panel's game volumes or Docker network could not be identified");
+    }
+    const existing = await this.inspectManagedContainer(name);
+    if (existing === undefined) throw new Error(`Cannot inspect the game container: ${this.lastError || "unknown error"}`);
+    if (existing) {
+      if (existing.Config?.Labels?.["zomboid-panel.game-id"] !== String(profile.id)) {
+        throw new Error("A container with this game's name already exists but is not owned by this profile");
+      }
+      const settingsChanged = existing.Config.Labels?.["zomboid-panel.server-name"] !== profile.serverName ||
+        existing.Config.Labels?.["zomboid-panel.server-port"] !== String(port);
+      const imageChanged = Boolean(panel.Image && existing.Image !== panel.Image);
+      if (settingsChanged || imageChanged) {
+        if (existing.State?.Running) {
+          if (settingsChanged) throw new Error("Stop the game before changing its server name or port");
+          return;
+        }
+        const removed = await this._requestStatus("DELETE", `/containers/${encodeURIComponent(name)}`);
+        if (removed !== 204) throw new Error(`Docker could not replace the stopped game container (${removed})`);
+      } else {
+        return;
+      }
+    }
+
+    const ports = [port, port + 1];
+    await this._requestJson("POST", `/containers/create?name=${encodeURIComponent(name)}`, REQUEST_TIMEOUT_MS, {
+      Image: image,
+      User: "1000:1000",
+      WorkingDir: "/pz-server",
+      Entrypoint: ["/bin/bash", `/pz-server/start-server_${profile.serverName}.sh`],
+      Healthcheck: { Test: ["NONE"] },
+      Env: ["HOME=/home/steam"],
+      Labels: {
+        [MANAGED_LABEL]: "true",
+        "zomboid-panel.game-id": String(profile.id),
+        "zomboid-panel.server-name": profile.serverName,
+        "zomboid-panel.server-port": String(port),
+      },
+      ExposedPorts: Object.fromEntries(ports.map((value) => [`${value}/udp`, {}])),
+      HostConfig: {
+        Binds: [`${install}:/pz-server:rw`, `${data}:/zomboid:rw`],
+        NetworkMode: network,
+        PortBindings: Object.fromEntries(ports.map((value) => [`${value}/udp`, [{ HostPort: String(value) }]])),
+        RestartPolicy: { Name: "unless-stopped" },
+        StopTimeout: 120,
+      },
+    });
+  }
+
+  async removeBundledGameContainer(profile: BundledGameProfile): Promise<void> {
+    if (!this.available || process.env.PANEL_DOCKER_INSTALL_KIND !== "split") {
+      throw new Error("Docker control is unavailable; the game profile was not deleted");
+    }
+    const name = `zomboid-game-${profile.id}`;
+    const existing = await this.inspectManagedContainer(name);
+    if (existing === undefined) throw new Error(`Cannot inspect the game container: ${this.lastError || "unknown error"}`);
+    if (!existing) return;
+    if (existing.Config?.Labels?.["zomboid-panel.game-id"] !== String(profile.id)) {
+      throw new Error("The game container is not owned by this profile");
+    }
+    if (existing.State?.Running) throw new Error("Stop the game before deleting its profile");
+    const status = await this._requestStatus("DELETE", `/containers/${encodeURIComponent(name)}`);
+    if (status !== 204) throw new Error(`Docker could not remove the stopped game container (${status})`);
   }
 
   async runManagedAction(
@@ -307,14 +409,17 @@ export class DockerClient {
     method: string,
     requestPath: string,
     timeoutMs = REQUEST_TIMEOUT_MS,
+    body?: unknown,
   ): Promise<unknown> {
     return new Promise((resolve, reject) => {
+      const payload = body === undefined ? null : JSON.stringify(body);
       const request = http.request(
         {
           socketPath: this.socketPath,
           method,
           path: requestPath,
           timeout: timeoutMs,
+          headers: payload ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) } : undefined,
         },
         (response) => {
           const chunks: Buffer[] = [];
@@ -336,7 +441,7 @@ export class DockerClient {
         request.destroy(new Error("Docker API timed out")),
       );
       request.on("error", reject);
-      request.end();
+      request.end(payload);
     });
   }
 

@@ -8,8 +8,6 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-      - "16261:16261/udp"
-      - "16262:16262/udp"
     environment:
       NODE_ENV: production
       PZ_SERVER_PATH: /pz-server
@@ -21,12 +19,14 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-1}
       PANEL_LAN_IP: ${PANEL_LAN_IP:-}
       PANEL_WAN_IP: ${PANEL_WAN_IP:-}
-      PANEL_DOCKER_INSTALL_KIND: aio
+      PANEL_DOCKER_INSTALL_KIND: split
+      PANEL_DOCKER_CONTROL_ENABLED: "true"
     volumes:
       - panel-data:/app/data
       - panel-logs:/app/logs
       - pz-server:/pz-server
       - zomboid-data:/zomboid
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   panel-data:

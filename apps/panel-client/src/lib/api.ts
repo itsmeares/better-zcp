@@ -2204,7 +2204,7 @@ export interface PanelUpdateStatus {
   lastError: string | null;
   updateMode?: "binary" | "docker";
   updateCommand?: string | null;
-  dockerInstallKind?: "aio" | null;
+  dockerInstallKind?: "aio" | "split" | null;
   stagedUpdate: { version: string | null; path: string } | null;
   lastApplyResult: PanelUpdateApplyResult | null;
 }

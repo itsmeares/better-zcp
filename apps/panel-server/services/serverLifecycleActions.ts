@@ -2,7 +2,7 @@ import { createLogger } from "../utils/logger.ts";
 import { getActiveServer, logServerEvent } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
-import { runManagedLifecycle } from "./managedContainer.ts";
+import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
@@ -110,15 +110,7 @@ export async function startServerAction(
 
     autoInstallBridgeIfNeeded(activeServer);
 
-    const managed = await runManagedLifecycle("start", {
-      serverId: activeServer.id ?? null,
-    });
-    if (managed.handled && !managed.success) {
-      throw lifecycleError(sanitizeError(managed.error), 502);
-    }
-    if (managed.alreadyRunning) return managed;
-
-    if (!managed.handled && isFirstBootMissingAdminPassword(activeServer)) {
+    if (isFirstBootMissingAdminPassword(activeServer)) {
       throw lifecycleError(
         `${activeServer.name || activeServer.serverName} has never started before and has no admin password set. ` +
           `Project Zomboid needs one to create the admin account on first boot, or the server process hangs waiting ` +
@@ -130,8 +122,16 @@ export async function startServerAction(
 
     const { scriptBackupWarnings } = await refreshLaunchTargetBeforeStart(
       activeServer,
-      { managedHandled: Boolean(managed.handled) },
+      { managedHandled: Boolean(activeServer.dockerContainerName) && !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(activeServer)) },
     );
+    if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") await ensureBundledGameContainer(activeServer);
+    const managed = await runManagedLifecycle("start", {
+      serverId: activeServer.id ?? null,
+    });
+    if (managed.handled && !managed.success) {
+      throw lifecycleError(sanitizeError(managed.error), 502);
+    }
+    if (managed.alreadyRunning) return managed;
     const result = managed.handled
       ? { success: true, message: managed.message || "Container starting" }
       : await runtime.serverManager.startServer({
