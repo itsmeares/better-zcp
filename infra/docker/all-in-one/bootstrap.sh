@@ -10,6 +10,10 @@ for required_command in docker curl tar; do
     exit 1
   fi
 done
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Docker Compose plugin is required to install or update the panel." >&2
+  exit 1
+fi
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is installed but its daemon is not available to this user." >&2
   exit 1
@@ -24,18 +28,17 @@ if [ -z "$VERSION" ]; then
     "https://api.github.com/repos/$REPOSITORY/releases/latest" \
     | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' | head -n 1)"
 fi
-case "$VERSION" in
-  ''|*[!0-9.]*) echo "Could not determine a valid release version. Pass it explicitly, for example: ./bootstrap.sh 2.0.0" >&2; exit 1 ;;
-esac
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+  echo "Could not determine a valid release version. Pass it explicitly, for example: ./bootstrap.sh 2.0.0" >&2
+  exit 1
+fi
 
 PANEL_HOME="${PANEL_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/zomboid-panel}"
 BUILD_ROOT="${BUILD_ROOT:-$PANEL_HOME/build}"
 CONTEXT_DIR="$BUILD_ROOT/ctx"
 SOURCE_DIR="$BUILD_ROOT/source"
 LOCAL_PANEL_IMAGE="zomboid-panel-allinone:latest"
-LOCAL_UPDATER_IMAGE="zomboid-panel-updater:latest"
 PUBLISHED_PANEL_IMAGE="${PANEL_IMAGE_SOURCE:-ghcr.io/itsmeares/better-zcp:aio-$VERSION}"
-PUBLISHED_UPDATER_IMAGE="${UPDATER_IMAGE_SOURCE:-ghcr.io/itsmeares/better-zcp:updater-$VERSION}"
 
 mkdir -p "$CONTEXT_DIR"
 
@@ -49,21 +52,15 @@ if [ -n "$detected_lan_ip" ]; then
 fi
 
 if [ ! -f "$CONTEXT_DIR/.env" ]; then
-  TOKEN="$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
   cat > "$CONTEXT_DIR/.env" <<EOF
 CORS_ORIGINS=${CORS_ORIGINS:-$default_origins}
 TRUST_PROXY=${TRUST_PROXY:-false}
-PANEL_DOCKER_UPDATER_TOKEN=$TOKEN
-PANEL_BUILD_DIR=$BUILD_ROOT
 PANEL_LAN_IP=$detected_lan_ip
 PANEL_WAN_IP=${PANEL_WAN_IP:-}
 EOF
   chmod 600 "$CONTEXT_DIR/.env"
   echo "Created $CONTEXT_DIR/.env."
 else
-  if ! grep -q '^PANEL_BUILD_DIR=' "$CONTEXT_DIR/.env"; then
-    printf '\nPANEL_BUILD_DIR=%s\n' "$BUILD_ROOT" >> "$CONTEXT_DIR/.env"
-  fi
   if ! grep -q '^TRUST_PROXY=' "$CONTEXT_DIR/.env"; then
     printf 'TRUST_PROXY=false\n' >> "$CONTEXT_DIR/.env"
   fi
@@ -84,9 +81,17 @@ EXTRACTED_SOURCE="$(find "$WORK_DIR/extract" -mindepth 1 -maxdepth 1 -type d -pr
 test -n "$EXTRACTED_SOURCE"
 test -f "$EXTRACTED_SOURCE/infra/docker/all-in-one/Dockerfile"
 
-rm -rf "$SOURCE_DIR"
-mv "$EXTRACTED_SOURCE" "$SOURCE_DIR"
-cp "$SOURCE_DIR/infra/docker/all-in-one/docker-compose.yml" "$CONTEXT_DIR/docker-compose.yml"
+if docker inspect zomboid-panel >/dev/null 2>&1 && \
+  [ "$(docker inspect --format '{{.State.Running}}' zomboid-panel)" = true ]; then
+  if ! running_processes="$(docker top zomboid-panel 2>&1)"; then
+    echo "Could not inspect the existing panel container. No update was started: $running_processes" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$running_processes" | grep -Eq '(^|[[:space:]/])java([[:space:]]|$)|zombie\.network\.GameServer|ProjectZomboid64|start-server(_[^ ]*)?\.sh'; then
+    echo "Project Zomboid is still running in the all-in-one container. Save and stop it from the panel before updating." >&2
+    exit 1
+  fi
+fi
 
 prepare_image() {
   published_image="$1"
@@ -99,7 +104,7 @@ prepare_image() {
     return
   fi
   echo "Published $label image is not available yet; building it locally."
-  docker build -t "$local_image" -f "$SOURCE_DIR/$dockerfile" "$SOURCE_DIR"
+  docker build -t "$local_image" -f "$EXTRACTED_SOURCE/$dockerfile" "$EXTRACTED_SOURCE"
 }
 
 prepare_image \
@@ -107,18 +112,12 @@ prepare_image \
   "$LOCAL_PANEL_IMAGE" \
   "infra/docker/all-in-one/Dockerfile" \
   "panel"
-prepare_image \
-  "$PUBLISHED_UPDATER_IMAGE" \
-  "$LOCAL_UPDATER_IMAGE" \
-  "infra/docker/all-in-one/updater/Dockerfile" \
-  "updater"
 
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$BUILD_ROOT:/build" \
-  -w /build/ctx \
-  "$LOCAL_UPDATER_IMAGE" \
-  docker compose --env-file .env -f docker-compose.yml up -d --no-build
+rm -rf "$SOURCE_DIR"
+mv "$EXTRACTED_SOURCE" "$SOURCE_DIR"
+cp "$SOURCE_DIR/infra/docker/all-in-one/docker-compose.yml" "$CONTEXT_DIR/docker-compose.yml"
+
+docker compose --env-file "$CONTEXT_DIR/.env" -f "$CONTEXT_DIR/docker-compose.yml" up -d --no-build --remove-orphans
 
 echo "Waiting for the panel to become healthy (the first PZ install can take several minutes)..."
 attempt=0

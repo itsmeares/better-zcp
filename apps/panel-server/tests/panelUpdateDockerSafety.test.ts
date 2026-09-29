@@ -1,75 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { handlePanelUpdateDownload } from "../index.ts";
-import { ServerManager } from "../services/serverManager.ts";
+import { handlePanelUpdateDownload } from "../http/panelUpdateHandlers.ts";
 
-function createResponse() {
-  const response = { status: vi.fn(), json: vi.fn() };
-  response.status.mockReturnValue(response);
-  return response;
-}
+const isContainerized = vi.fn(() => true);
+vi.mock("../utils/dockerDetect.ts", () => ({
+  isContainerized: (...args: unknown[]) => isContainerized(...args),
+}));
 
-describe("Docker panel update process-state guard", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+const { PanelUpdateChecker, getDockerUpgradeInstruction } = await import(
+  "../services/panelUpdateChecker.ts"
+);
 
-  it("refuses to start a Docker update when process detection fails", async () => {
-    vi.spyOn(ServerManager.prototype, "getServerProcessDetails").mockResolvedValue({
-      running: false,
-      scanFailed: true,
-    });
-    const downloadUpdate = vi.fn();
-    const response = createResponse();
+afterEach(() => {
+  delete process.env.PANEL_DOCKER_INSTALL_KIND;
+  isContainerized.mockReturnValue(true);
+});
 
-    await handlePanelUpdateDownload(
-      {
-        body: { confirm: true },
-        app: {
-          get: (key) =>
-            key === "panelUpdateChecker"
-              ? { dockerUpdateProxy: { enabled: true }, downloadUpdate }
-              : undefined,
-        },
-      },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(503);
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: false,
-        code: "SERVER_STATE_UNKNOWN",
-      }),
-    );
-    expect(downloadUpdate).not.toHaveBeenCalled();
-  });
-
-  it("continues when process detection confirms the server is stopped", async () => {
-    vi.spyOn(ServerManager.prototype, "getServerProcessDetails").mockResolvedValue({
-      running: false,
-      scanFailed: false,
-    });
-    const downloadUpdate = vi.fn(async () => ({
-      success: false,
-      code: "no_update",
-      error: "No update available",
-    }));
-    const response = createResponse();
+describe("Docker panel updates", () => {
+  it("refuses a panel update request without touching the game server", async () => {
+    const checker = new PanelUpdateChecker();
+    checker.updateAvailable = true;
+    checker.latestRelease = { version: "2.0.1" } as typeof checker.latestRelease;
+    const serverManager = { getServerProcessDetails: vi.fn() };
+    const rconService = { save: vi.fn(), quit: vi.fn() };
+    const response = { status: vi.fn(), json: vi.fn() };
+    response.status.mockReturnValue(response);
 
     await handlePanelUpdateDownload(
       {
         body: { confirm: true },
-        app: {
-          get: (key) =>
-            key === "panelUpdateChecker"
-              ? { dockerUpdateProxy: { enabled: true }, downloadUpdate }
-              : undefined,
-        },
-      },
-      response,
+        app: { get: (name: string) => ({ panelUpdateChecker: checker, serverManager, rconService })[name] },
+      } as never,
+      response as never,
     );
 
-    expect(downloadUpdate).toHaveBeenCalledOnce();
     expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: "docker_manual_update" }));
+    expect(serverManager.getServerProcessDetails).not.toHaveBeenCalled();
+    expect(rconService.save).not.toHaveBeenCalled();
+    expect(rconService.quit).not.toHaveBeenCalled();
+  });
+
+  it("offers a host command for the deployment kind", () => {
+    process.env.PANEL_DOCKER_INSTALL_KIND = "aio";
+    expect(getDockerUpgradeInstruction("2.0.1")).toContain("bootstrap.sh | sh -s -- 2.0.1");
+    expect(getDockerUpgradeInstruction("2.0.1; rm -rf /oops")).toBe("");
+    const status = new PanelUpdateChecker().getStatus();
+    expect(status.updateMode).toBe("docker");
+    expect(status.dockerInstallKind).toBe("aio");
+
+    delete process.env.PANEL_DOCKER_INSTALL_KIND;
+    expect(getDockerUpgradeInstruction("2.0.1")).toBe(
+      "docker compose pull panel && docker compose up -d --no-deps panel",
+    );
   });
 });

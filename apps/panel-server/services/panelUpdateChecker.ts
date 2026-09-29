@@ -13,7 +13,6 @@ import {
   getDatabaseFilePath,
 } from "../database/init.ts";
 import { getDataPaths } from "../utils/paths.ts";
-import { DockerUpdateProxy } from "./dockerUpdateProxy.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
 import { stageUpdateBundle } from "./updateBundle.ts";
 import { getRestartAssessment } from "./runtimeInfo.ts";
@@ -64,9 +63,18 @@ export function getPanelFolderPermissionGuidance(platform: string, detail: unkno
 }
 
 export function getDevModeUpgradeInstruction(containerized: boolean = isContainerized()) {
-  return containerized
-    ? "Pull the newer image and recreate the container: docker compose pull && docker compose up -d."
-    : "In dev mode, pull the latest code with git.";
+  if (!containerized) return "In dev mode, pull the latest code with git.";
+  return process.env.PANEL_DOCKER_INSTALL_KIND === "aio"
+    ? "Save and stop the game, then run the host update command shown in Settings."
+    : "Pull the newer image and recreate the container: docker compose pull && docker compose up -d.";
+}
+
+export function getDockerUpgradeInstruction(version: string | null | undefined): string {
+  if (process.env.PANEL_DOCKER_INSTALL_KIND === "aio") {
+    if (!version || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version)) return "";
+    return `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/v${version}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}`;
+  }
+  return "docker compose pull panel && docker compose up -d --no-deps panel";
 }
 
 function addPreflightMessage(messages: string[], details: AnyRecord[], key: string, params: AnyRecord, fallback: string) {
@@ -138,7 +146,6 @@ export class PanelUpdateChecker {
   downloadProgress: number;
   lastCheck: string | null;
   lastError: string | null;
-  dockerUpdateProxy: DockerUpdateProxy;
   isApplying: boolean;
   _downloadAttemptSeq = 0;
   _stagedVersionCache: string | null = null;
@@ -156,7 +163,6 @@ export class PanelUpdateChecker {
     this.downloadProgress = 0;
     this.lastCheck = null;
     this.lastError = null;
-    this.dockerUpdateProxy = new DockerUpdateProxy();
     this.isApplying = false;
   }
 
@@ -417,6 +423,13 @@ export class PanelUpdateChecker {
   }
 
   async downloadUpdate() {
+    if (isContainerized()) {
+      return {
+        success: false,
+        error: "Docker images must be updated from the host. See the update command in Settings.",
+        code: "docker_manual_update",
+      };
+    }
     if (this.isDownloading) {
       return {
         success: false,
@@ -457,18 +470,6 @@ export class PanelUpdateChecker {
         error: pre.blockers[0] || "Preflight check failed",
         preflight: pre,
       };
-    }
-
-    if (this.dockerUpdateProxy.enabled) {
-      const version = latestRelease.version;
-      try {
-        return await this.dockerUpdateProxy.apply(version);
-      } catch (error: any) {
-        this.lastError = error.message;
-        return { success: false, error: error.message };
-      } finally {
-        this.isDownloading = false;
-      }
     }
 
     const isWindows = process.platform === "win32";
@@ -1143,7 +1144,9 @@ export class PanelUpdateChecker {
       downloadProgress: this.downloadProgress,
       lastCheck: this.lastCheck,
       lastError: this.lastError,
-      updateMode: this.dockerUpdateProxy.mode,
+      updateMode: isContainerized() ? "docker" : "binary",
+      updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.version) || null : null,
+      dockerInstallKind: isContainerized() && process.env.PANEL_DOCKER_INSTALL_KIND === "aio" ? "aio" : null,
       stagedUpdate: staged
         ? { version: staged.version, path: staged.stagedPath }
         : null,
@@ -1163,22 +1166,10 @@ export class PanelUpdateChecker {
     const isPackaged = typeof process.pkg !== "undefined";
     info.isPackaged = isPackaged;
     info.platform = process.platform;
-    info.updateMode = this.dockerUpdateProxy.mode;
+    info.updateMode = isContainerized() ? "docker" : "binary";
     info.restartAssessment = getRestartAssessment();
     info.temporaryDirectory = os.tmpdir();
     info.applyLogPath = path.join(getDataPaths().logsDir, "panel-update-last.log");
-
-    if (this.dockerUpdateProxy.enabled) {
-      info.dockerUpdater = true;
-      info.checksPerformed = false;
-      info.dockerNotChecked = {
-        key: "updates.preflight.dockerNotChecked",
-        params: {},
-        message:
-          "Docker updates are applied by a separate update controller container. The panel does not run its own preflight checks (disk space, permissions, etc.) for this mode -- those are the controller's responsibility.",
-      };
-      return { ok: true, blockers, warnings, blockerDetails, warningDetails, info };
-    }
 
     if (!isPackaged) {
       const containerized = isContainerized();
