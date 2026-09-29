@@ -213,7 +213,7 @@ export default function Settings() {
     autoStartServer: false,
     modCheckInterval: '5',
     modAutoRestart: true,
-    modRestartDelay: '5',
+    modRestartDelay: '15',
     serverAutoUpdate: false,
     serverAutoUpdateWarningMinutes: '15',
     steamUpdateAccount: '',
@@ -3995,7 +3995,7 @@ export default function Settings() {
                 {settings.modAutoRestart && (
                   <div className="max-w-xs space-y-2 ps-4 border-s-2 border-primary/30">
                     <Label htmlFor="mod-restart-delay" className="text-base">
-                      {'Restart Delay (minutes)'}
+                      {'Forced Restart Warning (minutes)'}
                     </Label>
                     <Input
                       id="mod-restart-delay"
@@ -4011,7 +4011,7 @@ export default function Settings() {
                       inputMode="numeric"
                     />
                     <p className="text-sm text-muted-foreground">
-                      {'Players are warned before the restart happens.'}
+                      {'Used only when you enable a forced deadline on the Mods page. Otherwise the restart waits for an empty server.'}
                     </p>
                   </div>
                 )}
@@ -4275,7 +4275,7 @@ export default function Settings() {
                       <p className="text-sm text-muted-foreground">
                         {!backupStatus && backupStatusLoadError
                           ? "Couldn't check whether scheduled backups are on — this toggle is disabled until it loads. Reopen this page to try again."
-                          : 'Automatically backup your world on a schedule'}
+                          : 'Create a full server backup on a schedule. The server stops briefly for a consistent archive.'}
                       </p>
                     </div>
                     <Switch
@@ -4288,6 +4288,14 @@ export default function Settings() {
                       aria-label={'Enable scheduled backups'}
                     />
                   </div>
+
+                  {backupStatus?.enabled && (
+                    <p className="text-xs text-muted-foreground">
+                      {backupStatus.forceAfterMinutes === null
+                        ? 'Backups wait for players to leave. You can opt into a forced deadline on the Backups page.'
+                        : `Forced backup deadline: ${backupStatus.forceAfterMinutes} minutes after the scheduled time, with a ${backupStatus.forceWarningMinutes} minute warning.`}
+                    </p>
+                  )}
 
                   {backupStatus?.enabled && (
                     <div className="grid grid-cols-1 gap-4 border-s-2 border-primary/20 ps-4 sm:grid-cols-2">

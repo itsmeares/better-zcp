@@ -127,9 +127,9 @@ function demoModsStatus() {
         latestTimestamp: '2026-06-24T01:10:00.000Z',
       },
     ],
-    restartWarningMinutes: 5,
-    delayIfPlayersOnline: true,
-    maxDelayMinutes: 30,
+    restartWarningMinutes: 15,
+    forceAfterDeadline: false,
+    maxDelayMinutes: 60,
     pendingRestart: false,
   }
 }
@@ -581,6 +581,7 @@ export function installDemoFetchShim(): void {
     if (path === '/api/backup/status') {
       return jsonResponse({
         enabled: false, schedule: '0 */6 * * *', maxBackups: 10, includeDb: false,
+        forceAfterMinutes: null, forceWarningMinutes: 15,
         backupInProgress: false, restoreInProgress: false, lastBackup: null,
         backupCount: 0, savesPath: '/home/pz/Zomboid/Saves/Multiplayer/DoomerZDemo',
         backupsPath: '/home/pz/Zomboid/backups', savesExists: true,

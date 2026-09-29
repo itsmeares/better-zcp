@@ -665,22 +665,22 @@ router.put("/restart-options", async (req, res) => {
 
     const {
       warningMinutes,
-      delayIfPlayersOnline,
       maxDelayMinutes,
+      forceAfterDeadline,
       checkInterval,
     } = req.body || {};
 
     const inRange = (v: any, min: number, max: number) =>
       parseBoundedInteger(v, null, min, max) !== null;
-    if (warningMinutes !== undefined && !inRange(warningMinutes, 0, 30)) {
+    if (warningMinutes !== undefined && !inRange(warningMinutes, 1, 30)) {
       return res.status(400).json({
-        error: "warningMinutes must be a whole number from 0 to 30",
+        error: "warningMinutes must be a whole number from 1 to 30",
         code: ErrorCode.MODS_RESTART_WARNING_MINUTES_INVALID,
       });
     }
-    if (maxDelayMinutes !== undefined && !inRange(maxDelayMinutes, 5, 120)) {
+    if (maxDelayMinutes !== undefined && !inRange(maxDelayMinutes, 15, 120)) {
       return res.status(400).json({
-        error: "maxDelayMinutes must be a whole number from 5 to 120",
+        error: "maxDelayMinutes must be a whole number from 15 to 120",
         code: ErrorCode.MODS_RESTART_MAX_DELAY_MINUTES_INVALID,
       });
     }
@@ -698,22 +698,23 @@ router.put("/restart-options", async (req, res) => {
         code: ErrorCode.MODS_RESTART_CHECK_INTERVAL_INVALID,
       });
     }
-    if (
-      delayIfPlayersOnline !== undefined &&
-      typeof delayIfPlayersOnline !== "boolean"
-    ) {
+    if (forceAfterDeadline !== undefined && typeof forceAfterDeadline !== "boolean") {
       return res
         .status(400)
         .json({
-          error: "delayIfPlayersOnline must be a boolean",
-          code: ErrorCode.MODS_RESTART_DELAY_IF_PLAYERS_ONLINE_INVALID,
+          error: "forceAfterDeadline must be a boolean",
+          code: ErrorCode.MODS_RESTART_FORCE_AFTER_DEADLINE_INVALID,
         });
+    }
+    if ((forceAfterDeadline ?? modChecker.forceAfterDeadline) &&
+        (maxDelayMinutes ?? modChecker.maxDelayMinutes) < (warningMinutes ?? modChecker.restartWarningMinutes)) {
+      return res.status(400).json({ error: "Restart deadline must be at least as long as the warning countdown" });
     }
 
     await modChecker.setRestartOptions({
       warningMinutes,
-      delayIfPlayersOnline,
       maxDelayMinutes,
+      forceAfterDeadline,
       checkInterval,
     });
 
@@ -722,8 +723,8 @@ router.put("/restart-options", async (req, res) => {
       success: true,
       options: {
         warningMinutes: status.restartWarningMinutes,
-        delayIfPlayersOnline: status.delayIfPlayersOnline,
         maxDelayMinutes: status.maxDelayMinutes,
+        forceAfterDeadline: status.forceAfterDeadline,
         checkInterval: status.checkInterval,
       },
     });

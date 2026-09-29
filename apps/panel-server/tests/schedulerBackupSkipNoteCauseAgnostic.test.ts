@@ -61,3 +61,70 @@ describe("Scheduler: scheduled-backup skip note is cause-agnostic, not hardcoded
     expect(message).toMatch(/symbolic link/i);
   });
 });
+
+describe("scheduled full backup deadline", () => {
+  it("requires each countdown warning to be accepted by RCON", async () => {
+    const serverMessage = vi.fn()
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: false, rejected: true });
+    const scheduler = new Scheduler({ serverMessage }, {});
+    scheduler.sleep = vi.fn().mockResolvedValue(undefined);
+
+    await expect(scheduler.warnForForcedBackup(null, 15, 0)).resolves.toBe(false);
+    expect(serverMessage).toHaveBeenCalledTimes(2);
+    expect(serverMessage.mock.calls[0][0]).toContain("15 minute");
+    expect(serverMessage.mock.calls[1][0]).toContain("10 minute");
+  });
+
+  it("does not stop an occupied server when player warnings fail", async () => {
+    const scheduler = new Scheduler({
+      getPlayers: vi.fn().mockResolvedValue({ success: true, players: ["online"] }),
+    }, {});
+    const createBackup = vi.fn();
+    scheduler.setBackupService({
+      getSettings: vi.fn().mockResolvedValue({
+        enabled: true,
+        schedule: "0 */12 * * *",
+        includeDb: false,
+        forceAfterMinutes: 15,
+        forceWarningMinutes: 15,
+      }),
+      createBackup,
+    });
+    vi.spyOn(scheduler, "warnForForcedBackup").mockResolvedValue(false);
+
+    await scheduler.setupBackupSchedule();
+    await capturedBackupCallback();
+
+    expect(createBackup).not.toHaveBeenCalled();
+    expect(logScheduleExecution).toHaveBeenCalledWith(
+      null, "Scheduled Backup", "backup", false,
+      expect.stringContaining("warning"), expect.any(Number),
+    );
+    scheduler.stopAllJobs();
+  });
+
+  it("does not bypass the player check without an explicit deadline", async () => {
+    const scheduler = new Scheduler({}, {});
+    const createBackup = vi.fn().mockResolvedValue({ success: false, deferred: true, message: "Players online" });
+    scheduler.setBackupService({
+      getSettings: vi.fn().mockResolvedValue({
+        enabled: true,
+        schedule: "0 */12 * * *",
+        includeDb: false,
+        forceAfterMinutes: null,
+        forceWarningMinutes: 15,
+      }),
+      createBackup,
+    });
+
+    await scheduler.setupBackupSchedule();
+    await capturedBackupCallback();
+
+    expect(createBackup).toHaveBeenCalledWith(expect.objectContaining({
+      scheduled: true,
+      allowOccupiedScheduled: false,
+    }));
+    scheduler.stopAllJobs();
+  });
+});

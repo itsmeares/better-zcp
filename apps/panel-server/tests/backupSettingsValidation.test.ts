@@ -99,6 +99,15 @@ describe("BackupService.updateSettings schedule validation", () => {
     expect(setSetting).not.toHaveBeenCalled();
   });
 
+  it("rejects a forced deadline shorter than its player warning before saving anything", async () => {
+    const service = new BackupService();
+
+    await expect(service.updateSettings({
+      enabled: true, forceAfterMinutes: 15, forceWarningMinutes: 30,
+    })).rejects.toThrow(/deadline.*warning/i);
+    expect(setSetting).not.toHaveBeenCalled();
+  });
+
   it("rejects non-finite bulk-delete day values at the service boundary", async () => {
     const service = new BackupService();
 

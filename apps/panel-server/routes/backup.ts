@@ -189,6 +189,20 @@ router.post("/settings", async (req, res) => {
       }
       allowed.includeDb = includeDb;
     }
+    if (req.body.forceAfterMinutes !== undefined) {
+      const value = req.body.forceAfterMinutes;
+      if (value !== null && (!Number.isInteger(value) || value < 15 || value > 1440)) {
+        return res.status(400).json({ success: false, error: "forceAfterMinutes must be null or 15-1440 whole minutes" });
+      }
+      allowed.forceAfterMinutes = value;
+    }
+    if (req.body.forceWarningMinutes !== undefined) {
+      const value = req.body.forceWarningMinutes;
+      if (!Number.isInteger(value) || value < 1 || value > 30) {
+        return res.status(400).json({ success: false, error: "forceWarningMinutes must be 1-30 whole minutes" });
+      }
+      allowed.forceWarningMinutes = value;
+    }
 
     const settings = await backupService.updateSettings(allowed);
 

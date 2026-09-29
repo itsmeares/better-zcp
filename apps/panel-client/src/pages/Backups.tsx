@@ -159,6 +159,8 @@ export default function Backups() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [backupSchedule, setBackupSchedule] = useState('0 */6 * * *')
   const [backupMaxCount, setBackupMaxCount] = useState(10)
+  const [forceAfterMinutes, setForceAfterMinutes] = useState<number | null>(null)
+  const [forceWarningMinutes, setForceWarningMinutes] = useState(15)
   const [savingSettings, setSavingSettings] = useState(false)
 
   const [restoreDialog, setRestoreDialog] = useState<{
@@ -187,6 +189,8 @@ export default function Backups() {
     if (!backupStatus) return
     setBackupSchedule(backupStatus.schedule)
     setBackupMaxCount(backupStatus.maxBackups)
+    setForceAfterMinutes(backupStatus.forceAfterMinutes)
+    setForceWarningMinutes(backupStatus.forceWarningMinutes)
     if (backupStatus.backupInProgress) {
       setCreatingBackup(true)
     }
@@ -566,6 +570,8 @@ export default function Backups() {
         enabled: backupStatus?.enabled || false,
         schedule: backupSchedule,
         maxBackups: backupMaxCount,
+        forceAfterMinutes,
+        forceWarningMinutes,
       })
       await fetchBackupStatus()
       toast({
@@ -1043,6 +1049,35 @@ export default function Backups() {
                   {'Oldest backups will be auto-deleted when limit is reached'}
                 </p>
               </div>
+            </div>
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="backup-force-deadline">{'Force backup at a deadline'}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {'Off by default. When enabled, online players get a countdown before the server stops for a full backup.'}
+                  </p>
+                </div>
+                <Switch
+                  id="backup-force-deadline"
+                  checked={forceAfterMinutes !== null}
+                  onCheckedChange={(checked) => setForceAfterMinutes(checked ? 60 : null)}
+                />
+              </div>
+              {forceAfterMinutes !== null && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="backup-force-after">{'Deadline after scheduled time (minutes)'}</Label>
+                    <NumberInput id="backup-force-after" min={15} max={1440}
+                      value={forceAfterMinutes} onChange={setForceAfterMinutes} />
+                  </div>
+                  <div>
+                    <Label htmlFor="backup-force-warning">{'Warning countdown (minutes)'}</Label>
+                    <NumberInput id="backup-force-warning" min={1} max={30}
+                      value={forceWarningMinutes} onChange={setForceWarningMinutes} />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 text-xs text-muted-foreground">

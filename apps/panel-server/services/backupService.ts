@@ -48,6 +48,8 @@ type BackupSettings = {
   schedule: string;
   maxBackups: number;
   includeDb: boolean;
+  forceAfterMinutes: number | null;
+  forceWarningMinutes: number;
 };
 const PORTABLE_PROFILE_KEYS = [
   "name", "branch", "rconPort", "rconPassword", "serverPort",
@@ -62,6 +64,7 @@ type BackupOptions = {
   force?: boolean;
   createPreRestoreBackup?: boolean;
   scheduled?: boolean;
+  allowOccupiedScheduled?: boolean;
 };
 type ProgressEmitter = (
   phase: string,
@@ -394,8 +397,10 @@ export class BackupService {
     const schedule = (await getSetting("backupSchedule")) ?? "0 */6 * * *";
     const maxBackups = (await getSetting("backupMaxCount")) ?? 10;
     const includeDb = (await getSetting("backupIncludeDb")) ?? false;
+    const forceAfterMinutes = (await getSetting("backupForceAfterMinutes")) ?? null;
+    const forceWarningMinutes = (await getSetting("backupForceWarningMinutes")) ?? 15;
 
-    return { enabled, schedule, maxBackups, includeDb };
+    return { enabled, schedule, maxBackups, includeDb, forceAfterMinutes, forceWarningMinutes };
   }
 
   async updateSettings(settings: Partial<BackupSettings>): Promise<BackupSettings> {
@@ -419,6 +424,21 @@ export class BackupService {
     ) {
       throw new Error("includeDb must be a boolean");
     }
+    if (settings.forceAfterMinutes !== undefined && settings.forceAfterMinutes !== null &&
+      (!Number.isInteger(settings.forceAfterMinutes) || settings.forceAfterMinutes < 15 || settings.forceAfterMinutes > 1440)) {
+      throw new Error("forceAfterMinutes must be null or 15-1440 whole minutes");
+    }
+    if (settings.forceWarningMinutes !== undefined &&
+      (!Number.isInteger(settings.forceWarningMinutes) || settings.forceWarningMinutes < 1 || settings.forceWarningMinutes > 30)) {
+      throw new Error("forceWarningMinutes must be 1-30 whole minutes");
+    }
+    const current = await this.getSettings();
+    const forceAfterMinutes = settings.forceAfterMinutes === undefined
+      ? current.forceAfterMinutes : settings.forceAfterMinutes;
+    if (forceAfterMinutes !== null &&
+      forceAfterMinutes < (settings.forceWarningMinutes ?? current.forceWarningMinutes)) {
+      throw new Error("The backup deadline must be at least as long as the warning countdown");
+    }
     if (
       settings.schedule !== undefined &&
       (!isSupportedFiveFieldCron(settings.schedule) ||
@@ -439,6 +459,12 @@ export class BackupService {
     }
     if (settings.includeDb !== undefined) {
       await setSetting("backupIncludeDb", settings.includeDb);
+    }
+    if (settings.forceAfterMinutes !== undefined) {
+      await setSetting("backupForceAfterMinutes", settings.forceAfterMinutes);
+    }
+    if (settings.forceWarningMinutes !== undefined) {
+      await setSetting("backupForceWarningMinutes", settings.forceWarningMinutes);
     }
 
     return this.getSettings();
@@ -503,7 +529,7 @@ export class BackupService {
           throw new Error("RCON is required to save and stop a running server before a full backup");
         }
         const scheduledPlayerDeferral = async (): Promise<string | null> => {
-          if (!options.scheduled) return null;
+          if (!options.scheduled || options.allowOccupiedScheduled) return null;
           let players;
           try {
             players = await this.rconService.getPlayers();

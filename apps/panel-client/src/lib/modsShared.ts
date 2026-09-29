@@ -31,7 +31,7 @@ export interface ModStatus {
     latestTimestamp: string
   }>
   restartWarningMinutes: number
-  delayIfPlayersOnline: boolean
+  forceAfterDeadline: boolean
   maxDelayMinutes: number
   pendingRestart: boolean
   steamApiHealthy: boolean

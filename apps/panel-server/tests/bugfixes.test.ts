@@ -727,10 +727,36 @@ describe("online player count when RCON is unavailable", () => {
 
     const result = await checker.handleModUpdate([{ workshopId: "123", name: "Updated mod" }]);
 
-    expect(checker.delayIfPlayersOnline).toBe(true);
+    expect(checker.forceAfterDeadline).toBe(false);
     expect(result).toMatchObject({ success: false, retry: true, reason: "player_count_unknown" });
     expect(checker.scheduler.performRestart).not.toHaveBeenCalled();
     expect(checker.pendingRestart).toBe(false);
+  });
+
+  it("never forces a Workshop restart at the old delay unless the deadline was enabled", async () => {
+    vi.useFakeTimers();
+    try {
+      const checker = new ModChecker();
+      checker.scheduler = {
+        rconService: { getPlayers: async () => ({ success: true, players: ["online"] }) },
+        cancelRestart: vi.fn(),
+      };
+      checker.pendingRestartStartedAt = Date.now() - 2 * 60 * 60_000;
+      const restart = vi.spyOn(checker, "triggerModRestart").mockResolvedValue({ success: true });
+
+      checker.startPlayerMonitoring([{ workshopId: "123", name: "Updated mod" }]);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(restart).not.toHaveBeenCalled();
+
+      checker.forceAfterDeadline = true;
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(restart).toHaveBeenCalledWith(
+        [{ workshopId: "123", name: "Updated mod" }], true,
+      );
+      checker.cancelPendingRestart();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
