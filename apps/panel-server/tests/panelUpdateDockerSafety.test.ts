@@ -42,14 +42,18 @@ describe("Docker panel updates", () => {
 
   it("offers a host command for the deployment kind", () => {
     process.env.PANEL_DOCKER_INSTALL_KIND = "aio";
-    expect(getDockerUpgradeInstruction("2.0.1")).toContain("bootstrap.sh | sh -s -- 2.0.1");
-    expect(getDockerUpgradeInstruction("2.0.1; rm -rf /oops")).toBe("");
-    const status = new PanelUpdateChecker().getStatus();
+    expect(getDockerUpgradeInstruction("v2.0.1")).toContain("bootstrap.sh | sh -s -- 2.0.1");
+    expect(getDockerUpgradeInstruction("v2.0.1-rc5")).toContain("/v2.0.1-rc5/infra/docker/all-in-one/bootstrap.sh");
+    expect(getDockerUpgradeInstruction("v2.0.1; rm -rf /oops")).toBe("");
+    const checker = new PanelUpdateChecker();
+    checker.latestRelease = { tag: "v2.0.1-rc5", version: "2.0.1" } as typeof checker.latestRelease;
+    const status = checker.getStatus();
     expect(status.updateMode).toBe("docker");
     expect(status.dockerInstallKind).toBe("aio");
+    expect(status.updateCommand).toContain("/v2.0.1-rc5/infra/docker/all-in-one/bootstrap.sh");
 
     delete process.env.PANEL_DOCKER_INSTALL_KIND;
-    expect(getDockerUpgradeInstruction("2.0.1")).toBe(
+    expect(getDockerUpgradeInstruction("v2.0.1")).toBe(
       "docker compose pull panel && docker compose up -d --no-deps panel",
     );
   });

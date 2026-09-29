@@ -69,10 +69,11 @@ export function getDevModeUpgradeInstruction(containerized: boolean = isContaine
     : "Pull the newer image and recreate the container: docker compose pull && docker compose up -d.";
 }
 
-export function getDockerUpgradeInstruction(version: string | null | undefined): string {
+export function getDockerUpgradeInstruction(tag: string | null | undefined): string {
   if (process.env.PANEL_DOCKER_INSTALL_KIND === "aio") {
-    if (!version || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version)) return "";
-    return `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/v${version}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}`;
+    const version = tag?.match(/^v(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/)?.[1];
+    if (!version) return "";
+    return `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/${tag}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}`;
   }
   return "docker compose pull panel && docker compose up -d --no-deps panel";
 }
@@ -1145,7 +1146,7 @@ export class PanelUpdateChecker {
       lastCheck: this.lastCheck,
       lastError: this.lastError,
       updateMode: isContainerized() ? "docker" : "binary",
-      updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.version) || null : null,
+      updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.tag) || null : null,
       dockerInstallKind: isContainerized() && process.env.PANEL_DOCKER_INSTALL_KIND === "aio" ? "aio" : null,
       stagedUpdate: staged
         ? { version: staged.version, path: staged.stagedPath }
