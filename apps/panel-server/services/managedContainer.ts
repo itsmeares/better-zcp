@@ -21,7 +21,7 @@ export interface DockerControl {
   available: boolean;
   inspectManagedContainer: (
     ref: string,
-  ) => Promise<DockerContainer | null>;
+  ) => Promise<DockerContainer | null | undefined>;
   runManagedAction: (
     ref: string,
     action: LifecycleAction,
@@ -238,7 +238,7 @@ export async function resolveDockerHostSignal(
     const container = await dockerClient.inspectManagedContainer(containerRef);
     return container
       ? { running: container.State?.Running === true, scanFailed: false }
-      : { running: false, scanFailed: !isBundledGameProfile(server) };
+      : { running: false, scanFailed: container === undefined || !isBundledGameProfile(server) };
   }
 
   const managed = await resolveManagedContainer({

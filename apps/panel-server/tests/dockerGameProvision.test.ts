@@ -4,6 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { DockerClient } from "../services/dockerClient.ts";
+import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 
 const profile = {
   id: "server-a",
@@ -36,6 +37,8 @@ describe.skipIf(process.platform === "win32")("bundled game provisioning", () =>
     let createCount = 0;
     let panelImage = "sha256:first";
     let gameImage = "";
+    let inspectionFails = false;
+    let unmanaged = false;
     process.env.PANEL_DOCKER_INSTALL_KIND = "split";
     process.env.HOSTNAME = "panel123";
     daemon = http.createServer((request, response) => {
@@ -53,9 +56,10 @@ describe.skipIf(process.platform === "win32")("bundled game provisioning", () =>
         return;
       }
       if (request.url === "/containers/zomboid-game-server-a/json") {
+        if (inspectionFails) { response.writeHead(500); response.end(); return; }
         if (!created) { response.writeHead(404); response.end(); return; }
         response.setHeader("Content-Type", "application/json");
-        response.end(JSON.stringify({ Image: gameImage, State: { Running: false }, Config: { Labels: created.Labels } }));
+        response.end(JSON.stringify({ Image: gameImage, State: { Running: false }, Config: { Labels: unmanaged ? {} : created.Labels } }));
         return;
       }
       if (request.method === "DELETE" && request.url === "/containers/zomboid-game-server-a") {
@@ -98,5 +102,15 @@ describe.skipIf(process.platform === "win32")("bundled game provisioning", () =>
     await client.ensureBundledGameContainer(profile);
     expect(createCount).toBe(2);
     expect(gameImage).toBe(panelImage);
+
+    inspectionFails = true;
+    expect(await resolveDockerHostSignal({ ...profile, installPath: "/pz-server", zomboidDataPath: "/zomboid" }, client))
+      .toEqual({ running: false, scanFailed: true });
+    await expect(client.ensureBundledGameContainer(profile)).rejects.toThrow(/cannot inspect/i);
+
+    inspectionFails = false;
+    unmanaged = true;
+    expect(await resolveDockerHostSignal({ ...profile, installPath: "/pz-server", zomboidDataPath: "/zomboid" }, client))
+      .toEqual({ running: false, scanFailed: true });
   });
 });

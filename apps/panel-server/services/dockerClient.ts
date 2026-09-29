@@ -219,17 +219,23 @@ export class DockerClient {
 
   async inspectManagedContainer(
     containerId: string,
-  ): Promise<DockerContainer | null> {
-    if (!this.available) return null;
-    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(containerId)) return null;
+  ): Promise<DockerContainer | null | undefined> {
+    if (!this.available) return undefined;
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(containerId)) return undefined;
     try {
       const container = await this._requestJson(
         "GET",
         `/containers/${encodeURIComponent(containerId)}/json`,
       );
-      return isManagedContainer(container) ? container : null;
-    } catch {
-      return null;
+      if (!isManagedContainer(container)) {
+        this.lastError = "Container is not managed by this panel";
+        return undefined;
+      }
+      this.lastError = null;
+      return container as DockerContainer;
+    } catch (error) {
+      this.lastError = errorMessage(error) === "Docker API returned 404" ? null : errorMessage(error);
+      return this.lastError ? undefined : null;
     }
   }
 
@@ -256,6 +262,7 @@ export class DockerClient {
       throw new Error("The panel's game volumes or Docker network could not be identified");
     }
     const existing = await this.inspectManagedContainer(name);
+    if (existing === undefined) throw new Error(`Cannot inspect the game container: ${this.lastError || "unknown error"}`);
     if (existing) {
       if (existing.Config?.Labels?.["zomboid-panel.game-id"] !== String(profile.id)) {
         throw new Error("A container with this game's name already exists but is not owned by this profile");
@@ -306,6 +313,7 @@ export class DockerClient {
     }
     const name = `zomboid-game-${profile.id}`;
     const existing = await this.inspectManagedContainer(name);
+    if (existing === undefined) throw new Error(`Cannot inspect the game container: ${this.lastError || "unknown error"}`);
     if (!existing) return;
     if (existing.Config?.Labels?.["zomboid-panel.game-id"] !== String(profile.id)) {
       throw new Error("The game container is not owned by this profile");
