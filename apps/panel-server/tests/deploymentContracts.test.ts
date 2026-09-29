@@ -5,11 +5,12 @@ const readRepoFile = (relativePath) =>
   fs.readFileSync(new URL(`../../../${relativePath}`, import.meta.url), "utf8");
 
 describe("Deployment contracts", () => {
-  it("publishes both PZ UDP ports in the all-in-one Compose stack", () => {
+  it("keeps the panel's game data mounts and Docker control while game ports belong to game containers", () => {
     const compose = readRepoFile("infra/docker/all-in-one/docker-compose.yml");
-
-    expect(compose).toContain('"16261:16261/udp"');
-    expect(compose).toContain('"16262:16262/udp"');
+    expect(compose).toContain("pz-server:/pz-server");
+    expect(compose).toContain("zomboid-data:/zomboid");
+    expect(compose).toContain("/var/run/docker.sock:/var/run/docker.sock");
+    expect(compose).not.toContain('"16261:16261/udp"');
   });
 
   it("pulls immutable release images before falling back to local builds", () => {
@@ -18,10 +19,10 @@ describe("Deployment contracts", () => {
     expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:aio-$VERSION");
     expect(bootstrap).toContain('docker pull "$published_image"');
     expect(bootstrap).toContain('docker build -t "$local_image"');
-    expect(bootstrap).toContain("up -d --no-build");
+    expect(bootstrap).toContain("up -d --no-deps --no-build --remove-orphans panel");
     expect(bootstrap).toContain('if [ "$health" = "healthy" ]');
-    expect(bootstrap).toContain("All-in-one installation is ready.");
-    expect(bootstrap).toContain("Save and stop it from the panel before updating.");
+    expect(bootstrap).toContain("Panel installation is ready.");
+    expect(bootstrap).toContain("Save and stop it from the panel before splitting the containers.");
     expect(bootstrap).toContain("--remove-orphans");
   });
 

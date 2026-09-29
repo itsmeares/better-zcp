@@ -28,6 +28,7 @@ import {
 import { resolveLaunchMode, ServerManager } from "./serverManager.ts";
 import { applyUpnpToIni } from "../utils/upnpConfig.ts";
 import { resolveEnvRconHost } from "./rcon.ts";
+import { getDockerClient, isBundledGameProfile, removeBundledGameContainer, resolveDockerHostSignal } from "./managedContainer.ts";
 import {
   buildLifecycleTemplate,
   createLinuxServiceLifecycle,
@@ -360,6 +361,10 @@ export async function createServerProfile(
   if (dockerContainerName && !isValidDockerContainerRef(dockerContainerName)) {
     fail("Invalid Docker container name");
   }
+  if (process.env.PANEL_DOCKER_INSTALL_KIND === "split" && !dockerContainerName &&
+      (config.installPath !== "/pz-server" || config.zomboidDataPath !== "/zomboid" || config.startCommand)) {
+    fail("Managed Docker stack profiles must use the shared /pz-server and /zomboid volumes and the generated launcher");
+  }
 
   let serverPort = 16261;
   if (
@@ -561,6 +566,24 @@ export async function updateServerProfile(
       fail("At least one field is required");
     }
 
+    const current = process.env.PANEL_DOCKER_INSTALL_KIND === "split" ? await getServer(serverId) : null;
+    if (current && isBundledGameProfile(current) && (
+      (updates.installPath !== undefined && updates.installPath !== "/pz-server") ||
+      (updates.zomboidDataPath !== undefined && updates.zomboidDataPath !== "/zomboid") ||
+      (updates.dockerContainerName !== undefined && updates.dockerContainerName !== current.dockerContainerName) ||
+      (updates.startCommand !== undefined && updates.startCommand !== "")
+    )) {
+      fail("This Docker stack manages the game volumes, container mapping, and launcher", 409);
+    }
+    if (current && isBundledGameProfile(current) && [
+      "serverName", "serverPort", "rconPort", "rconHost", "installPath",
+      "zomboidDataPath", "dockerContainerName", "startCommand",
+    ].some((key) => updates[key] !== undefined && updates[key] !== current[key])) {
+      const state = await resolveDockerHostSignal(current, getDockerClient());
+      if (state.scanFailed) fail("Cannot verify whether the game container is stopped", 503);
+      if (state.running) fail("Stop the game before changing its network or launch settings", 409);
+    }
+
     const server = await updateServer(serverId, updates);
     if (!server) fail("Server not found", 404);
 
@@ -662,6 +685,13 @@ export async function deleteServerProfile(
     if (serverId === null) fail("Invalid server ID");
 
     const targetServer = await getServer(serverId);
+    if (targetServer && process.env.PANEL_DOCKER_INSTALL_KIND === "split") {
+      try {
+        await removeBundledGameContainer(targetServer);
+      } catch (error) {
+        fail(errorMessage(error), 409);
+      }
+    }
     const deletingActiveServer = Boolean(targetServer?.isActive);
     if (!(await deleteServer(serverId))) fail("Server not found", 404);
 

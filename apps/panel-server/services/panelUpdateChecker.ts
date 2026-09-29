@@ -64,13 +64,16 @@ export function getPanelFolderPermissionGuidance(platform: string, detail: unkno
 
 export function getDevModeUpgradeInstruction(containerized: boolean = isContainerized()) {
   if (!containerized) return "In dev mode, pull the latest code with git.";
-  return process.env.PANEL_DOCKER_INSTALL_KIND === "aio"
-    ? "Save and stop the game, then run the host update command shown in Settings."
+  if (process.env.PANEL_DOCKER_INSTALL_KIND === "aio") {
+    return "Save and stop the game once, then run the host update command shown in Settings.";
+  }
+  return process.env.PANEL_DOCKER_INSTALL_KIND === "split"
+    ? "Run the host update command shown in Settings."
     : "Pull the newer image and recreate the container: docker compose pull && docker compose up -d.";
 }
 
 export function getDockerUpgradeInstruction(tag: string | null | undefined): string {
-  if (process.env.PANEL_DOCKER_INSTALL_KIND === "aio") {
+  if (["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "")) {
     const version = tag?.match(/^v(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/)?.[1];
     if (!version) return "";
     return `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/${tag}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}`;
@@ -1147,7 +1150,7 @@ export class PanelUpdateChecker {
       lastError: this.lastError,
       updateMode: isContainerized() ? "docker" : "binary",
       updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.tag) || null : null,
-      dockerInstallKind: isContainerized() && process.env.PANEL_DOCKER_INSTALL_KIND === "aio" ? "aio" : null,
+      dockerInstallKind: isContainerized() && ["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "") ? process.env.PANEL_DOCKER_INSTALL_KIND : null,
       stagedUpdate: staged
         ? { version: staged.version, path: staged.stagedPath }
         : null,

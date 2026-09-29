@@ -13,7 +13,11 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const runManagedLifecycle = vi.fn();
-vi.mock("../services/managedContainer.ts", () => ({ runManagedLifecycle }));
+vi.mock("../services/managedContainer.ts", () => ({
+  runManagedLifecycle,
+  isBundledGameProfile: () => false,
+  ensureBundledGameContainer: vi.fn(async () => false),
+}));
 
 const { default: router } = await import("../routes/server.ts");
 

@@ -6,7 +6,7 @@ const log = createLogger("Scheduler");
 import panelBridge from "./panelBridge.ts";
 import { RconService } from "./rcon.ts";
 import { ServerManager } from "./serverManager.ts";
-import { runManagedLifecycle } from "./managedContainer.ts";
+import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
@@ -14,6 +14,7 @@ import {
 import { createBackupIfChanged } from "../utils/configBackup.ts";
 import {
   candidateIniPaths,
+  isFirstBootMissingAdminPassword,
   refreshLaunchTargetBeforeStart,
 } from "./serverLaunch.ts";
 import {
@@ -1074,12 +1075,19 @@ export class Scheduler {
           "Auto-restart triggered but server was not running - starting server",
         );
         const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
+        if (isFirstBootMissingAdminPassword(restartTarget)) {
+          const errorMsg = "Set an admin password before starting this game for the first time";
+          await recordScheduleExecution(null, label, "restart", false, errorMsg, Date.now() - restartStartTime);
+          return { success: false, wasRunning: false, message: errorMsg };
+        }
         await refreshLaunchTargetBeforeStart(restartTarget, {
-          managedHandled: false,
+          managedHandled: Boolean(restartTarget?.dockerContainerName) && !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(restartTarget)),
         });
-        const started = await serverManager.startServer({
-          serverId: pinnedServerId,
-        });
+        if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") await ensureBundledGameContainer(restartTarget);
+        const managedStart = await runManagedLifecycle("start", { serverId: pinnedServerId });
+        const started = managedStart.handled
+          ? managedStart
+          : await serverManager.startServer({ serverId: pinnedServerId });
         if (!started?.success) {
           log.warn(
             `Auto-restart: start command reported failure: ${started?.error || started?.message || "unknown error"}`,
@@ -1259,6 +1267,12 @@ export class Scheduler {
       const postSaveDeferral = await deferForPlayers();
       if (postSaveDeferral) return postSaveDeferral;
 
+      const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
+      if (restartTarget?.dockerContainerName) {
+        await refreshLaunchTargetBeforeStart(restartTarget, {
+          managedHandled: !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(restartTarget)),
+        });
+      }
       const managed = await runManagedLifecycle("restart", {
         serverId: pinnedServerId,
       });
@@ -1361,11 +1375,9 @@ export class Scheduler {
         await this.sleep(3000);
       }
 
-      const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
-
-      await refreshLaunchTargetBeforeStart(restartTarget, {
-        managedHandled: managed.handled as boolean,
-      });
+      if (!managed.handled) {
+        await refreshLaunchTargetBeforeStart(restartTarget, { managedHandled: false });
+      }
 
       if (rconService.setServerStarting) {
         rconService.setServerStarting(true);

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { getActiveServer, getServer } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 
@@ -24,12 +26,28 @@ export interface DockerControl {
     ref: string,
     action: LifecycleAction,
   ) => Promise<DockerActionResult>;
+  ensureBundledGameContainer?: (profile: {
+    id: string | number;
+    serverName: string;
+    serverPort: number;
+    dockerContainerName: string;
+  }) => Promise<void>;
+  removeBundledGameContainer?: (profile: {
+    id: string | number;
+    serverName: string;
+    serverPort: number;
+    dockerContainerName: string;
+  }) => Promise<void>;
 }
 
 interface ServerProfile {
   id?: string | number;
   dockerContainerName?: unknown;
   dockerContainerId?: unknown;
+  installPath?: unknown;
+  zomboidDataPath?: unknown;
+  serverName?: unknown;
+  serverPort?: unknown;
 }
 
 interface ResolveManagedContainerOptions {
@@ -95,6 +113,47 @@ export function setDockerClient(client: DockerControl | null | undefined): void 
 
 export function getDockerClient(): DockerControl | null {
   return sharedDockerClient;
+}
+
+export function isBundledGameProfile(server: ServerProfile | null | undefined): boolean {
+  return process.env.PANEL_DOCKER_INSTALL_KIND === "split" &&
+    server?.installPath === "/pz-server" &&
+    server?.zomboidDataPath === "/zomboid" &&
+    server?.dockerContainerName === `zomboid-game-${server?.id}`;
+}
+
+export async function ensureBundledGameContainer(server: ServerProfile): Promise<boolean> {
+  if (!isBundledGameProfile(server)) return false;
+  if (typeof server.serverName !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9_ -]*$/.test(server.serverName)) {
+    throw new Error("Invalid game server name");
+  }
+  if (!sharedDockerClient?.ensureBundledGameContainer || !sharedDockerClient.available) {
+    throw new Error("Docker control is unavailable; the game container was not started");
+  }
+  const launcher = path.join("/pz-server", `start-server_${server.serverName}.sh`);
+  if (!fs.existsSync(launcher)) {
+    throw new Error(`Game launch script is missing: ${launcher}`);
+  }
+  await sharedDockerClient.ensureBundledGameContainer(server as {
+    id: string | number;
+    serverName: string;
+    serverPort: number;
+    dockerContainerName: string;
+  });
+  return true;
+}
+
+export async function removeBundledGameContainer(server: ServerProfile): Promise<void> {
+  if (!isBundledGameProfile(server)) return;
+  if (!sharedDockerClient?.removeBundledGameContainer || !sharedDockerClient.available) {
+    throw new Error("Docker control is unavailable; the game profile was not deleted");
+  }
+  await sharedDockerClient.removeBundledGameContainer(server as {
+    id: string | number;
+    serverName: string;
+    serverPort: number;
+    dockerContainerName: string;
+  });
 }
 
 async function acquireContainerLifecycleLock(
@@ -179,7 +238,7 @@ export async function resolveDockerHostSignal(
     const container = await dockerClient.inspectManagedContainer(containerRef);
     return container
       ? { running: container.State?.Running === true, scanFailed: false }
-      : { running: false, scanFailed: true };
+      : { running: false, scanFailed: !isBundledGameProfile(server) };
   }
 
   const managed = await resolveManagedContainer({

@@ -11,21 +11,22 @@ assumes you've read the others.
 
 | What you already have                                                                                                                                                                     | Use this path                                                                                     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Nothing running yet. You want the current combined panel and game container.                                                                                     | [All-in-one](#path-a-all-in-one) — combined container until the game split                               |
+| Nothing running yet. You want the panel to install and manage game servers. | [Managed stack](#path-a-managed-stack) — separate panel and game containers |
 | Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or use PanelBridge. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access       |
 | **Unraid**, with Project Zomboid already running in its own container/template.                                                                                                           | [Unraid template](#path-c-unraid) — panel with the PZ folders mounted                             |
-| macOS                                                                                                                                                                                     | There's no native macOS binary. Use [Path A](#path-a-all-in-one) with Docker Desktop or OrbStack. |
+| macOS | Run the panel with Docker Desktop or OrbStack and connect it to a PZ server on Linux using [Path B](#path-b-docker-composeyml-bind-mounts). The managed stack requires an amd64 Linux Docker host. |
 
 Every path ends with the same web UI at `http://localhost:3001` — only how
 Project Zomboid gets there differs.
 
 ---
 
-## Path A: All-in-one
+## Path A: Managed stack
 
-**What it is:** one container running the panel and Project Zomboid. This
-existing layout shares the game process with the panel. The planned split into
-separate containers is not complete yet.
+**What it is:** a panel container and one game container per server profile.
+The panel mounts the Docker socket to start and stop game containers. Access to
+that socket grants host-level Docker control, so use this path only on a host
+where you trust the panel administrator with Docker access.
 
 ### Install
 
@@ -43,8 +44,10 @@ separate containers is not complete yet.
    panel state, logs, the PZ install, and saves. It waits for the panel health
    check before reporting success.
 3. Find the first-run setup token in `docker logs zomboid-panel`, then open
-   the printed panel URL and complete setup. The game ports `16261/udp` and
-   `16262/udp` are published by Compose.
+   the printed panel URL and complete setup. Create a server profile, set its
+   admin password, and start it from the panel. Its game container publishes
+   the profile's UDP server port and the next UDP port. Additional profiles
+   need distinct server ports and RCON ports to run at the same time.
 
 The stack's `.env` is in `<state dir>/build/ctx/.env`, normally
 `~/.local/state/zomboid-panel/build/ctx/.env`. `PANEL_HOME` and `BUILD_ROOT`
@@ -54,16 +57,15 @@ first run and preserves an existing `.env` on later runs.
 ### Update
 
 Settings reports newer releases and shows the host command for the selected
-version. Before running it, take a full backup and stop Project Zomboid from
-the panel. The installer refuses to recreate the container while it detects a
-running game process. The current all-in-one layout still interrupts the game
-when its container is recreated; there is no panel-side Docker update button
-or Docker-socket updater service. The command must be run on the Docker host
-with the same `PANEL_HOME` or `BUILD_ROOT` value used at install time.
+version. Take a full backup before updating. The command recreates only the
+panel container; running game containers stay online. Run it on the Docker
+host with the same `PANEL_HOME` or `BUILD_ROOT` value used at install time.
 
-An existing all-in-one install keeps the same named volumes when updated.
-The obsolete `zomboid-panel-updater` service is removed as an orphan by
-Compose. The panel, game install, and saves remain in their existing volumes.
+The first update from the older combined container requires stopping the game
+once. The installer refuses to split it while the old game process is running.
+It keeps the four named volumes, existing profiles, game install, and saves.
+Later panel updates leave game containers running. The obsolete updater
+service is removed by Compose.
 
 ---
 
@@ -289,7 +291,7 @@ the supplementary group first.
 
 This applies to **Path B** and **Path C** — anywhere the panel bind-mounts a
 PZ folder that already exists on the host, owned by a specific Linux
-user/group. It does **not** apply to **Path A** (all-in-one uses named
+user/group. It does **not** apply to **Path A** (the managed stack uses named
 volumes it owns itself, always as UID/GID `1000` internally).
 
 The container image runs as root by default and re-owns exactly two
@@ -347,12 +349,12 @@ chicken-and-egg problem of not being able to reach Settings if CORS is
 already blocking you. **Where you set it, and how you apply it, is different
 per path** — the variable name is the same everywhere:
 
-- **Path A (all-in-one):** already wired. It lives in a different file —
+- **Path A (managed stack):** already wired. It lives in a different file —
   `<state dir>/build/ctx/.env` (default:
   `~/.local/state/zomboid-panel/build/ctx/.env`) — and defaults to
   `http://localhost:3001` plus your detected LAN address when the installer
-  first creates it. Edit it there, stop the game from the panel, then re-run
-  the bootstrap command to apply the change.
+  first creates it. Edit it there, then re-run the bootstrap command to apply
+  the change without stopping the game.
 - **Path B (docker-compose.yml or docker-compose.install.yml):** set the
   variable in the `.env` file beside the compose file. For example, when a
   reverse proxy exposes the panel at its default HTTPS port:

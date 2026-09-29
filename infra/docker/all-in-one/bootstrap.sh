@@ -18,9 +18,13 @@ if ! docker info >/dev/null 2>&1; then
   echo "Docker is installed but its daemon is not available to this user." >&2
   exit 1
 fi
+if [ ! -S /var/run/docker.sock ]; then
+  echo "The managed stack requires the Docker socket at /var/run/docker.sock." >&2
+  exit 1
+fi
 case "$(docker info --format '{{.Architecture}}')" in
   amd64 | x86_64) ;;
-  *) echo "The all-in-one image requires an amd64 Docker host." >&2; exit 1 ;;
+  *) echo "The managed stack requires an amd64 Docker host." >&2; exit 1 ;;
 esac
 
 if [ -z "$VERSION" ]; then
@@ -88,7 +92,7 @@ if docker inspect zomboid-panel >/dev/null 2>&1 && \
     exit 1
   fi
   if printf '%s\n' "$running_processes" | grep -Eq '(^|[[:space:]/])java([[:space:]]|$)|zombie\.network\.GameServer|ProjectZomboid64|start-server(_[^ ]*)?\.sh'; then
-    echo "Project Zomboid is still running in the all-in-one container. Save and stop it from the panel before updating." >&2
+    echo "Project Zomboid is still running in the old combined container. Save and stop it from the panel before splitting the containers." >&2
     exit 1
   fi
 fi
@@ -117,7 +121,7 @@ rm -rf "$SOURCE_DIR"
 mv "$EXTRACTED_SOURCE" "$SOURCE_DIR"
 cp "$SOURCE_DIR/infra/docker/all-in-one/docker-compose.yml" "$CONTEXT_DIR/docker-compose.yml"
 
-docker compose --env-file "$CONTEXT_DIR/.env" -f "$CONTEXT_DIR/docker-compose.yml" up -d --no-build --remove-orphans
+docker compose --env-file "$CONTEXT_DIR/.env" -f "$CONTEXT_DIR/docker-compose.yml" up -d --no-deps --no-build --remove-orphans panel
 
 echo "Waiting for the panel to become healthy (the first PZ install can take several minutes)..."
 attempt=0
@@ -141,6 +145,6 @@ if [ "$health" != "healthy" ]; then
   exit 1
 fi
 
-echo "All-in-one installation is ready."
+echo "Panel installation is ready. Game containers are created when their server profiles start."
 echo "Panel: http://${detected_lan_ip:-localhost}:3001"
-echo "PZ ports: 16261/udp and 16262/udp (published automatically)"
+echo "Game ports: each game container publishes its server port and the next UDP port when started."

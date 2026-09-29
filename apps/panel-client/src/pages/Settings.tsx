@@ -2928,7 +2928,12 @@ export default function Settings() {
                       </code>
                       {panelUpdateStatus.dockerInstallKind === 'aio' && (
                         <p className="text-sm text-amber-600 dark:text-amber-400">
-                          The current all-in-one container also runs Project Zomboid. Save and stop the game before updating; players will be disconnected. A separate game container is planned.
+                          This older combined container also runs Project Zomboid. Save and stop the game once before migrating with the host command.
+                        </p>
+                      )}
+                      {panelUpdateStatus.dockerInstallKind === 'split' && (
+                        <p className="text-sm text-muted-foreground">
+                          This updates the panel container. Running game containers stay online.
                         </p>
                       )}
                     </div>

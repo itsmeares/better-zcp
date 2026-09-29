@@ -68,6 +68,7 @@ import { scoreServerProcessOwnership } from "../services/serverManager.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 import { resolveEnvRconHost } from "../services/rcon.ts";
 import { updateServerProfile } from "../services/serverProfiles.ts";
+import { getDockerClient, resolveDockerHostSignal } from "../services/managedContainer.ts";
 
 export { applyUpnpToIni } from "../utils/upnpConfig.ts";
 
@@ -2714,6 +2715,32 @@ async function checkSpecificServerStopped(
   actionLabel: string,
   runningCode: string = ErrorCode.WIPE_SERVER_RUNNING,
 ) {
+  const configuredServers = targetServer.installPath ? await getServers() : [];
+  const peers = (Array.isArray(configuredServers) ? configuredServers : []).filter(
+    (server: AnyRecord) => server.installPath && path.resolve(server.installPath) === path.resolve(targetServer.installPath),
+  );
+  for (const server of peers.length ? peers : [targetServer]) {
+    const result = await checkOneServerStopped(serverManager, server, actionLabel, runningCode);
+    if (result) return result;
+  }
+  return null;
+}
+
+async function checkOneServerStopped(
+  serverManager: any,
+  targetServer: AnyRecord,
+  actionLabel: string,
+  runningCode: string,
+) {
+  if (targetServer.dockerContainerName || targetServer.dockerContainerId) {
+    const signal = await resolveDockerHostSignal(targetServer, getDockerClient());
+    if (signal.scanFailed) {
+      return { status: 503, body: { error: "Cannot verify whether the game container is stopped", code: ErrorCode.SERVER_STATE_UNKNOWN } };
+    }
+    return signal.running
+      ? { status: 400, body: { error: `Server must be stopped before ${actionLabel}. Stop the server first.`, code: runningCode } }
+      : null;
+  }
   const provider = String(targetServer.lifecycleProvider || "");
   if (isManagedLifecycleProvider(provider)) {
     try {
