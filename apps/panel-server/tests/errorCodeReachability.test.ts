@@ -62,7 +62,6 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
   it("already_downloading: code survives to the named 409 branch", async () => {
     const res = createResponse();
     const checker = {
-      dockerUpdateProxy: { enabled: false },
       downloadUpdate: vi.fn(async () => ({
         success: false,
         error: "Download already in progress",
@@ -81,7 +80,6 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
   it("no_update: code survives to the named 400 branch", async () => {
     const res = createResponse();
     const checker = {
-      dockerUpdateProxy: { enabled: false },
       downloadUpdate: vi.fn(async () => ({
         success: false,
         error: "No update available",
@@ -97,29 +95,9 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
     );
   });
 
-  it("docker_updater_not_configured: code survives to the generic fallback branch (currently unreachable via downloadUpdate()'s own guard -- see comment above)", async () => {
-    const res = createResponse();
-    const checker = {
-      dockerUpdateProxy: { enabled: false },
-      downloadUpdate: vi.fn(async () => ({
-        success: false,
-        error: "Docker update controller is not configured",
-        code: "docker_updater_not_configured",
-      })),
-    };
-
-    await handlePanelUpdateDownload(createRequest(checker), res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "docker_updater_not_configured" }),
-    );
-  });
-
   it("success: the result object (no code) still passes through unmodified", async () => {
     const res = createResponse();
     const checker = {
-      dockerUpdateProxy: { enabled: false },
       downloadUpdate: vi.fn(async () => ({ success: true, version: "1.2.3" })),
     };
 

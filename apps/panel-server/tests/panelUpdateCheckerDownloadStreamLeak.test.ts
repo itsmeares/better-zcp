@@ -35,12 +35,6 @@ vi.mock("../database/init.ts", () => ({
   setSetting: vi.fn(async () => {}),
 }));
 
-vi.mock("../services/dockerUpdateProxy.ts", () => ({
-  DockerUpdateProxy: vi.fn(function DockerUpdateProxy() {
-    this.mode = "none";
-  }),
-}));
-
 const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 let tempDir;

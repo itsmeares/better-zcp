@@ -26,12 +26,6 @@ vi.mock("../database/init.ts", () => ({
   getDatabaseFilePath: vi.fn(),
 }));
 
-vi.mock("../services/dockerUpdateProxy.ts", () => ({
-  DockerUpdateProxy: vi.fn(function DockerUpdateProxy() {
-    this.mode = "none";
-  }),
-}));
-
 const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("PanelUpdateChecker checksum fetch timeout", () => {

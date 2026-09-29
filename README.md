@@ -199,8 +199,8 @@ Zomboid server — is the all-in-one installer:
 curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
 ```
 
-It checks Docker, generates the secret and persistent configuration, pulls the
-prebuilt release images, installs PZ, detects the LAN address, and publishes
+It checks Docker, creates persistent configuration, pulls the
+prebuilt release image, installs PZ, detects the LAN address, and publishes
 the required UDP ports `16261` and `16262`, and prints the panel URL near the end
 once the health check passes.
 

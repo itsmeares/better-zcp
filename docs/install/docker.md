@@ -11,7 +11,7 @@ assumes you've read the others.
 
 | What you already have                                                                                                                                                                     | Use this path                                                                                     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Nothing running yet. You want one container that installs and runs Project Zomboid **and** the panel.                                                                                     | [All-in-one](#path-a-all-in-one) — the flagship, most-complete path                               |
+| Nothing running yet. You want the current combined panel and game container.                                                                                     | [All-in-one](#path-a-all-in-one) — combined container until the game split                               |
 | Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or use PanelBridge. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access       |
 | **Unraid**, with Project Zomboid already running in its own container/template.                                                                                                           | [Unraid template](#path-c-unraid) — panel with the PZ folders mounted                             |
 | macOS                                                                                                                                                                                     | There's no native macOS binary. Use [Path A](#path-a-all-in-one) with Docker Desktop or OrbStack. |
@@ -23,138 +23,47 @@ Project Zomboid gets there differs.
 
 ## Path A: All-in-one
 
-**What it is:** one container running the panel, SteamCMD, and the Project
-Zomboid dedicated server together. This is the most complete path in the
-repository — pick this if you're starting
-from nothing.
+**What it is:** one container running the panel and Project Zomboid. This
+existing layout shares the game process with the panel. The planned split into
+separate containers is not complete yet.
 
-### Phase 1 — Prerequisites
+### Install
 
-1. A Linux host (or a Linux VM), **amd64/x86_64**, with **Docker Engine**
-   installed and running. You do **not** need the Docker Compose plugin on
-   the host — the installer runs Compose inside its own controller
-   container.
-2. `curl` and `tar` available on the host.
+1. On an amd64 Linux Docker host, install Docker Engine, the Docker Compose
+   plugin, `curl`, and `tar`. Check `docker compose version` before proceeding.
+2. Run:
 
-The installer checks all of this itself before it does anything else —
-missing command, unreachable Docker daemon, or a non-amd64 host each stop it
-immediately with a plain-English message, rather than failing confusingly
-partway through.
-
-**You know it worked when:** `docker info` runs without an error. If it
-prints "permission denied", your user isn't in the `docker` group yet (or you
-need `sudo` in front of the commands below).
-
-### Phase 2 — Run the installer
-
-3. Run:
    ```sh
    curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
    ```
-   This resolves the latest release, creates its state under
-   `~/.local/state/zomboid-panel/` (override with the `PANEL_HOME` or
-   `BUILD_ROOT` environment variables if you want it elsewhere), generates a
-   random updater token, detects the host's LAN address, and starts the
-   stack.
 
-   To install a specific version instead of the latest release, pass it as
-   an argument:
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh -s -- 2.0.0
-   ```
+   To select a release, add a version after `sh -s --`, such as `2.0.0`.
+   The script downloads that release's source, pulls its exact image tag when
+   available, and otherwise builds from source. It keeps named volumes for
+   panel state, logs, the PZ install, and saves. It waits for the panel health
+   check before reporting success.
+3. Find the first-run setup token in `docker logs zomboid-panel`, then open
+   the printed panel URL and complete setup. The game ports `16261/udp` and
+   `16262/udp` are published by Compose.
 
-   For the panel and updater images, it pulls the exact release-tagged image
-   from GHCR first; only if that specific tag isn't published yet does it
-   fall back to building the image locally from the downloaded release
-   source — so a normal run doesn't compile anything on your host.
+The stack's `.env` is in `<state dir>/build/ctx/.env`, normally
+`~/.local/state/zomboid-panel/build/ctx/.env`. `PANEL_HOME` and `BUILD_ROOT`
+can change that location. The installer generates a local CORS origin on the
+first run and preserves an existing `.env` on later runs.
 
-**You know it worked when:** the script's last line is `All-in-one
-installation is ready.` followed by the panel URL and a note that the PZ
-ports are published automatically. If it instead prints `Could not determine
-a valid release version`, the GitHub API call failed (rate-limited or
-offline) — pass a version explicitly as shown above.
+### Update
 
-### Phase 3 — Wait for first boot
+Settings reports newer releases and shows the host command for the selected
+version. Before running it, take a full backup and stop Project Zomboid from
+the panel. The installer refuses to recreate the container while it detects a
+running game process. The current all-in-one layout still interrupts the game
+when its container is recreated; there is no panel-side Docker update button
+or Docker-socket updater service. The command must be run on the Docker host
+with the same `PANEL_HOME` or `BUILD_ROOT` value used at install time.
 
-4. On first start, the container also downloads Project Zomboid itself
-   through SteamCMD, which can take several minutes depending on your
-   connection. The installer waits for this on its own — polling the
-   panel's health check for up to 15 minutes — so you don't need to watch
-   it, but you can:
-   ```sh
-   docker logs -f zomboid-panel
-   ```
-   Look for `[entrypoint] No PZ install found in /pz-server; installing as
-   steam...` followed by SteamCMD's own output. A second start (after an
-   update or restart) skips this — you'll see `[entrypoint] Existing PZ
-   install found in /pz-server.` instead. If the container stops or the
-   health check never turns green within 15 minutes, the installer prints
-   the last 40 lines of `docker logs` itself and exits — you don't need to
-   go dig for them.
-
-**You know it worked when:** `docker ps` lists both `zomboid-panel` and
-`zomboid-panel-updater` as `Up`, and `zomboid-panel` eventually shows
-`(healthy)`. If it never leaves `(starting)`, check the logs from step 4 —
-SteamCMD usually hasn't finished yet.
-
-### Phase 4 — First login
-
-5. Open `http://localhost:3001` (or whatever origin you set — see
-   [CORS_ORIGINS](#cors_origins-when-accessed-from-anywhere-other-than-localhost)
-   below if that's not `localhost`). You'll see a setup screen asking for a
-   **Setup Token**.
-6. Get that token by watching the same logs from Phase 3:
-   ```sh
-   docker logs zomboid-panel | grep "SETUP TOKEN"
-   ```
-   Copy the long string after `SETUP TOKEN required to complete first-run
-   setup:` — treat it like a password; anyone who has it can create the
-   admin account before you do. Paste it into the setup screen, choose a
-   username and password, confirm the password, and submit.
-7. Project Zomboid, RCON, and the PanelBridge mod are all local to this
-   container, so the setup wizard should find them without extra
-   configuration. If RCON shows disconnected, open **Settings** and confirm
-   the RCON password matches your server `.ini` (see [README —
-   Setup](../../README.md#setup)).
-
-**You know it worked when:** the dashboard shows the server status card
-instead of a setup prompt, and RCON shows connected.
-
-### Updating
-
-After the first install, use the panel's **Settings** page to apply a newer
-release: it saves and stops Project Zomboid through RCON, downloads the
-tagged source, rebuilds the panel image, recreates only the panel service,
-and waits for its health check. A failed rollout restores the previous
-source and image automatically — you don't need to intervene.
-
-### Notes specific to this path
-
-- Panel state, PZ install, and PZ save data all live in **named Docker
-  volumes** (`panel-data`, `panel-logs`, `pz-server`, `zomboid-data`), not
-  bind mounts. You never need to set `PUID`/`PGID` for this path — see
-  [the PUID/PGID section](#puidpgid-on-bind-mounted-pz-folders) for why.
-- The update controller (`zomboid-panel-updater`) mounts the host's Docker
-  socket so it can rebuild and recreate the panel container — that mount is
-  **host-root-equivalent access**, not just container-level access: anyone
-  who can reach that container's HTTP endpoint can run arbitrary containers
-  on the Docker host itself, not only affect the panel. It is protected by
-  two things, both load-bearing: the token in `.env` (`PANEL_DOCKER_UPDATER_TOKEN`,
-  compared with a constant-time check — there is no default, `docker compose`
-  refuses to start without one), and the fact that its port is **never**
-  published to the host — it is reachable only over the internal Compose
-  network, by container name. Do not add a `ports:` mapping for
-  `zomboid-panel-updater` to this stack; doing so would expose that
-  host-root-equivalent endpoint to the network the port is bound on.
-- The PZ game ports (`16261/udp`, `16262/udp`) are published automatically
-  by the stack — there's nothing to add to Compose by hand for this path.
-- Config lives at `<state dir>/build/ctx/.env` (`~/.local/state/zomboid-panel/build/ctx/.env`
-  by default). The installer sets `CORS_ORIGINS` there itself on first run —
-  `http://localhost:3001` plus your detected LAN address — so LAN access
-  usually needs no extra configuration. For a reverse proxy or public
-  hostname, edit `CORS_ORIGINS` (and `TRUST_PROXY`) in that file, then
-  re-run the curl command from step 3 — it reapplies the stack but never
-  overwrites an `.env` that already exists, so your edit sticks.
+An existing all-in-one install keeps the same named volumes when updated.
+The obsolete `zomboid-panel-updater` service is removed as an orphan by
+Compose. The panel, game install, and saves remain in their existing volumes.
 
 ---
 
@@ -442,9 +351,8 @@ per path** — the variable name is the same everywhere:
   `<state dir>/build/ctx/.env` (default:
   `~/.local/state/zomboid-panel/build/ctx/.env`) — and defaults to
   `http://localhost:3001` plus your detected LAN address when the installer
-  first creates it. Edit it there, then re-run the bootstrap command to
-  apply the change (see [Path A's notes](#notes-specific-to-this-path)
-  above).
+  first creates it. Edit it there, stop the game from the panel, then re-run
+  the bootstrap command to apply the change.
 - **Path B (docker-compose.yml or docker-compose.install.yml):** set the
   variable in the `.env` file beside the compose file. For example, when a
   reverse proxy exposes the panel at its default HTTPS port:

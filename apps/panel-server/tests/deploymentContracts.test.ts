@@ -16,24 +16,22 @@ describe("Deployment contracts", () => {
     const bootstrap = readRepoFile("infra/docker/all-in-one/bootstrap.sh");
 
     expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:aio-$VERSION");
-    expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:updater-$VERSION");
     expect(bootstrap).toContain('docker pull "$published_image"');
     expect(bootstrap).toContain('docker build -t "$local_image"');
     expect(bootstrap).toContain("up -d --no-build");
     expect(bootstrap).toContain('if [ "$health" = "healthy" ]');
     expect(bootstrap).toContain("All-in-one installation is ready.");
+    expect(bootstrap).toContain("Save and stop it from the panel before updating.");
+    expect(bootstrap).toContain("--remove-orphans");
   });
 
-  it("publishes versioned panel and updater images from release tags", () => {
+  it("publishes a versioned panel image from release tags", () => {
     const workflow = readRepoFile(".github/workflows/docker-aio-build.yml");
 
-    expect(workflow).toMatch(/- [\"']v2\.\*[\"']/);
-    expect(workflow).toContain("type=raw,value=updater");
+    expect(workflow).toMatch(/- [\"']v\*[\"']/);
     expect(workflow).toContain("type=semver,pattern={{version}},prefix=aio-");
-    expect(workflow).toContain(
-      "type=semver,pattern={{version}},prefix=updater-",
-    );
-    expect(workflow.match(/flavor: latest=false/g) || []).toHaveLength(2);
+    expect(workflow.match(/flavor: latest=false/g) || []).toHaveLength(1);
+    expect(workflow).not.toContain("updater/Dockerfile");
   });
 
   it("uploads the Linux archive from the release tree created by scripts/release/build.mjs", () => {

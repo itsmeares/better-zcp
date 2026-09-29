@@ -2203,6 +2203,8 @@ export interface PanelUpdateStatus {
   lastCheck: string | null;
   lastError: string | null;
   updateMode?: "binary" | "docker";
+  updateCommand?: string | null;
+  dockerInstallKind?: "aio" | null;
   stagedUpdate: { version: string | null; path: string } | null;
   lastApplyResult: PanelUpdateApplyResult | null;
 }
@@ -2243,7 +2245,6 @@ export interface PanelUpdatePreflight {
     isPackaged?: boolean;
     platform?: string;
     updateMode?: "binary" | "docker";
-    dockerUpdater?: boolean;
     alreadyCurrent?: boolean;
     exePath?: string;
     exeDir?: string;
@@ -2313,8 +2314,8 @@ export const panelUpdateApi = {
   getStatus: (): Promise<PanelUpdateStatus> => apiGet("/panel/update-status"),
   preflight: (): Promise<PanelUpdatePreflight> =>
     apiGet("/panel/update-preflight"),
-  download: (confirm: boolean = false): Promise<PanelUpdateActionResult> =>
-    apiPost("/panel/update-download", { confirm }),
+  download: (): Promise<PanelUpdateActionResult> =>
+    apiPost("/panel/update-download", {}),
   getApplyLog: (): Promise<{ log: string | null; logPath: string }> =>
     apiGet("/panel/update-apply-log"),
 };

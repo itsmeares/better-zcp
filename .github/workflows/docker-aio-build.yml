@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - "v2.*"
+      - "v*"
     paths:
       - "infra/docker/all-in-one/**"
       - "apps/panel-server/**"
@@ -52,17 +52,6 @@ jobs:
             type=semver,pattern={{version}},prefix=aio-
             type=sha,format=short,prefix=aio-
 
-      - name: Extract updater image metadata
-        id: updater-meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
-        with:
-          images: ghcr.io/itsmeares/better-zcp
-          flavor: latest=false
-          tags: |
-            type=raw,value=updater,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-            type=semver,pattern={{version}},prefix=updater-
-            type=sha,format=short,prefix=updater-
-
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
@@ -84,17 +73,4 @@ jobs:
           labels: ${{ steps.panel-meta.outputs.labels }}
           cache-from: type=gha,scope=aio
           cache-to: type=gha,mode=max,scope=aio
-          provenance: false
-
-      - name: Build (and publish on push/dispatch) updater image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: infra/docker/all-in-one/updater/Dockerfile
-          platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.updater-meta.outputs.tags }}
-          labels: ${{ steps.updater-meta.outputs.labels }}
-          cache-from: type=gha,scope=aio-updater
-          cache-to: type=gha,mode=max,scope=aio-updater
           provenance: false
