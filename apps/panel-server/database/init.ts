@@ -46,11 +46,10 @@ const RETENTION: Record<string, number> = {
   server_events: 500,
   schedule_history: 500,
   performance_history: 1440,
-  bridge_logs: 500,
   backup_records: 500,
 };
 const PANEL_SETTINGS =
-  /^(auth|jwt|cors|setupToken$|panelPort$|panelUpdate|preUpdate|steamApiKey$|darkMode$|enablePublicIpLookup$|lanIpAddress$|steamcmdPath$|steamUpdateAccount$)/;
+  /^(auth|jwt|cors|setupToken$|panelPort$|panelUpdate|preUpdate|steamApiKey$|darkMode$|enablePublicIpLookup$|lanIpAddress$|steamcmdPath$|steamUpdateAccount$|panelBridge$|panelBridgeAutoUpdate$)/;
 const PROFILE_FIELDS: Record<string, string> = {
   serverPath: "installPath",
   serverName: "serverName",
@@ -255,19 +254,23 @@ function appendHistory(
 ): AnyRecord {
   return transaction(() => {
     putRecord(collection, entry, id);
-    db()
-      .prepare(
-        "DELETE FROM records WHERE collection=? AND server_id=? AND sequence NOT IN (SELECT sequence FROM records WHERE collection=? AND server_id=? ORDER BY sequence DESC LIMIT ?)",
-      )
-      .run(
-        collection,
-        requireServerId(),
-        collection,
-        requireServerId(),
-        RETENTION[collection],
-      );
+    trimHistory(collection);
     return entry;
   });
+}
+
+function trimHistory(collection: string): void {
+  db()
+    .prepare(
+      "DELETE FROM records WHERE collection=? AND server_id=? AND sequence NOT IN (SELECT sequence FROM records WHERE collection=? AND server_id=? ORDER BY sequence DESC LIMIT ?)",
+    )
+    .run(
+      collection,
+      requireServerId(),
+      collection,
+      requireServerId(),
+      RETENTION[collection],
+    );
 }
 
 function historyLimit(
@@ -481,6 +484,7 @@ export async function getAllSettings(): Promise<AnyRecord> {
         "SELECT key,value FROM settings WHERE server_id='' OR server_id=? ORDER BY server_id",
       )
       .all(serverId ?? "")
+      .filter((row) => !["panelBridge", "panelBridgeAutoUpdate"].includes(String(row.key)))
       .map((row) => [String(row.key), JSON.parse(String(row.value))]),
   );
   settings.steamApiKey = readUiSecretFile("steamApiKey");
@@ -645,38 +649,37 @@ export async function logCommand(command: any, response: any, success = true) {
 export async function getCommandHistory(limit: unknown = 100) {
   return records("command_history", historyLimit(limit, "command_history"));
 }
-export async function logBridgeCommand(
-  action: string,
-  args: AnyRecord,
-  result: any,
-  success = true,
-  durationMs = 0,
-) {
-  const text = JSON.stringify(result);
-  return appendHistory("bridge_logs", {
-    id: randomUUID(),
-    action,
-    args: args || {},
-    result: text?.length > 4096 ? { truncated: true } : result,
-    success: success ? 1 : 0,
-    duration_ms: durationMs,
-    executed_at: new Date().toISOString(),
-  });
-}
-export async function getBridgeLogs(limit: unknown = 100) {
-  return records("bridge_logs", historyLimit(limit, "bridge_logs"));
-}
 export async function logPlayerAction(
   playerName: string,
   action: string,
   details: any = null,
 ) {
-  return appendHistory("player_logs", {
+  const now = new Date().toISOString();
+  const entry = {
     id: randomUUID(),
     player_name: playerName,
     action,
     details,
-    logged_at: new Date().toISOString(),
+    logged_at: now,
+  };
+  return transaction(() => {
+    putRecord("player_logs", entry);
+    trimHistory("player_logs");
+    if (action === "death") {
+      const id = playerName.toLowerCase();
+      const player = readRecord("player_stats", id) ?? {
+        id: randomUUID(),
+        player_name: playerName,
+        total_playtime_seconds: 0,
+        session_count: 0,
+        deaths: 0,
+        first_seen: now,
+        sessions: [],
+      };
+      player.deaths = (Number(player.deaths) || 0) + 1;
+      putRecord("player_stats", player, id);
+    }
+    return entry;
   });
 }
 export async function getPlayerLogs(
@@ -995,58 +998,71 @@ export async function removeIgnoredModPair(a: any, b: any) {
   return id ? deleteRecord("ignored_mod_pairs", id) : false;
 }
 
-export async function getPlayerNotes() {
-  return records("player_notes");
+const PLAYER_SESSION_RETENTION_MS = 30 * 24 * 3600000;
+
+function retainPlayerSessions(player: AnyRecord, now = Date.now()): AnyRecord {
+  const cutoff = now - PLAYER_SESSION_RETENTION_MS;
+  return {
+    ...player,
+    sessions: (Array.isArray(player.sessions) ? player.sessions : []).filter(
+      (session: AnyRecord) => {
+        const end = Date.parse(session.end);
+        return Number.isFinite(end) && end >= cutoff && end <= now;
+      },
+    ),
+  };
 }
-export async function getPlayerNote(name: string) {
-  return readRecord("player_notes", name.toLowerCase()) ?? null;
-}
-export async function upsertPlayerNote(
-  name: string,
-  note: string,
-  tags: any[] = [],
-) {
-  return putRecord(
-    "player_notes",
-    {
-      id: randomUUID(),
-      player_name: name,
-      note: note || "",
-      tags,
-      updated_at: new Date().toISOString(),
-    },
-    name.toLowerCase(),
+
+function retainPlayerStatEntries(
+  entries: Array<{ id: string; player: AnyRecord }>,
+): AnyRecord[] {
+  const retained = entries.map(({ id, player }) => ({
+    id,
+    originalSessionCount: Array.isArray(player.sessions)
+      ? player.sessions.length
+      : 0,
+    player: retainPlayerSessions(player),
+  }));
+  const pruned = retained.filter(
+    (entry) => entry.originalSessionCount !== entry.player.sessions.length,
   );
+  if (pruned.length) {
+    transaction(() => {
+      for (const entry of pruned) {
+        putRecord("player_stats", entry.player, entry.id);
+      }
+    });
+  }
+  return retained.map((entry) => entry.player);
 }
-export async function deletePlayerNote(name: string) {
-  return deleteRecord("player_notes", name.toLowerCase());
-}
-export async function getPlayerStats() {
-  return records("player_stats");
-}
-export async function getPlayerStat(name: string) {
-  return readRecord("player_stats", name.toLowerCase()) ?? null;
-}
-export async function recordPlayerSession(name: string, action: string) {
-  const now = new Date().toISOString();
-  const player = readRecord("player_stats", name.toLowerCase()) ?? {
+
+function updatePlayerSession(
+  name: string,
+  action: string,
+  now: string,
+): AnyRecord | null {
+  const id = name.trim().toLowerCase();
+  if (!id) return null;
+  let player = readRecord("player_stats", id) ?? {
     id: randomUUID(),
-    player_name: name,
+    player_name: name.trim(),
     total_playtime_seconds: 0,
     session_count: 0,
+    deaths: 0,
     first_seen: now,
     sessions: [],
   };
   player.last_seen = now;
-  if (action === "connect") {
+  if (action === "connect" && !player.last_session_start) {
     player.last_session_start = now;
-    player.session_count++;
+    player.session_count = (Number(player.session_count) || 0) + 1;
   } else if (action === "disconnect" && player.last_session_start) {
     const duration = Math.max(
       0,
-      Math.floor((Date.now() - Date.parse(player.last_session_start)) / 1000),
+      Math.floor((Date.parse(now) - Date.parse(player.last_session_start)) / 1000),
     );
-    player.total_playtime_seconds += duration;
+    player.total_playtime_seconds =
+      (Number(player.total_playtime_seconds) || 0) + duration;
     player.sessions.unshift({
       start: player.last_session_start,
       end: now,
@@ -1054,11 +1070,69 @@ export async function recordPlayerSession(name: string, action: string) {
     });
     player.last_session_start = null;
   }
-  player.sessions = player.sessions.filter(
-    (session: AnyRecord) =>
-      Date.parse(session.end) >= Date.now() - 30 * 24 * 3600000,
-  );
-  return putRecord("player_stats", player, name.toLowerCase());
+  player = retainPlayerSessions(player, Date.parse(now));
+  return putRecord("player_stats", player, id);
+}
+
+export async function recordPlayerSession(name: string, action: string) {
+  const now = new Date().toISOString();
+  return transaction(() => updatePlayerSession(name, action, now));
+}
+
+export async function syncPlayerSessions(names: string[]) {
+  const now = new Date().toISOString();
+  const present = new Map<string, string>();
+  for (const name of names) {
+    if (typeof name === "string" && name.trim()) {
+      const trimmed = name.trim();
+      present.set(trimmed.toLowerCase(), trimmed);
+    }
+  }
+  const serverId = requireServerId();
+  return transaction(() => {
+    const active = new Map(
+      db()
+        .prepare(
+          "SELECT id, data FROM records WHERE collection='player_stats' AND server_id=? AND json_extract(data,'$.last_session_start') IS NOT NULL",
+        )
+        .all(serverId)
+        .map((row) => [String(row.id), JSON.parse(String(row.data)) as AnyRecord]),
+    );
+    for (const [id, name] of present) {
+      updatePlayerSession(name, "connect", now);
+      active.delete(id);
+    }
+    for (const [id, player] of active) {
+      updatePlayerSession(String(player.player_name || id), "disconnect", now);
+    }
+  });
+}
+
+export async function getPlayerStats() {
+  const serverId = requireServerId();
+  const entries = db()
+    .prepare(
+      "SELECT id, data FROM records WHERE collection='player_stats' AND server_id=? ORDER BY sequence DESC",
+    )
+    .all(serverId)
+    .map((row) => ({
+      id: String(row.id),
+      player: JSON.parse(String(row.data)) as AnyRecord,
+    }));
+  return retainPlayerStatEntries(entries);
+}
+export async function getPlayerStat(name: string) {
+  const serverId = requireServerId();
+  const row = db()
+    .prepare(
+      "SELECT id, data FROM records WHERE collection='player_stats' AND server_id=? AND id=?",
+    )
+    .get(serverId, name.trim().toLowerCase());
+  if (!row) return null;
+  const [player] = retainPlayerStatEntries([
+    { id: String(row.id), player: JSON.parse(String(row.data)) as AnyRecord },
+  ]);
+  return player;
 }
 export function recentPerformanceHistory(
   entries: AnyRecord[],

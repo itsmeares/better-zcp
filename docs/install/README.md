@@ -25,5 +25,5 @@ don't need to read the others first.
   live in the main [README](../../README.md#macos) instead of getting its
   own file.
 
-For anything past initial install — PanelBridge, updates, remote access, the
+For anything past initial install — game integration, updates, remote access, the
 full feature list — see the main [README.md](../../README.md).

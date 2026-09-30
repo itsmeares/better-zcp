@@ -65,6 +65,20 @@ export function resolveApiContractVersion(env = process.env) {
     : DEFAULT_API_CONTRACT_VERSION;
 }
 
+export function validateArgusBundle(luaSource, modInfo) {
+  const runtimeVersions = [
+    ...luaSource.matchAll(/^[ \t]*local[ \t]+Argus[ \t]*=[ \t]*\{[ \t]*VERSION[ \t]*=[ \t]*"([^"]+)"/gm),
+  ];
+  const modVersions = [...modInfo.matchAll(/^modversion=([^\r\n]+)$/gm)];
+  if (runtimeVersions.length !== 1 || modVersions.length !== 1) {
+    throw new Error("Game integration must contain exactly one runtime and mod.info version");
+  }
+  if (runtimeVersions[0][1] !== modVersions[0][1]) {
+    throw new Error("Game integration runtime and mod.info versions differ");
+  }
+  return runtimeVersions[0][1];
+}
+
 export function createEmbeddedClientBundle(clientDist, expectedMetadata) {
   const files = {};
   const walk = (directory, relativeDirectory = "") => {
@@ -275,7 +289,7 @@ GitHub if you'd rather read them there or check for updates to them:
 - docs/install/troubleshooting.md Symptom-first fixes, organized by what's on
                                    your screen, not by subsystem.
 
-For everything else — PanelBridge, updates, remote access, the full feature
+For everything else — game integration, updates, remote access, the full feature
 list — see README.md in the GitHub repository (not shipped in this archive,
 needs internet).
 
@@ -292,7 +306,7 @@ needs internet).
 - data/panel.sqlite        - Panel database (created on first run)
 - data/README.txt          - Upgrade-safety notes for the data/ folder
 - logs/                    - Application logs
-- pz-mod/                  - PanelBridge server-side Lua (drop into Install/media/lua/server)
+- pz-mod/                  - Game integration server-side Lua
 - checksums.txt            - SHA256 hashes for release archives
 - release-manifest.json    - Build metadata for this package
 
@@ -301,13 +315,10 @@ an older or missing client/dist folder. Keep client/dist when using the
 journaled updater or a manual archive upgrade; it is still retained in the
 package for compatibility with older binaries.
 
-## Panel Bridge Setup (Optional)
-The PanelBridge Lua enables advanced features like weather control. It is a
-server-side drop-in, NOT a Workshop mod — there is no client component.
-1. Copy pz-mod/PanelBridge/media/lua/server/PanelBridge.lua into your PZ
-   dedicated server's install folder: Install/media/lua/server/PanelBridge.lua
-2. Restart your PZ server (no .ini changes needed; nothing loads on clients)
-3. Go to Settings in the panel and configure the Panel Bridge section
+## Game Integration Setup (Optional)
+The panel installs the server-side game integration before starting or
+restarting a configured server. If permissions prevent installation, open
+Settings → Game integration and use Install after correcting the server path.
 
 ## Upgrading
 - The panel auto-update feature handles upgrades safely — prefer it.
@@ -349,6 +360,16 @@ async function main() {
     PANEL_BUILD_SHA: process.env.PANEL_BUILD_SHA,
   });
   const apiContractVersion = resolveApiContractVersion();
+
+  const luaSourcePath = "./integrations/argus/Argus/media/lua/server/Argus.lua";
+  const modInfoPath = "./integrations/argus/Argus/mod.info";
+  if (!fs.existsSync(luaSourcePath) || !fs.existsSync(modInfoPath)) {
+    throw new Error(`Game integration source is required for release builds (${luaSourcePath}, ${modInfoPath})`);
+  }
+  const luaSource = fs.readFileSync(luaSourcePath, "utf8");
+  const modInfo = fs.readFileSync(modInfoPath, "utf8");
+  const argusVersion = validateArgusBundle(luaSource, modInfo);
+  const argusLuaB64 = Buffer.from(luaSource).toString("base64");
 
   await cleanDir(distDir);
   if (!fs.existsSync(distDir)) {
@@ -397,22 +418,9 @@ async function main() {
     `Version: ${panelVersion} (build ${buildSha}, API contract ${apiContractVersion})`,
   );
 
-  const luaSourcePath = "./integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua";
-  let panelBridgeLuaB64 = "";
-  if (fs.existsSync(luaSourcePath)) {
-    panelBridgeLuaB64 = fs.readFileSync(luaSourcePath).toString("base64");
-    const luaVerMatch = fs
-      .readFileSync(luaSourcePath, "utf8")
-      .match(/VERSION\s*=\s*"([^"]+)"/);
-    const luaVer = luaVerMatch ? luaVerMatch[1] : "unknown";
-    console.log(
-      `Embedding PanelBridge.lua v${luaVer} (${panelBridgeLuaB64.length} base64 chars)`,
-    );
-  } else {
-    console.warn(
-      `WARNING: ${luaSourcePath} not found — binary will not be able to auto-update the Lua mod.`,
-    );
-  }
+  console.log(
+    `Embedding game integration v${argusVersion} (${argusLuaB64.length} base64 chars)`,
+  );
 
   await esbuild.build({
     entryPoints: ["./apps/panel-server/native.ts"],
@@ -427,7 +435,7 @@ async function main() {
       PANEL_VERSION: JSON.stringify(panelVersion),
       PANEL_BUILD_SHA: JSON.stringify(buildSha),
       PANEL_API_CONTRACT_VERSION: JSON.stringify(apiContractVersion),
-      PANEL_BRIDGE_LUA_B64: JSON.stringify(panelBridgeLuaB64),
+      ARGUS_LUA_B64: JSON.stringify(argusLuaB64),
       PANEL_CLIENT_DIST_B64: JSON.stringify(embeddedClientDistB64),
     },
     banner: {
@@ -567,8 +575,8 @@ Windows: extract everything except data/, or back up data/ first.
   fs.mkdirSync("./release/logs", { recursive: true });
   fs.writeFileSync("./release/logs/.gitkeep", "");
 
-  if (fs.existsSync("./integrations/panelbridge")) {
-    fs.cpSync("./integrations/panelbridge", "./release/pz-mod", { recursive: true });
+  if (fs.existsSync("./integrations/argus")) {
+    fs.cpSync("./integrations/argus", "./release/pz-mod", { recursive: true });
   }
 
   const wasmSrc = [

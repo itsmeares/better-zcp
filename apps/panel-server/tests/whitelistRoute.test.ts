@@ -12,10 +12,6 @@ vi.mock("../database/init.ts", () => ({
   getCurrentServer,
   logPlayerAction,
   getPlayerLogs: vi.fn(),
-  getPlayerNotes: vi.fn(),
-  getPlayerNote: vi.fn(),
-  upsertPlayerNote: vi.fn(),
-  deletePlayerNote: vi.fn(),
   getPlayerStats: vi.fn(),
   getPlayerStat: vi.fn(),
   getSteamIdBans: vi.fn(),
@@ -24,7 +20,6 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts }));
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: { isRunning: false } }) }));
 
 const { default: router } = await import("../routes/players.ts");
 

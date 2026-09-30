@@ -15,7 +15,7 @@ interface InstallProbeResult {
   reason?: "permission-denied";
   serverNames: string[];
   hasStartScript: boolean;
-  hasPanelBridge: boolean;
+  hasGameIntegration: boolean;
 }
 
 interface DataProbeResult {
@@ -37,7 +37,7 @@ interface DiscoveredMount {
   source: string;
   serverNames: string[];
   hasStartScript: boolean;
-  hasPanelBridge: boolean;
+  hasGameIntegration: boolean;
 }
 
 interface MountIssue {
@@ -97,7 +97,7 @@ export function probeInstallPath(
       reason: dirState === "inaccessible" ? "permission-denied" : undefined,
       serverNames: [],
       hasStartScript: false,
-      hasPanelBridge: false,
+      hasGameIntegration: false,
     };
   }
 
@@ -113,8 +113,8 @@ export function probeInstallPath(
     valid: hasZomboidBinary || hasStartScript || hasMediaLua || hasSteamapps,
     serverNames: readServerNames(path.join(installPath, "Server")),
     hasStartScript,
-    hasPanelBridge: fs.existsSync(
-      path.join(installPath, "media", "lua", "server", "PanelBridge.lua"),
+    hasGameIntegration: fs.existsSync(
+      path.join(installPath, "media", "lua", "server", "Argus.lua"),
     ),
   };
 }
@@ -218,7 +218,7 @@ export function discoverMounts(): DiscoveredMount[] {
         ? dataResult.serverNames
         : installResult.serverNames,
       hasStartScript: installResult.hasStartScript,
-      hasPanelBridge: installResult.hasPanelBridge,
+      hasGameIntegration: installResult.hasGameIntegration,
     });
   }
 

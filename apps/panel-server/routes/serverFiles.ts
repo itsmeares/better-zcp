@@ -205,10 +205,12 @@ export function unescapeLuaString(value: unknown): string {
   }
   return str
     .slice(1, -1)
-    .replace(/\\([\s\S])/g, (match, c) =>
-      Object.prototype.hasOwnProperty.call(LUA_UNESCAPES, c)
-        ? LUA_UNESCAPES[c]
-        : match,
+    .replace(/\\([0-9]{1,3}|[\s\S])/g, (match, c) =>
+      /^[0-9]+$/.test(c) && Number(c) <= 255
+        ? String.fromCharCode(Number(c))
+        : Object.prototype.hasOwnProperty.call(LUA_UNESCAPES, c)
+          ? LUA_UNESCAPES[c]
+          : match,
     );
 }
 
@@ -1054,71 +1056,6 @@ router.put("/sandbox", async (req, res) => {
     });
   } catch (error: unknown) {
     log.error("Failed to save SandboxVars:", error);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.put("/sandbox-option", async (req, res) => {
-  try {
-    const { name, value } = req.body || {};
-
-    if (typeof name !== "string" || !name) {
-      return res.status(400).json({
-        error: "Option name required",
-        code: ErrorCode.SANDBOX_OPTION_NAME_REQUIRED,
-      });
-    }
-    if (!["string", "number", "boolean"].includes(typeof value)) {
-      return res.status(400).json({
-        error: "Option value must be a primitive",
-        code: ErrorCode.SANDBOX_OPTION_VALUE_INVALID,
-      });
-    }
-
-    const parts = name.split(".");
-    const isIdentifier = (p: string): boolean =>
-      /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p);
-    if (parts.length > 2 || !parts.every(isIdentifier)) {
-      return res.status(400).json({
-        error: "Invalid option name",
-        code: ErrorCode.SANDBOX_OPTION_NAME_INVALID,
-      });
-    }
-    const block = parts.length === 2 ? parts[0] : null;
-    const key = parts.length === 2 ? parts[1] : parts[0];
-
-    const { configPath, serverName } = await getRequestServerValues(req);
-    const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        error:
-          "SandboxVars file not found. Start the server once to generate it.",
-        code: ErrorCode.SANDBOX_OPTION_FILE_NOT_FOUND,
-      });
-    }
-
-    let persisted = false;
-    let backupWarning = null;
-    await withFileLock(filePath, async () => {
-      const originalContent = fs.readFileSync(filePath, "utf-8");
-      const newContent = modifySandboxValue(originalContent, key, value, block);
-      if (newContent === originalContent) return;
-      backupWarning = backupWarningFor(
-        await createBackup(configPath, `${serverName}_SandboxVars.lua`),
-      );
-      writeFileAtomic(filePath, newContent, "utf-8");
-      persisted = true;
-    });
-
-    log.info(`Sandbox option ${name} persisted: ${persisted}`);
-    res.json({
-      success: true,
-      persisted,
-      ...(backupWarning ? { backupWarning } : {}),
-    });
-  } catch (error: unknown) {
-    log.error("Failed to save sandbox option:", error);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });

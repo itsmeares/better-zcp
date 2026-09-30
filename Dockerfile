@@ -55,7 +55,7 @@ COPY apps/panel-server/ ./apps/panel-server/
 
 COPY --from=builder /app/apps/panel-client/dist ./apps/panel-client/dist
 
-COPY integrations/panelbridge/ ./pz-mod/
+COPY integrations/argus/ ./pz-mod/
 
 COPY infra/docker/entrypoint.sh /usr/local/bin/zomboid-panel-entrypoint
 RUN chmod 0755 /usr/local/bin/zomboid-panel-entrypoint

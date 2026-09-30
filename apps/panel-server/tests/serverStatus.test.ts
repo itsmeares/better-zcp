@@ -9,7 +9,7 @@ describe("isServerObservedRunning", () => {
   it("accepts each direct running signal", () => {
     expect(isServerObservedRunning({ processRunning: true })).toBe(true);
     expect(isServerObservedRunning({ rconConnected: true })).toBe(true);
-    expect(isServerObservedRunning({ bridgeConnected: true })).toBe(true);
+    expect(isServerObservedRunning({ gameIntegrationConnected: true })).toBe(true);
   });
 
   it("keeps a systemd-hosted server online when strict process attribution fails", () => {
@@ -17,7 +17,7 @@ describe("isServerObservedRunning", () => {
       isServerObservedRunning({
         processRunning: false,
         rconConnected: true,
-        bridgeConnected: true,
+        gameIntegrationConnected: true,
       }),
     ).toBe(true);
   });
@@ -36,7 +36,7 @@ describe("isServerObservedRunning", () => {
       isServerObservedRunning({
         processRunning: false,
         rconConnected: true,
-        bridgeConnected: true,
+        gameIntegrationConnected: true,
         hostStateAuthoritative: true,
       }),
     ).toBe(false);

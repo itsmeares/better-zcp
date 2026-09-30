@@ -65,14 +65,14 @@ function verify() {
     assert(version === expectedVersion, `${label} is ${version}, expected ${expectedVersion}`);
   }
 
-  const lua = readText("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
-  const modInfo = readText("integrations/panelbridge/PanelBridge/mod.info");
+  const lua = readText("integrations/argus/Argus/media/lua/server/Argus.lua");
+  const modInfo = readText("integrations/argus/Argus/mod.info");
   const runtime = [...lua.matchAll(/^\s*VERSION\s*=\s*"([^"]+)"/gm)];
   const manifest = [...modInfo.matchAll(/^modversion=([^\r\n]+)$/gm)];
   assert(runtime.length === 1 && manifest.length === 1,
-    "PanelBridge must contain exactly one runtime and mod.info version");
+    "Game integration must contain exactly one runtime and mod.info version");
   assert(runtime[0][1] === manifest[0][1],
-    "PanelBridge runtime and mod.info versions differ");
+    "Game integration runtime and mod.info versions differ");
 
   const releaseManifest = readJson("release/release-manifest.json");
   assert(releaseManifest.version === expectedVersion,
@@ -104,7 +104,7 @@ function verify() {
       `client file hash mismatch: ${relativePath}`);
   }
 
-  console.log(`Release ${expectedVersion} verified: ${sourcePaths.length} client files, PanelBridge ${runtime[0][1]}`);
+  console.log(`Release ${expectedVersion} verified: ${sourcePaths.length} client files, game integration ${runtime[0][1]}`);
 }
 
 try {

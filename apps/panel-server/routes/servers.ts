@@ -90,7 +90,7 @@ function profileRuntime(req: Request) {
     logTailer: get("logTailer"),
     io: get("panelIo"),
     refreshWorkshopChecker: get("refreshWorkshopChecker"),
-    autoInstallBridgeIfNeeded: get("autoInstallBridgeIfNeeded"),
+    gameIntegration: get("gameIntegration"),
     stop: get("stop"),
   };
 }

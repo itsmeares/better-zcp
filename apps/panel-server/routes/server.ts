@@ -1401,51 +1401,6 @@ router.post("/install", async (req, res) => {
           });
         }
 
-        try {
-          const possibleModPaths = [
-            path.join(__dirname, "..", "..", "..", "integrations", "panelbridge", "PanelBridge"),
-            path.join(path.dirname(process.execPath), "pz-mod", "PanelBridge"),
-            path.join(process.cwd(), "pz-mod", "PanelBridge"),
-          ];
-
-          let modSourcePath = null;
-          for (const p of possibleModPaths) {
-            if (fs.existsSync(p)) {
-              modSourcePath = p;
-              break;
-            }
-          }
-
-          if (modSourcePath) {
-            const sourceLuaFile = path.join(
-              modSourcePath,
-              "media",
-              "lua",
-              "server",
-              "PanelBridge.lua",
-            );
-            const destLuaDir = path.join(installPath, "media", "lua", "server");
-            const destLuaFile = path.join(destLuaDir, "PanelBridge.lua");
-
-            if (fs.existsSync(sourceLuaFile)) {
-              if (!fs.existsSync(destLuaDir)) {
-                fs.mkdirSync(destLuaDir, { recursive: true });
-              }
-              fs.copyFileSync(sourceLuaFile, destLuaFile);
-              io.emit("install:log", {
-                type: "stdout",
-                text: "PanelBridge mod installed automatically",
-                progressCode: ProgressCode.PANELBRIDGE_AUTO_INSTALLED,
-              });
-              log.info("PanelBridge mod auto-installed to server");
-            }
-          }
-        } catch (modError: any) {
-          log.warn(
-            `Failed to auto-install PanelBridge mod: ${modError.message}`,
-          );
-        }
-
         io.emit("install:complete", {
           success: true,
           message: "Server installed successfully",
@@ -1718,46 +1673,6 @@ router.post("/quick-setup", async (req, res) => {
         ? `StartServer_${serverName}.bat`
         : `start-server_${serverName}.sh`;
 
-    let panelBridgeInstalled = false;
-    try {
-      const possibleModPaths = [
-        path.join(__dirname, "..", "..", "..", "integrations", "panelbridge", "PanelBridge"),
-        path.join(path.dirname(process.execPath), "pz-mod", "PanelBridge"),
-        path.join(process.cwd(), "pz-mod", "PanelBridge"),
-      ];
-
-      let modSourcePath = null;
-      for (const p of possibleModPaths) {
-        if (fs.existsSync(p)) {
-          modSourcePath = p;
-          break;
-        }
-      }
-
-      if (modSourcePath) {
-        const sourceLuaFile = path.join(
-          modSourcePath,
-          "media",
-          "lua",
-          "server",
-          "PanelBridge.lua",
-        );
-        const destLuaDir = path.join(installPath, "media", "lua", "server");
-        const destLuaFile = path.join(destLuaDir, "PanelBridge.lua");
-
-        if (fs.existsSync(sourceLuaFile)) {
-          if (!fs.existsSync(destLuaDir)) {
-            fs.mkdirSync(destLuaDir, { recursive: true });
-          }
-          fs.copyFileSync(sourceLuaFile, destLuaFile);
-          panelBridgeInstalled = true;
-          log.info("PanelBridge mod auto-installed to server");
-        }
-      }
-    } catch (modError: any) {
-      log.warn(`Failed to auto-install PanelBridge mod: ${modError.message}`);
-    }
-
     await logServerEventBestEffort(
       "server_quick_setup",
       `Created server config for ${serverName} using existing files at ${installPath}`,
@@ -1776,7 +1691,6 @@ router.post("/quick-setup", async (req, res) => {
       serverPort: safeServerPort,
       minMemory: safeMinMemory,
       maxMemory: safeMaxMemory,
-      panelBridgeInstalled,
       warnings,
     });
   } catch (error: any) {
@@ -2752,7 +2666,7 @@ const CONSOLE_LOG_ERROR_PATTERNS = [
 ];
 
 const CONSOLE_LOG_IMPORTANT_PATTERNS = [
-  /^\[PanelBridge\]/,
+  /^\[Argus\]/,
   /SERVER STARTED/,
   /fully-connected/,
   /player-connect/,

@@ -28,7 +28,7 @@ export function apiUrl(
     return `/api${endpoint}`;
   if (
     serverId &&
-    /^\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|panel-bridge)(\/|$)/.test(
+    /^\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|game-integration)(\/|$)/.test(
       endpoint,
     )
   ) {

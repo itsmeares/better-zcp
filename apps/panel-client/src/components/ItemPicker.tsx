@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { panelBridgeApi } from '@/lib/api'
+import { gameIntegrationApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -210,7 +210,7 @@ export function ItemPicker({
     const ctrl = new AbortController()
     ;(async () => {
       try {
-        const data = await panelBridgeApi.getCatalogItems()
+        const data = await gameIntegrationApi.getCatalogItems()
         if (ctrl.signal.aborted) return
         setItems(data.items || [])
         setScannedAt(data.scannedAt)
@@ -251,7 +251,7 @@ export function ItemPicker({
     setScanning(true)
     setScanError(null)
     try {
-      const data = await panelBridgeApi.scanCatalogItems()
+      const data = await gameIntegrationApi.refreshCatalogItems()
       setItems(data.items || [])
       setScannedAt(data.scannedAt)
       toast({
@@ -263,8 +263,8 @@ export function ItemPicker({
       setScanError(msg)
       toast({
         title: 'Item scan failed',
-        description: msg.includes('Bridge not running')
-          ? 'Server must be online with PanelBridge mod active'
+        description: msg.includes('not connected')
+          ? 'The game server must be online with game integration active.'
           : msg,
         variant: 'destructive',
       })
@@ -443,7 +443,7 @@ export function ItemPicker({
             disabled={scanning || disabled}
             // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what Scan needs to succeed, unconditional regardless of disabled state; `disabled` here is a generic pass-through prop no current caller sets, and `scanning` is a self-evident transient busy state (the spinner). Not a disabled-reason. Triaged 2026-08-27.
             title={
-              'Scan server for items (requires running server with PanelBridge)'
+              'Scan the server for modded items (requires the game server to be running)'
             }
             className="shrink-0"
           >

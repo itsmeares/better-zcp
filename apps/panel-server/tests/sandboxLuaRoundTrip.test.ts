@@ -10,6 +10,7 @@ describe("SandboxVars Lua string round trip", () => {
   const values = [
     "",
     "plain text",
+    "null\0followed4",
     "a\\b",
     "\\",
     "\\\\",

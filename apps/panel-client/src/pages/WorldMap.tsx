@@ -26,14 +26,14 @@ import {
   ArrowUpRight,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
-import { BridgeStatusBadge } from '@/components/BridgeStatusBadge'
+import { GameIntegrationStatusBadge } from '@/components/GameIntegrationStatusBadge'
 import { Button } from '@/components/ui/button'
 import {
-  panelBridgeApi,
+  gameIntegrationApi,
+  playersApi,
   serversApi,
   mapApi,
 } from '@/lib/api'
-import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useToast } from '@/components/ui/use-toast'
 import { cn, copyText } from '@/lib/utils'
@@ -44,7 +44,6 @@ import {
 } from './worldMapTileFallback'
 import { buildTileQuery } from './worldMapTileUrl'
 import { mapConfigsEqual } from './worldMapConfigEqual'
-import { bridgeSupportsPlayerStatus } from './worldMapBridgeVersion'
 import {
   diagnoseTileFailure,
   tileFailureCopy,
@@ -69,22 +68,6 @@ interface MapPlayer {
   prevX?: number
   prevY?: number
   animProgress?: number
-}
-
-interface RawBridgePlayer {
-  name?: string
-  username?: string
-  displayName?: string
-  x: number
-  y: number
-  z?: number
-  health?: number
-  isAlive?: boolean
-  isInfected?: boolean
-  accessLevel?: string
-  hunger?: number
-  thirst?: number
-  fatigue?: number
 }
 
 interface ContextMenu {
@@ -295,13 +278,8 @@ export default function WorldMap() {
     }
   }, [contextMenu])
   const [selectedPlayer, setSelectedPlayer] = useState<MapPlayer | null>(null)
-  const [bridgeConnected, setBridgeConnected] = useState(false)
-  const [bridgeLoading, setBridgeLoading] = useState(false)
-  const [bridgeVersion, setBridgeVersion] = useState<string | null>(null)
-  const bridgeVersionRef = useRef<string | null>(null)
-  useEffect(() => {
-    bridgeVersionRef.current = bridgeVersion
-  }, [bridgeVersion])
+  const [gameIntegrationConnected, setGameIntegrationConnected] = useState(false)
+  const [gameIntegrationLoading, setGameIntegrationLoading] = useState(false)
   const [hasActiveServer, setHasActiveServer] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null)
@@ -412,8 +390,8 @@ export default function WorldMap() {
 
   useEffect(() => {
     if (hasActiveServer) return
-    setBridgeConnected(false)
-    setBridgeLoading(false)
+    setGameIntegrationConnected(false)
+    setGameIntegrationLoading(false)
     setPlayers([])
     setLoading(false)
   }, [hasActiveServer])
@@ -791,7 +769,7 @@ export default function WorldMap() {
 
   const fetchPlayerPositions = useCallback(async () => {
     if (!hasActiveServer) {
-      setBridgeConnected(false)
+      setGameIntegrationConnected(false)
       setPlayers([])
       setLoading(false)
       return
@@ -799,78 +777,75 @@ export default function WorldMap() {
     if (!playerFetchGateRef.current.enter()) return
 
     try {
-      const res = await panelBridgeApi.getServerInfo()
-      const rawPlayers =
-        res.success && res.data?.players
-          ? Array.isArray(res.data.players)
-            ? res.data.players
-            : Object.values(res.data.players)
-          : null
+      const res = await gameIntegrationApi.getServerInfo()
+      const rawPlayers = res.success ? (res.data?.players ?? []) : null
       if (rawPlayers) {
-        setBridgeConnected(true)
-        const statusFieldsSupported = bridgeSupportsPlayerStatus(
-          bridgeVersionRef.current,
-        )
+        setGameIntegrationConnected(true)
         setPlayers((prev) => {
           const prevMap = new globalThis.Map(
             prev.map((p) => [p.username || p.displayName, p]),
           )
-          return rawPlayers.map((p: RawBridgePlayer) => {
-            const key = (p.name || p.username) as string
+          return rawPlayers.flatMap((p) => {
+            if (
+              typeof p.x !== 'number' ||
+              !Number.isFinite(p.x) ||
+              typeof p.y !== 'number' ||
+              !Number.isFinite(p.y)
+            ) {
+              return []
+            }
+            const key = p.username
             const old = prevMap.get(key)
-            return {
+            return [{
               username: key,
               displayName: p.displayName || key,
               x: p.x,
               y: p.y,
               z: p.z ?? 0,
-              health: p.health,
-              isAlive: statusFieldsSupported ? p.isAlive : undefined,
-              isInfected: statusFieldsSupported ? p.isInfected : undefined,
-              accessLevel: statusFieldsSupported ? p.accessLevel : undefined,
-              hunger: p.hunger,
-              thirst: p.thirst,
-              fatigue: p.fatigue,
+              health: p.health?.overallBodyHealth,
+              isAlive: p.isAlive,
+              isInfected: p.health?.isInfected,
+              accessLevel: p.accessLevel,
+              hunger: p.stats?.hunger,
+              thirst: p.stats?.thirst,
+              fatigue: p.stats?.fatigue,
               prevX: old ? old.x : p.x,
               prevY: old ? old.y : p.y,
               animProgress: old && (old.x !== p.x || old.y !== p.y) ? 0 : 1,
-            }
+            }]
           })
         })
       }
     } catch {
-      setBridgeConnected(false)
+      setGameIntegrationConnected(false)
     } finally {
       playerFetchGateRef.current.leave()
       setLoading(false)
     }
   }, [hasActiveServer])
 
-  const checkBridgeStatus = useCallback(async () => {
+  const checkGameIntegrationStatus = useCallback(async () => {
     if (!hasActiveServer) {
-      setBridgeConnected(false)
-      setBridgeVersion(null)
-      setBridgeLoading(false)
+      setGameIntegrationConnected(false)
+      setGameIntegrationLoading(false)
       return
     }
 
-    setBridgeLoading(true)
+    setGameIntegrationLoading(true)
     try {
-      const res = await panelBridgeApi.getStatus()
-      setBridgeConnected(res.modConnected === true)
-      setBridgeVersion(res.modStatus?.version || null)
+      const res = await gameIntegrationApi.getStatus()
+      setGameIntegrationConnected(res.modConnected === true)
     } catch {
-      setBridgeConnected(false)
-      setBridgeVersion(null)
+      setGameIntegrationConnected(false)
     } finally {
-      setBridgeLoading(false)
+      setGameIntegrationLoading(false)
     }
   }, [hasActiveServer])
 
   useEffect(() => {
-    checkBridgeStatus()
+    checkGameIntegrationStatus()
     fetchPlayerPositions()
-  }, [fetchPlayerPositions, checkBridgeStatus])
+  }, [fetchPlayerPositions, checkGameIntegrationStatus])
 
   useEffect(() => {
     if (!hasActiveServer) return
@@ -1177,7 +1152,7 @@ export default function WorldMap() {
 
       ctx.font = '400 11px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = C.emptySubtitle
-      const subtitle = 'Player positions appear when PanelBridge is connected'
+      const subtitle = 'Player positions appear when Game integration is connected'
       const subtitleHalfWidth = ctx.measureText(subtitle).width / 2
       const subtitleX = Math.max(W / 2, railClearance + subtitleHalfWidth)
       ctx.fillText(subtitle, subtitleX, H / 2 + 10)
@@ -1671,44 +1646,21 @@ export default function WorldMap() {
     async (username: string, x: number, y: number, z: number) => {
       setActionLoading('teleport')
       try {
-        const response = await panelBridgeApi.sendCommand('teleportPlayer', {
-          username,
+        await playersApi.teleport(username, {
           x: Math.round(x),
           y: Math.round(y),
           z: Math.round(z),
         })
         if (!mountedRef.current) return
-        const verifyState = getBridgeVerifiedState(
-          'teleportPlayer',
-          response?.data,
-        )
-        toast(
-          verifyState === 'unverifiable'
-            ? {
-                title: 'Player teleported',
-                description:
-                  String('Player teleported') +
-                  ' was sent, but the mod could not confirm it took effect.',
-                variant: 'default',
-              }
-            : verifyState === 'old-bridge'
-              ? {
-                  title: 'Player teleported',
-                  description:
-                    String('Player teleported') +
-                    " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
-                  variant: 'default',
-                }
-              : {
-                  title: 'Player teleported',
-                  description:
-                    String(username) +
-                    ' → ' +
-                    String(Math.round(x)) +
-                    ', ' +
-                    String(Math.round(y)),
-                },
-        )
+        toast({
+          title: 'Player teleported',
+          description:
+            String(username) +
+            ' → ' +
+            String(Math.round(x)) +
+            ', ' +
+            String(Math.round(y)),
+        })
         fetchPlayerPositions()
       } catch (err) {
         if (!mountedRef.current) return
@@ -1766,9 +1718,9 @@ export default function WorldMap() {
         icon={<MapIcon className="w-5 h-5" />}
         actions={
           <div className="flex items-center gap-2">
-            <BridgeStatusBadge
-              connected={bridgeConnected}
-              loading={bridgeLoading}
+            <GameIntegrationStatusBadge
+              connected={gameIntegrationConnected}
+              loading={gameIntegrationLoading}
             />
             <Button
               variant="outline"
@@ -1987,7 +1939,7 @@ export default function WorldMap() {
                 <span
                   className={cn(
                     'flex items-center gap-1',
-                    bridgeConnected
+                    gameIntegrationConnected
                       ? 'text-emerald-400/90'
                       : 'text-muted-foreground/60',
                   )}
@@ -1995,12 +1947,12 @@ export default function WorldMap() {
                   <span
                     className={cn(
                       'h-1.5 w-1.5 rounded-full',
-                      bridgeConnected
+                      gameIntegrationConnected
                         ? 'bg-emerald-400 animate-pulse'
                         : 'bg-muted-foreground/40',
                     )}
                   />
-                  {bridgeConnected ? 'live' : 'offline'}
+                  {gameIntegrationConnected ? 'live' : 'offline'}
                 </span>
               </span>
               <span className="flex items-center gap-1.5">
@@ -2065,7 +2017,7 @@ export default function WorldMap() {
                   <span
                     className={cn(
                       'h-1.5 w-1.5 rounded-full',
-                      bridgeConnected
+                      gameIntegrationConnected
                         ? 'bg-muted-foreground/40'
                         : 'bg-destructive/70',
                     )}
@@ -2073,9 +2025,9 @@ export default function WorldMap() {
                   <span>
                     {loading
                       ? 'loading…'
-                      : bridgeConnected
+                      : gameIntegrationConnected
                         ? 'no players online'
-                        : 'bridge offline'}
+                        : 'game integration offline'}
                   </span>
                 </div>
               ))}
@@ -2306,11 +2258,12 @@ export default function WorldMap() {
                     disabled={actionLoading !== null}
                     onClick={() => {
                       setActionLoading('heal-card')
-                      panelBridgeApi
-                        .sendCommand('healPlayer', {
-                          username: selectedPlayer.username,
-                        })
-                        .then(() => {
+                      gameIntegrationApi
+                        .healPlayer(selectedPlayer.username)
+                        .then((response) => {
+                          if (!response.success) {
+                            throw new Error(response.error || 'Heal failed.')
+                          }
                           toast({
                             title: 'Healed',
                             description:
@@ -2335,36 +2288,9 @@ export default function WorldMap() {
                       disabled={actionLoading !== null}
                       onClick={() => {
                         setActionLoading('god-card')
-                        panelBridgeApi
-                          .sendCommand('setGodMode', {
-                            username: selectedPlayer.username,
-                            enabled: true,
-                          })
-                          .then((response) => {
-                            const state = getBridgeVerifiedState(
-                              'setGodMode',
-                              response?.data,
-                            )
-                            if (state === 'unverifiable') {
-                              toast({
-                                title: 'God mode enabled',
-                                description:
-                                  String('God') +
-                                  ' was sent, but the mod could not confirm it took effect.',
-                                variant: 'default',
-                              })
-                            } else if (state === 'old-bridge') {
-                              toast({
-                                title: 'God mode enabled',
-                                description:
-                                  String('God') +
-                                  " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
-                                variant: 'default',
-                              })
-                            } else {
-                              toast({ title: 'God mode enabled' })
-                            }
-                          })
+                        playersApi
+                          .setGodMode(selectedPlayer.username, true)
+                          .then(() => toast({ title: 'God mode enabled' }))
                           .catch(() =>
                             toast({ title: 'Error', variant: 'destructive' }),
                           )
@@ -2512,11 +2438,12 @@ export default function WorldMap() {
                   tone="success"
 
                   onClick={() => {
-                    panelBridgeApi
-                      .sendCommand('healPlayer', {
-                        username: contextMenu.player!.username,
-                      })
-                      .then(() => {
+                    gameIntegrationApi
+                      .healPlayer(contextMenu.player!.username)
+                      .then((response) => {
+                        if (!response.success) {
+                          throw new Error(response.error || 'Heal failed.')
+                        }
                         toast({
                           title: 'Healed',
                           description:
@@ -2565,7 +2492,7 @@ export default function WorldMap() {
                       }
                       tone="primary"
                       loading={actionLoading === 'teleport'}
-                      disabled={!bridgeConnected}
+                      disabled={!gameIntegrationConnected}
                       onClick={() => {
                         teleportPlayerTo(
                           pl.username,

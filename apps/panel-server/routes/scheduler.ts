@@ -177,7 +177,7 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Invalid command (max 2000 chars)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
     if (!isSchedulableCommand(command)) {
-      return res.status(400).json({ error: 'This PanelBridge action is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
+      return res.status(400).json({ error: 'This scheduled command is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
     if (typeof cronExpression !== 'string' || cronExpression.length > 100) {
       return res.status(400).json({ error: 'Invalid cron expression format', code: ErrorCode.SCHEDULER_INVALID_CRON_FORMAT });
@@ -253,7 +253,7 @@ router.put('/tasks/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid command (max 2000 characters)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
     if (command !== undefined && !isSchedulableCommand(command) && enabled !== false && enabled !== 0) {
-      return res.status(400).json({ error: 'This PanelBridge action is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
+      return res.status(400).json({ error: 'This scheduled command is no longer supported', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
     if (
       enabled !== undefined &&

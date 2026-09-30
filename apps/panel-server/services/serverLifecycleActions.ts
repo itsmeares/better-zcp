@@ -3,12 +3,18 @@ import { createLogger } from "../utils/logger.ts";
 import { getCurrentServer, logServerEvent } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
-import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
+import {
+  ensureBundledGameContainer,
+  getDockerClient,
+  isBundledGameProfile,
+  resolveDockerHostSignal,
+  runManagedLifecycle,
+} from "./managedContainer.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "./lifecycleCoordinator.ts";
-import { autoInstallBridgeIfNeeded } from "./panelBridgeInstaller.ts";
+import { ensureGameIntegrationInstalled } from "./gameIntegrationInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import {
   attemptBoundedSaveBeforeForceStop,
@@ -110,8 +116,6 @@ export async function startServerAction(
     }
 
     if (activeServer.installPath && hasActiveSteamOperation(steamInstallKey(activeServer.installPath))) throw lifecycleError("A Steam operation is in progress for this game install.", 409);
-    autoInstallBridgeIfNeeded(activeServer);
-
     if (isFirstBootMissingAdminPassword(activeServer)) {
       throw lifecycleError(
         `${activeServer.name || activeServer.serverName} has never started before and has no admin password set. ` +
@@ -127,6 +131,13 @@ export async function startServerAction(
       { managedHandled: Boolean(activeServer.dockerContainerName) && !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(activeServer)) },
     );
     if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") await ensureBundledGameContainer(activeServer);
+    const serverState = activeServer.dockerContainerName || activeServer.dockerContainerId
+      ? await resolveDockerHostSignal(activeServer, getDockerClient())
+      : await runtime.serverManager.getServerProcessDetails();
+    if (!serverState || serverState.scanFailed || typeof serverState.running !== "boolean") {
+      throw lifecycleError("Cannot verify that the game is stopped before installing its integration.", 503);
+    }
+    if (!serverState.running) await ensureGameIntegrationInstalled(activeServer);
     const managed = await runManagedLifecycle("start", {
       serverId: activeServer.id ?? null,
     });

@@ -9,7 +9,7 @@ export interface StatusSignal {
 interface ServerStatusBadgeProps {
   host?: StatusSignal | null
   server?: StatusSignal | null
-  bridge?: StatusSignal | null
+  gameIntegration?: StatusSignal | null
   compact?: boolean
   className?: string
 }
@@ -112,11 +112,11 @@ function CompactBadge({
 export function ServerStatusBadge({
   host,
   server,
-  bridge,
+  gameIntegration,
   compact,
   className,
 }: ServerStatusBadgeProps) {
-  const signals = [host, server, bridge].filter((s): s is StatusSignal =>
+  const signals = [host, server, gameIntegration].filter((s): s is StatusSignal =>
     Boolean(s),
   )
 

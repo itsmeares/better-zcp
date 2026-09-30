@@ -78,16 +78,16 @@ describe("probeInstallPath", () => {
     fs.rmSync(other, { recursive: true, force: true });
   });
 
-  it("reports the bundled PanelBridge mod when present", () => {
+  it("reports the bundled Argus integration when present", () => {
     fs.writeFileSync(path.join(tmpRoot, "start-server.sh"), "");
     fs.mkdirSync(path.join(tmpRoot, "media", "lua", "server"), {
       recursive: true,
     });
     fs.writeFileSync(
-      path.join(tmpRoot, "media", "lua", "server", "PanelBridge.lua"),
+      path.join(tmpRoot, "media", "lua", "server", "Argus.lua"),
       "",
     );
-    expect(probeInstallPath(tmpRoot).hasPanelBridge).toBe(true);
+    expect(probeInstallPath(tmpRoot).hasGameIntegration).toBe(true);
   });
 });
 

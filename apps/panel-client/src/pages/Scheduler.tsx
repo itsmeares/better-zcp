@@ -121,13 +121,6 @@ function getCommonCommands() {
       value: 'servermsg Server maintenance in progress',
     },
     { label: 'Check Mod Updates', value: 'checkModsNeedUpdate' },
-    { label: 'Restore Utilities', value: 'bridge:restoreUtilities' },
-    { label: 'Shut Off Utilities', value: 'bridge:shutOffUtilities' },
-    { label: 'Save World (PanelBridge)', value: 'bridge:saveWorld' },
-    {
-      label: 'Broadcast (Server Chat)',
-      value: 'bridge:sendToServerChat {"message":"Scheduled broadcast"}',
-    },
   ]
 }
 
@@ -661,6 +654,24 @@ export default function Scheduler() {
       toast({
         title: 'Error',
         description: 'Please fill in all fields',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const command = newTaskCommand.trim()
+    const isUnsupportedAction = command.toLowerCase().startsWith('bridge:')
+    const wasUnsupportedAction = editingTask?.command
+      .trim()
+      .toLowerCase()
+      .startsWith('bridge:')
+    if (
+      isUnsupportedAction &&
+      (!wasUnsupportedAction || command !== editingTask?.command.trim())
+    ) {
+      toast({
+        title: 'Unsupported scheduled action',
+        description: 'Choose a listed command or another custom RCON command.',
         variant: 'destructive',
       })
       return
@@ -1268,26 +1279,9 @@ export default function Scheduler() {
                 className="mt-2"
                 value={newTaskCommand}
                 onChange={(e) => setNewTaskCommand(e.target.value)}
-                placeholder={'Or enter custom command'}
+                placeholder={'Or enter custom RCON command'}
                 maxLength={2000}
               />
-              {newTaskCommand.startsWith('bridge:') && (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  <>
-                    {'Format: '}
-                    <code className="text-foreground">
-                      {'bridge:\u003caction> {json args}'}
-                    </code>
-                    {' — e.g. '}
-                    <code className="ms-1 text-foreground">
-                      {'bridge:saveWorld'}
-                    </code>
-                    {
-                      '. Args are optional. Only allow-listed actions run via the scheduler.'
-                    }
-                  </>
-                </p>
-              )}
             </div>
             <div>
               <Label>{'Target Server'}</Label>

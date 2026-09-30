@@ -16,9 +16,7 @@ import {
   EyeOff,
   Loader2,
   Key,
-  Cloud,
   Zap,
-  CheckCircle2,
   XCircle,
   Download,
   RefreshCw,
@@ -32,7 +30,6 @@ import {
   RotateCw,
   User,
   ExternalLink,
-  FolderOpen,
   Palette,
   Check,
   MessageCircle,
@@ -71,11 +68,11 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/components/ui/use-toast'
-import { ToastAction } from '@/components/ui/toast'
 import { EmptyState } from '@/components/EmptyState'
 import {
   configApi,
-  panelBridgeApi,
+  gameIntegrationApi,
+  type GameIntegrationStatus,
   backupApi,
   authApi,
   serversApi,
@@ -96,16 +93,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useTheme, type ThemeName } from '@/contexts/ThemeContext'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
-import { BridgeStatusBadge } from '@/components/BridgeStatusBadge'
+import { GameIntegrationStatusBadge } from '@/components/GameIntegrationStatusBadge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -120,7 +109,6 @@ import {
 } from '@/components/ui/tooltip'
 
 interface AppSettings {
-  panelBridgeAutoUpdate: boolean
   autoStartServer: boolean
 
   modCheckInterval: string
@@ -178,17 +166,6 @@ export function isValidPort(port: number): boolean {
   return Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
-function formatBridgeAge(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return 'unknown'
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const m = Math.round(seconds / 60)
-  if (m < 60) return `${m}m`
-  const h = Math.round(m / 60)
-  if (h < 48) return `${h}h`
-  const d = Math.round(h / 24)
-  return `${d}d`
-}
-
 function ThemeSelect() {
   const { theme, setTheme } = useTheme()
   return (
@@ -208,7 +185,6 @@ export default function Settings() {
   const runtimeInfo = useRuntimeInfo()
   const socket = useSocket()
   const [settings, setSettings] = useState<AppSettings>({
-    panelBridgeAutoUpdate: true,
     autoStartServer: false,
     modCheckInterval: '5',
     modAutoRestart: true,
@@ -287,69 +263,13 @@ export default function Settings() {
   const [resettingLocalPassword, setResettingLocalPassword] = useState(false)
   const [showLocalResetPassword, setShowLocalResetPassword] = useState(false)
 
-  const [bridgeStatus, setBridgeStatus] = useState<{
-    configured: boolean
-    bridgePath: string | null
-    isRunning: boolean
-    pendingCommands: number
-    modConnected: boolean
-    consecutiveFailures?: number
-    hasFileWatcher?: boolean
-    transport?: {
-      type: 'local'
-      running: boolean
-      lastLatencyMs?: number | null
-      lastError?: string | null
-      lastErrorGuidance?: string | null
-      lastErrorCode?: string | null
-    }
-    config?: {
-      statusStaleMs: number
-      pollIntervalMs: number
-      statusCheckMs: number
-    }
-    connection?: {
-      healthy: boolean
-      canSendCommands: boolean
-      summary: string
-      issues: string[]
-      checks: Record<string, boolean | number | null>
-    }
-    statusFile?: {
-      exists: boolean
-      path?: string
-      size?: number
-      modified?: string
-      age?: number
-      ageSeconds?: number
-      error?: string
-    }
-    modStatus: {
-      alive: boolean
-      version: string
-      serverName: string
-      playerCount?: number
-      players: string[]
-      path: string
-      timestamp: number
-      age?: number
-      error?: string
-    } | null
-    detectedPaths?: {
-      serverName: string
-      installPath: string
-      zomboidDataPath: string
-    } | null
-  } | null>(null)
-  const [bridgeLoading, setBridgeLoading] = useState(false)
-  const [bridgeError, setBridgeError] = useState<string | null>(null)
-  const [pinging, setPinging] = useState(false)
-  const [manualBridgePath, setManualBridgePath] = useState('')
+  const [gameIntegrationStatus, setGameIntegrationStatus] =
+    useState<GameIntegrationStatus | null>(null)
+  const [gameIntegrationLoading, setGameIntegrationLoading] = useState(false)
+  const [gameIntegrationError, setGameIntegrationError] = useState<string | null>(null)
+  const hasLoadedGameIntegrationStatus = useRef(false)
   const [servers, setServers] = useState<ServerInstance[]>([])
-  const [serversLoadError, setServersLoadError] = useState(false)
-  const [selectedInstallServerId, setSelectedInstallServerId] =
-    useState<string>('')
-  const [installingMod, setInstallingMod] = useState(false)
+  const [installingIntegration, setInstallingIntegration] = useState(false)
 
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
   const [backups, setBackups] = useState<ServerBackupArchive[]>([])
@@ -412,13 +332,12 @@ export default function Settings() {
         'RCON connection used for commands, plus whether the game server starts with the panel.',
     },
     {
-      id: 'bridge',
-      label: 'PanelBridge',
+      id: 'game-integration',
+      label: 'Game integration',
       icon: Zap,
       group: 'Game server',
-      tip: 'Lua mod link for local server files',
-      description:
-        'PanelBridge Lua mod link for weather, teleport, and item control.',
+      tip: 'Live game data and player actions',
+      description: 'Status and installation for live game integration features.',
     },
     {
       id: 'mods',
@@ -1048,19 +967,20 @@ export default function Settings() {
     }
   }
 
-  const fetchBridgeStatus = useCallback(async () => {
+  const fetchGameIntegrationStatus = useCallback(async () => {
+    if (!hasLoadedGameIntegrationStatus.current) setGameIntegrationLoading(true)
     try {
-      const status = await panelBridgeApi.getStatus()
-      setBridgeStatus(status)
-      setBridgeError(null)
+      const status = await gameIntegrationApi.getStatus()
+      setGameIntegrationStatus(status)
+      setGameIntegrationError(null)
     } catch (error) {
-      reportClientError('Failed to fetch bridge status.', error)
-      setBridgeError(
-        getUserErrorMessage(
-          error,
-          "Couldn't reach the bridge status endpoint.",
-        ),
+      reportClientError('Failed to fetch game integration status.', error)
+      setGameIntegrationError(
+        getUserErrorMessage(error, "Couldn't load game integration status."),
       )
+    } finally {
+      hasLoadedGameIntegrationStatus.current = true
+      setGameIntegrationLoading(false)
     }
   }, [])
 
@@ -1068,16 +988,10 @@ export default function Settings() {
     try {
       const data = await serversApi.getAll()
       setServers(data.servers || [])
-      setServersLoadError(false)
-      const activeServer = data.servers?.find((s) => s.isActive)
-      if (activeServer && !selectedInstallServerId) {
-        setSelectedInstallServerId(String(activeServer.id))
-      }
     } catch (error) {
       reportClientError('Failed to fetch servers.', error)
-      setServersLoadError(true)
     }
-  }, [selectedInstallServerId])
+  }, [])
 
   useEffect(() => {
     if (!socket) return
@@ -1093,82 +1007,44 @@ export default function Settings() {
     }
   }, [socket, fetchSettings, fetchServers, isDirty])
 
-  const handleInstallMod = async () => {
-    if (!selectedInstallServerId) {
-      toast({
-        title: 'Select a Server',
-        description:
-          'Choose the server where you want to install PanelBridge.lua.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setInstallingMod(true)
+  const handleInstallIntegration = async () => {
+    setInstallingIntegration(true)
     try {
-      const result = await panelBridgeApi.installModAuto(
-        selectedInstallServerId,
-      )
+      const result = await gameIntegrationApi.install()
+      if (!result.success) throw new Error(result.error || 'Installation failed.')
+      const restartRequired = result.data?.restartRequired === true
       toast({
-        title: 'PanelBridge Installed',
-        description:
-          'PanelBridge.lua was copied to ' +
-          String(result.serverName || 'the selected server') +
-          '.',
+        title: 'Game integration installed',
+        description: restartRequired
+          ? 'The integration is installed. Restart the game server to load it.'
+          : result.message || 'The configured server is up to date.',
         variant: 'success' as const,
       })
+      await fetchGameIntegrationStatus()
     } catch (error) {
       toast({
-        title: 'Installation Failed',
+        title: 'Installation failed',
         description: getUserErrorMessage(
           error,
-          'The panel could not copy PanelBridge.lua. Verify the server path and permissions, then try again.',
+          'The panel could not install the game integration for the configured server.',
         ),
         variant: 'destructive',
       })
     } finally {
-      setInstallingMod(false)
+      setInstallingIntegration(false)
     }
   }
 
-  const bridgeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const bridgeStatusRef = useRef(bridgeStatus)
-
   useEffect(() => {
-    bridgeStatusRef.current = bridgeStatus
-  }, [bridgeStatus])
-
-  useEffect(() => {
-    fetchBridgeStatus()
-    fetchServers()
-
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-    const scheduleNextFetch = () => {
-      const status = bridgeStatusRef.current
-      const interval = status?.isRunning && !status?.modConnected ? 3000 : 10000
-
-      timeoutId = setTimeout(async () => {
-        if (document.visibilityState !== 'hidden') {
-          await fetchBridgeStatus()
-        }
-        scheduleNextFetch()
-      }, interval)
-    }
-
-    scheduleNextFetch()
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
+    void fetchGameIntegrationStatus()
+    void fetchServers()
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        void fetchGameIntegrationStatus()
       }
-      if (bridgeIntervalRef.current) {
-        clearInterval(bridgeIntervalRef.current)
-        bridgeIntervalRef.current = null
-      }
-    }
-  }, [fetchBridgeStatus, fetchServers])
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [fetchGameIntegrationStatus, fetchServers])
 
   const fetchBackupStatus = useCallback(async () => {
     try {
@@ -1367,176 +1243,16 @@ export default function Settings() {
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
   }
 
-  const fetchBridgeStatusRef = useRef(fetchBridgeStatus)
-  useEffect(() => {
-    fetchBridgeStatusRef.current = fetchBridgeStatus
-  }, [fetchBridgeStatus])
-
   useEffect(() => {
     if (!socket) return
-
-    const handleBridgeStatus = (data: {
-      isRunning: boolean
-      bridgePath: string
-    }) => {
-      setBridgeStatus((prev) =>
-        prev
-          ? { ...prev, isRunning: data.isRunning, bridgePath: data.bridgePath }
-          : null,
-      )
-      fetchBridgeStatusRef.current()
-    }
-
-    const handleModStatus = (data: {
-      alive: boolean
-      version?: string
-      serverName?: string
-      playerCount?: number
-      players?: string[] | Record<string, unknown>
-      path?: string
-      timestamp?: number
-    }) => {
-      setBridgeStatus((prev) => {
-        if (!prev) return null
-        const prevModStatus = prev.modStatus
-        const newModStatus = {
-          alive: data.alive,
-          version: data.version || prevModStatus?.version || '',
-          serverName: data.serverName || prevModStatus?.serverName || '',
-          playerCount: data.alive ? (data.playerCount ?? 0) : undefined,
-          players: Array.isArray(data.players)
-            ? data.players
-            : Object.keys(data.players || {}),
-          path: data.path || prevModStatus?.path || '',
-          timestamp: data.timestamp || Date.now(),
-        }
-        return {
-          ...prev,
-          modConnected: data.alive,
-          modStatus: newModStatus,
-        }
-      })
-    }
-
-    const handleBridgeConfigured = (data: { bridgePath: string }) => {
-      setBridgeStatus((prev) =>
-        prev
-          ? { ...prev, bridgePath: data.bridgePath, configured: true }
-          : null,
-      )
-      fetchBridgeStatusRef.current()
-    }
-
-    socket.on('panelBridge:status', handleBridgeStatus)
-    socket.on('panelBridge:modStatus', handleModStatus)
-    socket.on('panelBridge:configured', handleBridgeConfigured)
-
+    const refreshStatus = () => void fetchGameIntegrationStatus()
+    socket.on('gameIntegration:status', refreshStatus)
+    socket.on('gameIntegration:modStatus', refreshStatus)
     return () => {
-      socket.off('panelBridge:status', handleBridgeStatus)
-      socket.off('panelBridge:modStatus', handleModStatus)
-      socket.off('panelBridge:configured', handleBridgeConfigured)
+      socket.off('gameIntegration:status', refreshStatus)
+      socket.off('gameIntegration:modStatus', refreshStatus)
     }
-  }, [socket])
-
-  const handleAutoConfigure = async () => {
-    setBridgeLoading(true)
-    setBridgeError(null)
-    try {
-      const result = await panelBridgeApi.autoConfigure()
-      toast({
-        title: 'Bridge Auto-Configured',
-        description: 'Connected to server: ' + String(result.serverName),
-        variant: 'success' as const,
-      })
-      await fetchBridgeStatus()
-    } catch (error) {
-      setBridgeError(getUserErrorMessage(error, 'Failed to auto-configure'))
-    } finally {
-      setBridgeLoading(false)
-    }
-  }
-
-  const handleStopBridge = async () => {
-    setBridgeLoading(true)
-    try {
-      await panelBridgeApi.stop()
-      toast({
-        title: 'Bridge Stopped',
-        description: 'Panel Bridge has been stopped',
-        variant: 'success' as const,
-      })
-      await fetchBridgeStatus()
-    } catch (error) {
-      toast({
-        title: 'Failed to Stop',
-        description: getUserErrorMessage(
-          error,
-          'The panel could not stop Panel Bridge. Try again.',
-        ),
-        variant: 'destructive',
-      })
-    } finally {
-      setBridgeLoading(false)
-    }
-  }
-
-  const handleManualConfigure = async () => {
-    const trimmed = manualBridgePath.trim()
-    if (!trimmed) return
-    setBridgeLoading(true)
-    setBridgeError(null)
-    try {
-      const result = await panelBridgeApi.configureDirect(trimmed)
-      toast({
-        title: 'Bridge Configured',
-        description: 'Watching: ' + String(result.bridgePath),
-        variant: 'success' as const,
-      })
-      setManualBridgePath('')
-      await fetchBridgeStatus()
-    } catch (error) {
-      setBridgeError(
-        getUserErrorMessage(
-          error,
-          'Failed to configure bridge with manual path',
-        ),
-      )
-    } finally {
-      setBridgeLoading(false)
-    }
-  }
-
-  const handlePingMod = async () => {
-    setPinging(true)
-    try {
-      const result = await panelBridgeApi.ping()
-      toast({
-        title: 'Mod Connected!',
-        description:
-          'Connected to ' + String(result.modStatus?.serverName || 'server'),
-        variant: 'success' as const,
-      })
-    } catch (error) {
-      toast({
-        title: 'Mod Did Not Respond',
-        description: getUserErrorMessage(
-          error,
-          'No response from PanelBridge.lua. Make sure the game server is running and the mod is enabled.',
-        ),
-        variant: 'destructive',
-        action: (
-          <ToastAction
-            altText={'Open PanelBridge settings'}
-            onClick={() => handleTabChange('bridge')}
-          >
-            {'Open Bridge'}
-          </ToastAction>
-        ),
-      })
-    } finally {
-      setPinging(false)
-    }
-  }
+  }, [socket, fetchGameIntegrationStatus])
 
   const updateSetting = <K extends keyof AppSettings>(
     key: K,
@@ -1571,14 +1287,7 @@ export default function Settings() {
     updateSetting('corsAllowPrivateNetworks', value)
   }
 
-  const selectedInstallServer =
-    servers.find((server) => String(server.id) === selectedInstallServerId) ||
-    null
   const activeServer = servers.find((server) => server.isActive) || null
-  const sep = selectedInstallServer?.installPath?.includes('\\') ? '\\' : '/'
-  const selectedInstallTarget = selectedInstallServer
-    ? `${selectedInstallServer.installPath}${sep}media${sep}lua${sep}server${sep}PanelBridge.lua`
-    : null
 
   useEffect(() => {
     let cancelled = false
@@ -2840,658 +2549,116 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="bridge" className="mt-0">
-            <Card id="settings-bridge">
+          <TabsContent value="game-integration" className="mt-0">
+            <Card id="settings-game-integration">
               <CardHeader className="pb-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-primary" />
-                      {'Panel Bridge'}
+                      <Zap className="h-4 w-4 text-primary" />
+                      {'Game integration'}
                     </CardTitle>
-                    <CardDescription className="flex items-center gap-2">
-                      {
-                        'Connects this panel to the live game for weather, utilities, richer chat, and other in-world actions'
-                      }
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <button className="inline-flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap">
-                            <Info className="w-3.5 h-3.5" />
-                            {'How it works'}
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                              <Zap className="w-4 h-4 text-primary" />
-                              {'Panel Bridge'}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {
-                                'A Lua mod that runs inside Project Zomboid, giving this panel direct access to the live game world.'
-                              }
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-5 text-sm">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                                {'What it unlocks'}
-                              </p>
-                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                                  <p className="font-medium text-foreground">
-                                    {'Weather & Climate'}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {'Storms, rain, temperature, fog, wind'}
-                                  </p>
-                                </div>
-                                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                                  <p className="font-medium text-foreground">
-                                    {'Player Actions'}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {'Teleport, heal, god mode, inventory'}
-                                  </p>
-                                </div>
-                                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                                  <p className="font-medium text-foreground">
-                                    {'World Control'}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {'Utilities, zombies, time, sandbox'}
-                                  </p>
-                                </div>
-                                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                                  <p className="font-medium text-foreground">
-                                    {'Chat & Sound'}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {'Server chat, admin chat, world sounds'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                                {'How it works'}
-                              </p>
-                              <p className="text-muted-foreground mb-3">
-                                <>
-                                  {
-                                    'Two pieces meet in the middle: the panel runs a file watcher, and '
-                                  }
-                                  <strong className="text-foreground">
-                                    {'PanelBridge.lua'}
-                                  </strong>
-                                  {
-                                    ' runs inside the game. They exchange commands via JSON files.'
-                                  }
-                                </>
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                                {'Setup'}
-                              </p>
-                              <ol className="space-y-2">
-                                <li className="flex gap-3 items-start">
-                                  <span className="flex-none w-5 h-5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
-                                    1
-                                  </span>
-                                  <div>
-                                    <p className="font-medium">
-                                      {'Install the Lua file'}
-                                    </p>
-                                    <p className="text-muted-foreground text-xs">
-                                      {
-                                        'Use the Install section on this tab to copy PanelBridge.lua into your server.'
-                                      }
-                                    </p>
-                                  </div>
-                                </li>
-                                <li className="flex gap-3 items-start">
-                                  <span className="flex-none w-5 h-5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
-                                    2
-                                  </span>
-                                  <div>
-                                    <p className="font-medium">
-                                      {'Run Auto Setup'}
-                                    </p>
-                                    <p className="text-muted-foreground text-xs">
-                                      {
-                                        'Points the panel at the correct server data folder and starts the watcher.'
-                                      }
-                                    </p>
-                                  </div>
-                                </li>
-                                <li className="flex gap-3 items-start">
-                                  <span className="flex-none w-5 h-5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
-                                    3
-                                  </span>
-                                  <div>
-                                    <p className="font-medium">
-                                      {'Start the PZ server'}
-                                    </p>
-                                    <p className="text-muted-foreground text-xs">
-                                      <>
-                                        {
-                                          'When the game loads the mod, status changes from '
-                                        }
-                                        {'Waiting'}
-                                        {' to '}
-                                        {'Connected'}
-                                        {'.'}
-                                      </>
-                                    </p>
-                                  </div>
-                                </li>
-                              </ol>
-                            </div>
-
-                            <div className="rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs">
-                              <p>
-                                <>
-                                  <strong>
-                                    {'Requires DoLuaChecksum=false'}
-                                  </strong>
-                                  {
-                                    ' in your server INI. Commands can fail with checksum enabled.'
-                                  }
-                                </>
-                              </p>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                    <CardDescription>
+                      {'Live player details, healing, killing, sandbox settings, and mod item catalog.'}
                     </CardDescription>
                   </div>
-                  {bridgeStatus && (
-                    <BridgeStatusBadge
-                      connected={
-                        bridgeStatus.modConnected &&
-                        bridgeStatus.connection?.canSendCommands === true
-                      }
-                      running={bridgeStatus.isRunning}
-                      loading={bridgeLoading}
-                      bridgePath={bridgeStatus.bridgePath}
-                      summary={bridgeStatus.connection?.summary}
-                      interactive={false}
-                    />
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {bridgeStatus?.modConnected && bridgeStatus.modStatus && (
-                  <Alert
-                    className="border-primary/30 bg-primary/10"
-                    aria-live="polite"
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <CheckCircle2 className="w-5 h-5 text-primary" />
-                      <span className="font-semibold text-primary">
-                        {'Connected to ' +
-                          String(bridgeStatus.modStatus.serverName || 'server')}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">
-                          {'Mod Version:'}
-                        </span>{' '}
-                        <span className="font-medium">
-                          {bridgeStatus.modStatus.version || 'Unknown'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          {'Players Online:'}
-                        </span>{' '}
-                        <span className="font-medium">
-                          {bridgeStatus.modStatus.alive
-                            ? (bridgeStatus.modStatus.playerCount ?? 0)
-                            : 'Offline'}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {
-                        'Advanced features on Events, Players, and Chat are now available.'
-                      }
-                    </p>
-                  </Alert>
-                )}
-
-                {!bridgeStatus?.isRunning && (
-                  <div className="p-4 bg-muted rounded-xl space-y-3">
-                    <p className="text-sm font-medium">{'Get Started'}</p>
-                    <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
-                      <li>
-                        <>
-                          {'Install '}
-                          <strong className="text-foreground">
-                            {'PanelBridge.lua'}
-                          </strong>
-                          {' using the section below'}
-                        </>
-                      </li>
-                      <li>
-                        <>
-                          {'Set '}
-                          <strong className="text-foreground">
-                            {'DoLuaChecksum=false'}
-                          </strong>
-                          {' in your server INI'}
-                        </>
-                      </li>
-                      <li>
-                        <>
-                          {'Click '}
-                          <strong className="text-foreground">
-                            {'Auto Setup'}
-                          </strong>
-                          {' to start the bridge watcher'}
-                        </>
-                      </li>
-                      <li>{'Start or restart the PZ server'}</li>
-                    </ol>
-                    <Button
-                      onClick={() => handleAutoConfigure()}
-                      disabled={bridgeLoading}
-                      className="gap-2"
-                    >
-                      {bridgeLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Zap className="w-4 h-4" />
-                      )}
-                      {'Auto Setup'}
-                    </Button>
-
-                    <div className="border-t border-border/50 pt-3 mt-1 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        {
-                          'Or set the bridge path manually (Linux / VPS / custom installs):'
-                        }
-                      </p>
-                      <div className="flex gap-2">
-                        <Input
-                          value={manualBridgePath}
-                          onChange={(e) => setManualBridgePath(e.target.value)}
-                          placeholder="/home/pzuser/Zomboid/Lua/panelbridge/MyServer"
-                          className="text-xs h-9"
-                        />
-                        <Button
-                          onClick={handleManualConfigure}
-                          disabled={bridgeLoading || !manualBridgePath.trim()}
-                          variant="secondary"
-                          size="sm"
-                          className="shrink-0 gap-1.5"
-                        >
-                          {bridgeLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <FolderOpen className="w-3.5 h-3.5" />
-                          )}
-                          {'Connect'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {bridgeStatus?.isRunning && !bridgeStatus?.modConnected && (
-                  <Alert
-                    className="border-warning/40 bg-warning/10"
-                    aria-live="polite"
-                  >
-                    <Cloud className="h-4 w-4 text-warning" />
-                    <AlertTitle className="text-warning">
-                      {'Waiting for PZ mod'}
-                    </AlertTitle>
-                    <AlertDescription className="space-y-2">
-                      <p>
-                        {
-                          'The panel is ready. Start the PZ server with PanelBridge.lua installed and DoLuaChecksum=false set.'
-                        }
-                      </p>
-                      {bridgeStatus?.bridgePath ? (
-                        <p className="text-xs text-muted-foreground break-words">
-                          {'Watching:'}{' '}
-                          <code className="rounded bg-background px-1 break-all">
-                            {bridgeStatus.bridgePath}
-                          </code>
-                        </p>
-                      ) : null}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {bridgeStatus?.isRunning &&
-                  !bridgeStatus?.modConnected &&
-                  bridgeStatus?.connection && (
-                    <div className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border/40">
-                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-xs font-medium text-foreground">
-                          {'Connection Diagnostics'}
-                        </span>
-                        {bridgeStatus.consecutiveFailures != null &&
-                          bridgeStatus.consecutiveFailures > 0 && (
-                            <span className="ms-auto text-[10px] tabular-nums text-warning">
-                              {String(bridgeStatus.consecutiveFailures) +
-                                ' consecutive failures'}
-                            </span>
-                          )}
-                      </div>
-                      <div className="p-3 space-y-3">
-                        <p className="text-xs text-muted-foreground">
-                          {bridgeStatus.connection.summary}
-                        </p>
-
-                        {bridgeStatus.connection.issues &&
-                          bridgeStatus.connection.issues.length > 0 && (
-                            <div className="space-y-1">
-                              {bridgeStatus.connection.issues.map(
-                                (issue: string, i: number) => (
-                                  <div
-                                    key={i}
-                                    className="flex items-start gap-1.5 text-xs text-destructive"
-                                  >
-                                    <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                                    <span>{issue}</span>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          )}
-
-                        {bridgeStatus.connection.checks && (
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                            {Object.entries(bridgeStatus.connection.checks).map(
-                              ([key, val]) => {
-                                if (key === 'statusAgeMs') return null
-                                const label = key
-                                  .replace(/([A-Z])/g, ' $1')
-                                  .replace(/^./, (s) => s.toUpperCase())
-                                  .trim()
-                                const passed = val === true
-                                return (
-                                  <div
-                                    key={key}
-                                    className="flex items-center gap-1.5"
-                                  >
-                                    {passed ? (
-                                      <CheckCircle2
-                                        className="w-3 h-3 text-primary shrink-0"
-                                        aria-hidden="true"
-                                      />
-                                    ) : (
-                                      <XCircle
-                                        className="w-3 h-3 text-destructive shrink-0"
-                                        aria-hidden="true"
-                                      />
-                                    )}
-                                    <span
-                                      className={cn(
-                                        passed
-                                          ? 'text-muted-foreground'
-                                          : 'text-destructive/90',
-                                      )}
-                                    >
-                                      {label}
-                                    </span>
-                                  </div>
-                                )
-                              },
-                            )}
-                          </div>
-                        )}
-
-                        {bridgeStatus.statusFile && (
-                          <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/30">
-                            <div className="flex items-center gap-1.5">
-                              <span className="opacity-60">
-                                {'Status file:'}
-                              </span>
-                              <span
-                                className={
-                                  bridgeStatus.statusFile.exists
-                                    ? 'text-foreground'
-                                    : 'text-destructive/70'
-                                }
-                              >
-                                {bridgeStatus.statusFile.exists
-                                  ? 'Present'
-                                  : 'Not found'}
-                              </span>
-                              {bridgeStatus.statusFile.ageSeconds != null && (
-                                <span className="opacity-50">
-                                  {'(' +
-                                    String(
-                                      formatBridgeAge(
-                                        bridgeStatus.statusFile.ageSeconds,
-                                      ),
-                                    ) +
-                                    ' ago)'}
-                                </span>
-                              )}
-                            </div>
-                            {bridgeStatus.statusFile.path && (
-                              <div className="break-all opacity-50">
-                                <code className="text-[10px]">
-                                  {bridgeStatus.statusFile.path}
-                                </code>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1 border-t border-border/30">
-                          <span>
-                            {'File watcher:'}{' '}
-                            {bridgeStatus.hasFileWatcher ? (
-                              <span className="text-primary">{'Active'}</span>
-                            ) : (
-                              <span className="text-warning">
-                                {'Polling only'}
-                              </span>
-                            )}
-                          </span>
-                          {bridgeStatus.pendingCommands > 0 && (
-                            <span>
-                              {'Pending:'}{' '}
-                              <span className="text-warning tabular-nums">
-                                {bridgeStatus.pendingCommands}
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                {bridgeError && (
-                  <Alert variant="destructive" aria-live="assertive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>{'Panel Bridge Error'}</AlertTitle>
-                    <AlertDescription>{bridgeError}</AlertDescription>
-                  </Alert>
-                )}
-
-                {bridgeStatus?.isRunning && (
-                  <div className="flex flex-wrap gap-3">
-                    <Button
-                      onClick={handleStopBridge}
-                      disabled={bridgeLoading}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      {bridgeLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      {'Stop Bridge'}
-                    </Button>
-                    <Button
-                      onClick={handlePingMod}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={
-                        !bridgeStatus?.modConnected ||
-                        bridgeStatus?.connection?.canSendCommands !== true ||
-                        pinging
-                      }
-                    >
-                      {pinging ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      {pinging ? 'Pinging...' : 'Ping Mod'}
-                    </Button>
-                    <Button
-                      onClick={fetchBridgeStatus}
-                      variant="ghost"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      {'Refresh Status'}
-                    </Button>
-                  </div>
-                )}
-
-                <div className="border-t border-border/60 pt-5 space-y-4">
-                  <div>
-                    <p className="text-sm font-medium">{'Connections'}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {
-                        'PanelBridge handles game integration while RCON handles console commands. Configure both for the active server.'
-                      }
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
-                    <div
-                      id="rcon-command-connection"
-                      className="rounded-md border border-border/60 p-4 space-y-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {'RCON command connection'}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {
-                              'Used for console commands and RCON-backed event actions. It is stored with the active server profile, not with PanelBridge.'
-                            }
-                          </p>
-                        </div>
-                        <Link className="h-4 w-4 shrink-0 text-primary" />
-                      </div>
-                      {activeServer ? (
-                        <div className="rounded border border-border/50 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-                          <p className="font-medium text-foreground">
-                            {activeServer.name}
-                          </p>
-                          <p className="mt-1 font-mono">
-                            {activeServer.rconHost || 'Host not configured'}:
-                            {activeServer.rconPort || 'port not configured'}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-warning">
-                          {'No active server profile is available.'}
-                        </p>
-                      )}
-                      <RouterLink
-                        to="/servers"
-                        className="inline-flex text-xs font-medium text-primary hover:underline underline-offset-2"
-                      >
-                        {'Edit active server RCON connection'}
-                      </RouterLink>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/25 p-4">
-                  <div>
-                    <Label className="text-sm font-medium">
-                      {'Auto-update mod on panel startup'}
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      {
-                        'When the panel starts, automatically copy the latest bundled PanelBridge.lua to the PZ server if versions differ.'
-                      }
-                    </p>
-                  </div>
-                  <Switch
-                    checked={settings.panelBridgeAutoUpdate}
-                    onCheckedChange={(value) =>
-                      updateSetting('panelBridgeAutoUpdate', value)
-                    }
-                    aria-label={'Auto-update PanelBridge mod'}
+                  <GameIntegrationStatusBadge
+                    connected={gameIntegrationStatus?.modConnected === true}
+                    running={gameIntegrationStatus?.isRunning === true}
+                    loading={gameIntegrationLoading}
+                    summary={gameIntegrationStatus?.connection?.summary}
+                    interactive={false}
                   />
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {gameIntegrationError && (
+                  <Alert variant="destructive" aria-live="assertive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>{'Status unavailable'}</AlertTitle>
+                    <AlertDescription>{gameIntegrationError}</AlertDescription>
+                  </Alert>
+                )}
 
-                <div className="p-4 bg-muted rounded-xl space-y-3">
-                  <p className="text-sm font-medium">
-                    {'Install PanelBridge.lua'}
-                  </p>
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <Select
-                      value={selectedInstallServerId}
-                      onValueChange={setSelectedInstallServerId}
-                    >
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder={'Select server...'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {servers.length === 0 ? (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            {serversLoadError
-                              ? "Couldn't load the server list — try reopening this page"
-                              : 'No servers configured'}
-                          </div>
-                        ) : (
-                          servers.map((server) => (
-                            <SelectItem
-                              key={String(server.id)}
-                              value={String(server.id)}
-                            >
-                              {server.name} {server.isActive ? '(Active)' : ''}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={handleInstallMod}
-                      disabled={installingMod || !selectedInstallServerId}
-                      className="gap-2"
-                      variant="outline"
-                    >
-                      {installingMod ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
-                      {'Install Mod'}
-                    </Button>
-                  </div>
-                  {selectedInstallTarget && (
-                    <p className="text-xs text-muted-foreground break-all">
-                      {'Destination:'}{' '}
-                      <code className="bg-background px-1 rounded">
-                        {selectedInstallTarget}
-                      </code>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-4">
+                    <p className="text-sm font-medium">{'Connection'}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {gameIntegrationStatus?.connection?.summary ||
+                        (activeServer
+                          ? 'Waiting for the game server to report live data.'
+                          : 'Select a configured server profile to use live game features.')}
                     </p>
+                    {gameIntegrationStatus?.modConnected && gameIntegrationStatus.modStatus && (
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>{gameIntegrationStatus.modStatus.serverName}</span>
+                        <span>{'Version ' + gameIntegrationStatus.modStatus.version}</span>
+                        <span>
+                          {String(gameIntegrationStatus.modStatus.playerCount)} +
+                          {' players online'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-4">
+                    <p className="text-sm font-medium">{'Installation'}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {gameIntegrationStatus?.localInstall.installed
+                        ? gameIntegrationStatus.localInstall.needsUpdate
+                          ? 'An update is available for the configured server.'
+                          : 'Installed for the configured server.'
+                        : 'The integration installs to the currently configured server profile.'}
+                    </p>
+                    {gameIntegrationStatus?.localInstall.restartRequired && (
+                      <p className="mt-2 text-xs text-warning">
+                        {'Restart the game server to load the installed update.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {gameIntegrationStatus?.connection?.issues?.length ? (
+                  <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground">
+                    {gameIntegrationStatus.connection.issues.map((issue, index) => (
+                      <li key={`${index}-${issue}`}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
+                  <Button
+                    onClick={() => void fetchGameIntegrationStatus()}
+                    disabled={gameIntegrationLoading}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {gameIntegrationLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {'Refresh status'}
+                  </Button>
+                  <Button
+                    onClick={() => void handleInstallIntegration()}
+                    disabled={installingIntegration || !gameIntegrationStatus?.localInstall.canAutoInstall}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {installingIntegration ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {gameIntegrationStatus?.localInstall.needsUpdate
+                      ? 'Install update'
+                      : 'Install'}
+                  </Button>
+                  {!gameIntegrationStatus?.localInstall.canAutoInstall && (
+                    <span className="self-center text-xs text-muted-foreground">
+                      {'Automatic installation is unavailable for the configured server.'}
+                    </span>
                   )}
                 </div>
               </CardContent>
@@ -4614,7 +3781,7 @@ export default function Settings() {
 
                 <p className="text-sm text-muted-foreground">
                   {
-                    'A web-based management panel for Project Zomboid dedicated servers. Includes RCON, player management, mod update detection, scheduled restarts, world backups, and the PanelBridge Lua mod for in-world actions.'
+                    'A web-based management panel for Project Zomboid dedicated servers. Includes RCON, player management, live game integration, mod update detection, scheduled restarts, and world backups.'
                   }
                 </p>
 

@@ -7,7 +7,7 @@ vi.mock("../database/init.ts", async (importOriginal) => {
 });
 
 import { observeServerStatus } from "../services/serverDetection.ts";
-vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({panelBridge: {isModConnected: () => false}})}));
+vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({gameIntegration: {isConnected: () => false}})}));
 const io = {emit: vi.fn()};
 let previous = null;
 const checkServerStatusNow = async reason => {previous = await observeServerStatus({serverManager: new ServerManager(),rconService: {connected: false},io},previous,reason)};

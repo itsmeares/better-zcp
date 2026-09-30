@@ -28,7 +28,7 @@ export default [
         PANEL_VERSION: "readonly",
         PANEL_BUILD_SHA: "readonly",
         PANEL_API_CONTRACT_VERSION: "readonly",
-        PANEL_BRIDGE_LUA_B64: "readonly",
+        ARGUS_LUA_B64: "readonly",
         PANEL_CLIENT_DIST_B64: "readonly",
       },
     },
@@ -40,7 +40,7 @@ export default [
       "local/require-result-handling": "error",
 
       // Control chars in regexes are deliberate input sanitization (RCON args,
-      // player names, PanelBridge payloads).
+      // player names, game integration payloads).
       "no-control-regex": "off",
 
       "no-unused-vars": [

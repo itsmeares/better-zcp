@@ -6,12 +6,11 @@ import { getServer, type ServerRecord } from "../database/init.ts";
 import { runForServer } from "../utils/serverScope.ts";
 import { createLogger } from "../utils/logger.ts";
 import { createBackupIfChanged } from "../utils/configBackup.ts";
-import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { acquireLifecycleLock, type LifecycleLock } from "./lifecycleCoordinator.ts";
 import { resolveProvider } from "../utils/serverStatusModel.ts";
 import { ensureBundledGameContainer, isBundledGameProfile, resolveDockerHostSignal, runManagedLifecycle } from "./managedContainer.ts";
 import { candidateIniPaths, isFirstBootMissingAdminPassword, refreshLaunchTargetBeforeStart } from "./serverLaunch.ts";
-import { autoInstallBridgeIfNeeded } from "./panelBridgeInstaller.ts";
+import { ensureGameIntegrationInstalled } from "./gameIntegrationInstaller.ts";
 
 const log = createLogger("Maintenance");
 export type MaintenancePolicy = { waitMinutes: number; forceAfterDeadline: boolean; warningMinutes: number };
@@ -75,13 +74,10 @@ export class ServerMaintenance {
     return result.players.length;
   }
   private async announce(text: string): Promise<void> {
-    let delivered = false;
-    try { const result = await this.rcon.serverMessage(text, { skipLog: true }); delivered = result?.success === true && !result.rejected; } catch { /* Check the game integration as well. */ }
-    if (!delivered) {
-      const bridge = getPanelRuntime().panelBridge;
-      if (bridge?.isModConnected?.()) { const result = await bridge.sendCommand("sendToServerChat", { message: text, alert: true }); delivered = result?.success === true; }
+    const result = await this.rcon.serverMessage(text, { skipLog: true });
+    if (result?.success !== true || result.rejected) {
+      throw new Error("Players could not be warned. The server was left running.");
     }
-    if (!delivered) throw new Error("Players could not be warned. The server was left running.");
   }
   private async countdown(options: Options, minutes: number, signal: AbortSignal): Promise<void> {
     this.phase("countdown");
@@ -133,9 +129,9 @@ export class ServerMaintenance {
     const server = await this.profile();
     if (isFirstBootMissingAdminPassword(server)) throw new Error("This server needs an admin password before its first start.");
     if (server.installPath && hasActiveSteamOperation(steamInstallKey(server.installPath))) throw new Error("A Steam operation is in progress for this game install.");
-    autoInstallBridgeIfNeeded(server);
     await refreshLaunchTargetBeforeStart(server, { managedHandled: Boolean(server.dockerContainerName) && !isBundledGameProfile(server) });
     if (isBundledGameProfile(server)) await ensureBundledGameContainer(server);
+    await ensureGameIntegrationInstalled(server);
     this.phase("starting"); this.rcon.setServerStarting(true);
     this.io?.emit("server:status", { state: "starting", running: false });
     try {

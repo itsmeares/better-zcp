@@ -8,7 +8,7 @@ servers.
 - `apps/panel-client` contains the web app and its TanStack Start routes.
 - `apps/panel-server` contains the server process, database code, routes, and
   services.
-- `integrations/panelbridge` contains the Project Zomboid PanelBridge mod.
+- `integrations/argus` contains the Project Zomboid game integration.
 - `scripts` contains repository checks and release tooling.
 - `infra` contains Docker and host service files.
 
@@ -52,7 +52,7 @@ A change that works for one setup can still break another. When the changed
 behavior depends on them, check the relevant paths:
 
 - a local server and a remote server reached through SFTP;
-- RCON, PanelBridge, and direct file access;
+- RCON, the game integration, and direct file access;
 - source runs, packaged Windows and Linux builds, and Docker;
 - Build 42;
 - one configured server and several configured servers.

@@ -12,6 +12,7 @@ import archiver from "archiver";
 import { createLogger } from "../utils/logger.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 import { resolveLaunchMode } from "../services/serverManager.ts";
+import { getGameIntegrationInstallStatus } from "../services/gameIntegrationInstaller.ts";
 const log = createLogger("API:Debug");
 import { getDataPaths, setDataPaths } from "../utils/paths.ts";
 import {
@@ -21,7 +22,6 @@ import {
   createDatabaseBackup,
   compactDatabase,
   getCommandHistory,
-  getBridgeLogs,
   getPlayerLogs,
   getServerEvents,
   getScheduleHistory,
@@ -775,14 +775,14 @@ async function buildSandboxOptionsDiagnostics(
   const installedMods = await collectSandboxModMetadata(activeServer, ini);
   const pzVersion =
     logText?.match(/\bversion=([^\s]+)\s+b[0-9a-f]+/i)?.[1] || null;
-  const bridgeVersion =
-    logText?.match(/\[PanelBridge\]\s+Initializing v([^\s]+)/i)?.[1] || null;
+  const gameIntegrationVersion =
+    logText?.match(/\[Argus\]\s+Initializing v([^\s]+)/i)?.[1] || null;
   const detected = exceptionCount > 0;
   return {
     available: true,
     serverName,
     pzVersion,
-    panelBridgeVersion: bridgeVersion,
+    gameIntegrationVersion,
     configuredMods: ini?.Mods || [],
     workshopItems: ini?.WorkshopItems || [],
     detected,
@@ -986,11 +986,12 @@ async function buildZomboidPaths(activeServer: any) {
       logs: root ? await listDir(path.join(root, "Logs")) : null,
       mods: root ? await listDir(path.join(root, "mods")) : null,
       workshop: root ? await listDir(path.join(root, "Workshop")) : null,
-      panelBridge: root
-        ? await listDir(path.join(root, "panelbridge"), {
-            recurseInto: ["default"],
-          })
-        : null,
+      gameIntegration:
+        root && activeServer?.serverName
+          ? await listDir(
+              path.join(root, "Lua", "argus", activeServer.serverName),
+            )
+          : null,
       install: installDir ? await listDir(installDir) : null,
       installLogs: installDir
         ? await listDir(path.join(installDir, "logs"))
@@ -1016,7 +1017,6 @@ async function buildRecentEvents() {
   let commandHistory: any[] = [];
   let playerLogs: any[] = [];
   let scheduleHistory: any[] = [];
-  let bridgeLogs: any[] = [];
 
   try {
     serverEvents = await getServerEvents(50);
@@ -1036,18 +1036,11 @@ async function buildRecentEvents() {
   } catch (e: any) {
     playerLogs = [{ _error: e.message }];
   }
-  try {
-    bridgeLogs = await getBridgeLogs(100);
-  } catch (e: any) {
-    bridgeLogs = [{ _error: e.message }];
-  }
-
   return {
     serverEvents: sanitizeForBundle(serverEvents),
     commandHistory: sanitizeForBundle(commandHistory),
     playerLogs: sanitizeForBundle(playerLogs),
     scheduleHistory: sanitizeForBundle(scheduleHistory),
-    bridgeLogs: sanitizeForBundle(bridgeLogs),
   };
 }
 
@@ -1068,35 +1061,25 @@ async function buildDbStats() {
   }
 }
 
-function buildBridgeStatus() {
+function buildGameIntegrationStatus() {
   try {
-    const status: AnyRecord = getPanelRuntime().panelBridge?.getStatus?.() || {};
-    if (!status) return { available: false };
-
-    const enriched = { ...status };
-    if (status.bridgePath) {
-      const probe = ["commands.json", "results.json", "status.json"];
-      enriched.ipcFiles = {};
-      for (const name of probe) {
-        const fp = path.join(status.bridgePath, name);
-        try {
-          if (fs.existsSync(fp)) {
-            const s = fs.statSync(fp);
-            enriched.ipcFiles[name] = {
-              exists: true,
-              size: s.size,
-              modified: s.mtime.toISOString(),
-              ageSeconds: Math.round((Date.now() - s.mtimeMs) / 1000),
-            };
-          } else {
-            enriched.ipcFiles[name] = { exists: false };
-          }
-        } catch (e: any) {
-          enriched.ipcFiles[name] = { error: e.message };
-        }
-      }
-    }
-    return sanitizeForBundle(enriched);
+    const { configured, isRunning, modConnected, path: integrationPath, modStatus, connection } =
+      getPanelRuntime().gameIntegration.getStatus();
+    return sanitizeForBundle({
+      configured,
+      isRunning,
+      modConnected,
+      path: integrationPath,
+      modStatus: modStatus && {
+        alive: modStatus.alive,
+        version: modStatus.version,
+        session: modStatus.session,
+        serverName: modStatus.serverName,
+        playerCount: modStatus.playerCount,
+        age: modStatus.age,
+      },
+      connection,
+    });
   } catch (e: any) {
     return { _error: e.message };
   }
@@ -1286,7 +1269,7 @@ function buildBundleReadme() {
     "2. `system-info.json` — panel version, OS, RAM, disk free, whether the dedicated server process was running when this bundle was generated, and which UI language the browser reported when requesting this bundle (`uiLanguage`; \"not reported\" if the request didn't include it — never guessed).",
     "3. `panel-config.json` — sanitized settings + servers list (passwords/tokens masked). Also where backup schedule/retention and scheduled-task configuration live (`settings.backupSchedule`, `settings.backupMaxCount`, `scheduledTasks`).",
     "4. `zomboid-paths.tson` — what the panel thinks the data/install paths are, all probed candidates, and dir listings of `Saves/`, `Saves/Multiplayer/`, `Server/`, `Logs/`, etc.",
-    "5. `bridge-status.json` — PanelBridge connection, IPC file ages, and active transport.",
+    "5. `game-integration-status.json` — Argus heartbeat and configured IPC path.",
     "7. `recent-events.json` — last server starts/stops, RCON commands, player join/leave, scheduled task runs (`scheduleHistory` is the last-result history for scheduler entries).",
     "8. `db-stats.json` — record counts per collection.",
     "9. `performance-history.json` — recent CPU/RAM samples.",
@@ -1294,7 +1277,7 @@ function buildBundleReadme() {
     "11. `network-interfaces.json` — local IPs (no MACs).",
     "12. `process.json` — process flags, versions, active handle counts.",
     "13. `server-config-summary.json` — sanitized effective server settings, mod/map lists, sandbox integrity, and whether the Mods/WorkshopItems lists are the same length (a mismatch is a cheap signal of an unresolved mod).",
-    "14. `sandbox-options-diagnostics.json` — PZ/PanelBridge versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
+    "14. `sandbox-options-diagnostics.json` — PZ/Argus versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
     "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
     "18. `db-write-health.json` — SQLite integrity and storage errors. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
@@ -1354,7 +1337,7 @@ async function buildBundleDiagnostics(
     wrap("recent-events.json", () => buildRecentEvents()),
     wrap("performance-history.json", () => buildPerformanceHistory()),
     wrap("db-stats.json", () => buildDbStats()),
-    wrap("bridge-status.json", async () => buildBridgeStatus()),
+    wrap("game-integration-status.json", async () => buildGameIntegrationStatus()),
     wrap("process.json", () => buildProcessSnapshot()),
     wrap("network-interfaces.json", () => buildNetworkInterfaces()),
     wrap("server-config-summary.json", () => buildServerConfigSummary(activeServer)),
@@ -1851,7 +1834,7 @@ router.get("/health", async (req, res) => {
 
 const DIAG_CATEGORIES = {
   services: { label: "Core Services", order: 1 },
-  bridge: { label: "PanelBridge IPC", order: 2 },
+  gameIntegration: { label: "Game integration", order: 2 },
   server: { label: "Active Server", order: 3 },
   storage: { label: "Storage & Database", order: 4 },
   runtime: { label: "Runtime & Memory", order: 5 },
@@ -2693,7 +2676,7 @@ router.get("/diagnostics", async (req, res) => {
           diagSkip(
             "server.process",
             "Containerized server process",
-            "Runs in a separate Docker container this page cannot scan directly. RCON/PanelBridge checks below reflect real status.",
+            "Runs in a separate Docker container this page cannot scan directly. RCON and game integration checks below reflect real status.",
             { category: "services" },
           ),
         );
@@ -3159,77 +3142,35 @@ router.get("/diagnostics", async (req, res) => {
           );
         }
 
-        if (zPath || installPath) {
-          const bridgeCandidates: any[] = [];
-          if (zPath) {
-            for (const root of ["mods", "Mods"]) {
-              bridgeCandidates.push(
-                path.join(zPath, root, "PanelBridge", "mod.info"),
-              );
-              bridgeCandidates.push(
-                path.join(
-                  zPath,
-                  root,
-                  "PanelBridge",
-                  "media",
-                  "lua",
-                  "server",
-                  "PanelBridge.lua",
-                ),
-              );
-            }
-            bridgeCandidates.push(
-              path.join(zPath, "Workshop", "PanelBridge", "mod.info"),
-            );
-            bridgeCandidates.push(
-              path.join(zPath, "workshop", "PanelBridge", "mod.info"),
-            );
-          }
-          if (installPath) {
-            bridgeCandidates.push(
-              path.join(
-                installPath,
-                "media",
-                "lua",
-                "server",
-                "PanelBridge.lua",
-              ),
-            );
-            bridgeCandidates.push(
-              path.join(
-                installPath,
-                "steamapps",
-                "workshop",
-                "content",
-                "108600",
-              ),
-            );
-          }
-          let bridgeInstalled = false;
-          for (const p of bridgeCandidates) {
-            if (await safePathExists(p)) {
-              bridgeInstalled = true;
-              break;
-            }
-          }
-          if (bridgeInstalled) {
+        const integrationInstall = getGameIntegrationInstallStatus(activeServer);
+        if (integrationInstall.targetPath) {
+          if (integrationInstall.installed && !integrationInstall.needsUpdate) {
             checks.push(
               diagOk(
-                "server.bridgeMod",
-                "PanelBridge mod present",
-                "PanelBridge.lua is deployed on the server.",
+                "server.gameIntegration",
+                "Game integration present",
+                "The server-side game integration file is deployed in the installation.",
+                { category: "server" },
+              ),
+            );
+          } else if (integrationInstall.installed) {
+            checks.push(
+              diagWarn(
+                "server.gameIntegration",
+                "Game integration update pending",
+                "The installed game integration differs from the panel version and will update before the next start.",
                 { category: "server" },
               ),
             );
           } else {
             checks.push(
               diagWarn(
-                "server.bridgeMod",
-                "PanelBridge mod not detected",
-                "Couldn't find PanelBridge.lua under the server. Advanced player actions (teleport and heal) will be unavailable.",
+                "server.gameIntegration",
+                "Game integration not installed",
+                "The game integration file is not installed in the server folder. It will be installed automatically before the next start.",
                 {
                   category: "server",
-                  hint: "Copy pz-mod/PanelBridge into the server's media/lua/server folder",
+                  hint: "Start the server from the panel to install the game integration.",
                 },
               ),
             );
@@ -3898,54 +3839,54 @@ router.get("/diagnostics", async (req, res) => {
 
     try {
       {
-        const bridgeStatus = getPanelRuntime().panelBridge?.getStatus?.() || null;
-        if (!bridgeStatus?.configured) {
+        const gameIntegrationStatus = getPanelRuntime().gameIntegration.getStatus();
+        if (!gameIntegrationStatus.configured) {
           checks.push(
             diagSkip(
-              "bridge.configured",
-              "PanelBridge bridge path",
-              "Bridge path not yet configured (server may be starting up).",
-              { category: "bridge" },
+              "gameIntegration.configured",
+              "Game integration path",
+              "Game integration path is not configured for the active server.",
+              { category: "gameIntegration" },
             ),
           );
         } else {
           checks.push(
             diagOk(
-              "bridge.configured",
-              "Bridge path configured",
-              "Bridge IPC directory is set.",
-              { category: "bridge" },
+              "gameIntegration.configured",
+              "Game integration path configured",
+              "Game integration command directory is set.",
+              { category: "gameIntegration" },
             ),
           );
 
-          const bridgePath = bridgeStatus.bridgePath;
-          if (await safePathWritable(bridgePath)) {
+          const integrationPath = gameIntegrationStatus.path;
+          if (integrationPath && await safePathWritable(integrationPath)) {
             checks.push(
               diagOk(
-                "bridge.writable",
-                "Bridge directory writable",
-                "Panel can write commands.json for the mod.",
-                { category: "bridge" },
+                "gameIntegration.writable",
+                "Game integration directory writable",
+                "The panel can write game commands to the integration directory.",
+                { category: "gameIntegration" },
               ),
             );
-          } else if (!(await safePathExists(bridgePath))) {
+          } else if (!integrationPath || !(await safePathExists(integrationPath))) {
             checks.push(
               diagWarn(
-                "bridge.writable",
-                "Bridge directory missing",
-                "Bridge folder does not exist yet — it will be created when the mod first writes status.json.",
-                { category: "bridge" },
+                "gameIntegration.writable",
+                "Game integration directory missing",
+                "The integration directory will be created when the server writes its first heartbeat.",
+                { category: "gameIntegration" },
               ),
             );
           } else if (process.platform === "linux") {
             checks.push(
               diagFail(
-                "bridge.writable",
-                "Bridge directory not writable",
-                "Panel can't write to the bridge directory. Mod won't receive commands.",
+                "gameIntegration.writable",
+                "Game integration directory not writable",
+                "The panel cannot write commands to the integration directory.",
                 {
-                  category: "bridge",
-                  hint: "Check ownership / chmod on the Zomboid Lua folder (often needs the panel user to own ~/Zomboid)",
+                  category: "gameIntegration",
+                  hint: "Check ownership and permissions on the configured Zomboid data directory.",
                   variant: "linux",
                 },
               ),
@@ -3953,72 +3894,56 @@ router.get("/diagnostics", async (req, res) => {
           } else {
             checks.push(
               diagFail(
-                "bridge.writable",
-                "Bridge directory not writable",
-                "Panel can't write to the bridge directory. Mod won't receive commands.",
+                "gameIntegration.writable",
+                "Game integration directory not writable",
+                "The panel cannot write commands to the integration directory.",
                 {
-                  category: "bridge",
-                  hint: "Check filesystem permissions on the Lua write folder",
+                  category: "gameIntegration",
+                  hint: "Check filesystem permissions on the configured Zomboid data directory.",
                   variant: "other",
                 },
               ),
             );
           }
 
-          const status = bridgeStatus.modStatus;
-          const conn = bridgeStatus.connection as AnyRecord;
+          const status = gameIntegrationStatus.modStatus;
           if (status?.alive) {
             const ageText = fmtAge(status.age || 0);
             checks.push(
               diagOk(
-                "bridge.heartbeat",
-                "Mod heartbeat fresh",
-                `Status from mod ${ageText}.`,
-                { category: "bridge", params: { age: ageText } },
+                "gameIntegration.heartbeat",
+                "Game integration heartbeat fresh",
+                `Game integration heartbeat received ${ageText} ago.`,
+                { category: "gameIntegration", params: { age: ageText } },
               ),
             );
           } else if (serverRunning === null) {
             checks.push(
               diagSkip(
-                "bridge.heartbeat",
-                "Mod heartbeat",
+                "gameIntegration.heartbeat",
+                "Game integration heartbeat",
                 "Server process state is unknown — heartbeat status cannot be inferred from it.",
-                { category: "bridge" },
+                { category: "gameIntegration" },
               ),
             );
           } else if (serverRunning === false) {
             checks.push(
               diagSkip(
-                "bridge.heartbeat",
-                "Mod heartbeat",
+                "gameIntegration.heartbeat",
+                "Game integration heartbeat",
                 "Server is offline — heartbeat resumes when it starts.",
-                { category: "bridge" },
-              ),
-            );
-          } else if (conn?.statusFile?.exists) {
-            const ageText = fmtAge(conn.statusFile.age || 0);
-            checks.push(
-              diagFail(
-                "bridge.heartbeat",
-                "Mod heartbeat stale",
-                `Last heartbeat ${ageText}. Mod may have crashed or be unloaded.`,
-                {
-                  category: "bridge",
-                  hint: "Check server console.txt for PanelBridge errors",
-                  params: { age: ageText },
-                  variant: "stale",
-                },
+                { category: "gameIntegration" },
               ),
             );
           } else {
             checks.push(
               diagFail(
-                "bridge.heartbeat",
-                "No mod heartbeat",
-                "status.json has never been written. Mod is not loaded on the server.",
+                "gameIntegration.heartbeat",
+                "No game integration heartbeat",
+                "The game integration has not written a valid heartbeat for the running server.",
                 {
-                  category: "bridge",
-                  hint: "Verify PanelBridge is in the server's mod list and Workshop subscription",
+                  category: "gameIntegration",
+                  hint: "Check the server console for game integration errors and confirm the server-side integration file is installed.",
                   variant: "never",
                 },
               ),
@@ -4030,10 +3955,10 @@ router.get("/diagnostics", async (req, res) => {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
-          "bridge.error",
-          "Bridge checks errored",
-          `Bridge IPC checks could not run: ${reason}`,
-          { category: "bridge", params: { reason } },
+          "gameIntegration.error",
+          "Game integration checks errored",
+          `Game integration checks could not run: ${reason}`,
+          { category: "gameIntegration", params: { reason } },
         ),
       );
     }
@@ -4893,51 +4818,51 @@ router.get("/worldmap", async (req, res) => {
       );
     }
 
-    const bridgeStatus = getPanelRuntime().panelBridge?.getStatus?.() || null;
-    const bridgeRunning = !!bridgeStatus?.isRunning;
-    const modConnected = getPanelRuntime().panelBridge?.isModConnected?.() === true;
-    const statusAge = bridgeStatus?.statusFile?.age ?? null;
+    const gameIntegrationStatus = getPanelRuntime().gameIntegration.getStatus();
+    const gameIntegrationRunning = gameIntegrationStatus.isRunning;
+    const modConnected = gameIntegrationStatus.modConnected;
+    const statusAge = gameIntegrationStatus.modStatus?.age ?? null;
 
-    if (!bridgeStatus || !bridgeStatus.configured) {
+    if (!gameIntegrationStatus.configured) {
       checks.push(
-        diagFail(
-          "worldmap.bridge.configured",
-          "PanelBridge not configured",
-          "The map gets live player positions, vehicles and safehouses from PanelBridge. Without it, the map will show only the static base tiles.",
+        diagWarn(
+          "worldmap.gameIntegration.configured",
+          "Game integration not configured",
+          "The map gets live game data from the game integration. Without it, the map shows static base tiles only.",
           {
             category: "worldmap",
-            hint: "Configure the active server's Zomboid Data Path so the bridge folder can be located.",
+            hint: "Configure the active server's Zomboid data path and server name.",
           },
         ),
       );
-    } else if (!bridgeRunning) {
+    } else if (!gameIntegrationRunning) {
       checks.push(
         diagWarn(
-          "worldmap.bridge.running",
-          "PanelBridge service not running",
-          "The bridge service is configured but not currently polling. Live map data will be empty.",
+          "worldmap.gameIntegration.running",
+          "Game integration service not running",
+          "The game integration monitor is configured but not currently polling. Live map data will be empty.",
           { category: "worldmap" },
         ),
       );
     } else if (!modConnected) {
       checks.push(
         diagWarn(
-          "worldmap.bridge.mod",
-          "Mod not connected",
-          "PanelBridge is running but the in-game mod has not written status.json yet. Players, vehicles and safehouses will not appear.",
+          "worldmap.gameIntegration.mod",
+          "Game integration not connected",
+          "The game integration monitor is running but has not received a valid heartbeat yet.",
           {
             category: "worldmap",
-            hint: "Start the PZ server and confirm the PanelBridge mod is in the active mod list.",
+            hint: "Start the PZ server from the panel and confirm the server-side integration file is installed.",
           },
         ),
       );
-    } else if (statusAge !== null && statusAge > 15_000) {
+    } else if (statusAge !== null && statusAge > 45_000) {
       const ageSeconds = Math.round(statusAge / 1000);
       checks.push(
         diagWarn(
-          "worldmap.bridge.heartbeat",
-          "Mod heartbeat stale",
-          `Last status.json update was ${ageSeconds}s ago. Live map data may be stale.`,
+          "worldmap.gameIntegration.heartbeat",
+          "Game integration heartbeat stale",
+          `Last game integration heartbeat was ${ageSeconds}s ago. Live map data may be stale.`,
           { category: "worldmap", params: { ageSeconds } },
         ),
       );
@@ -4945,18 +4870,18 @@ router.get("/worldmap", async (req, res) => {
       const ageSeconds = Math.round(statusAge / 1000);
       checks.push(
         diagOk(
-          "worldmap.bridge",
+          "worldmap.gameIntegration",
           "Live data feed healthy",
-          `PanelBridge running, mod connected, last heartbeat ${ageSeconds}s ago.`,
+          `Game integration is connected; last heartbeat was ${ageSeconds}s ago.`,
           { category: "worldmap", variant: "withHeartbeat", params: { ageSeconds } },
         ),
       );
     } else {
       checks.push(
         diagOk(
-          "worldmap.bridge",
+          "worldmap.gameIntegration",
           "Live data feed healthy",
-          "PanelBridge running, mod connected.",
+          "Game integration is connected.",
           { category: "worldmap", variant: "withoutHeartbeat" },
         ),
       );
@@ -5068,16 +4993,13 @@ router.get("/worldmap", async (req, res) => {
       tileSources: {
         b42: b42Probe,
       },
-      bridge: bridgeStatus
-        ? {
-            configured: bridgeStatus.configured,
-            isRunning: bridgeStatus.isRunning,
-            modConnected,
-            statusAgeMs: statusAge,
-            bridgePath: bridgeStatus.bridgePath,
-            consecutiveFailures: bridgeStatus.consecutiveFailures,
-          }
-        : null,
+      gameIntegration: {
+        configured: gameIntegrationStatus.configured,
+        isRunning: gameIntegrationStatus.isRunning,
+        modConnected,
+        statusAgeMs: statusAge,
+        path: gameIntegrationStatus.path,
+      },
       handlers: WORLDMAP_HANDLERS,
       save: {
         zomboidDataPath: activeServer?.zomboidDataPath || null,
@@ -5529,28 +5451,6 @@ router.get("/activity", async (req, res) => {
           action: cmd.command,
           detail: cmd.response || "",
           success: cmd.success === 1,
-          timestamp: cmd.executed_at,
-        });
-      }
-    }
-
-    if (source === "all" || source === "bridge") {
-      const bridgeHistory = await getBridgeLogs(limit);
-      for (const cmd of bridgeHistory) {
-        const detail =
-          cmd.success === 1
-            ? cmd.result?.data
-              ? JSON.stringify(cmd.result.data).substring(0, 300)
-              : "ok"
-            : cmd.result?.error || "failed";
-        entries.push({
-          id: cmd.id,
-          source: "bridge",
-          action: cmd.action,
-          args: cmd.args,
-          detail,
-          success: cmd.success === 1,
-          duration_ms: cmd.duration_ms,
           timestamp: cmd.executed_at,
         });
       }

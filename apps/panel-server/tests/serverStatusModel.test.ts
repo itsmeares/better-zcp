@@ -3,7 +3,7 @@ import {
   resolveProvider,
   buildHostSignal,
   buildServerSignal,
-  buildBridgeSignal,
+  buildGameIntegrationSignal,
   buildSummary,
   composeServerStatus,
   resolveLifecycleState,
@@ -112,25 +112,25 @@ describe("buildServerSignal", () => {
   });
 });
 
-describe("buildBridgeSignal", () => {
-  it("reports not-installed when never configured", () => {
-    expect(buildBridgeSignal({ configured: false }).status).toBe("not-installed");
+describe("buildGameIntegrationSignal", () => {
+  it("reports not-configured when no profile path exists", () => {
+    expect(buildGameIntegrationSignal({ configured: false }).status).toBe("not-configured");
   });
 
   it("reports active only when running and the mod is responding", () => {
     expect(
-      buildBridgeSignal({ configured: true, running: true, modConnected: true })
+      buildGameIntegrationSignal({ configured: true, running: true, modConnected: true })
         .status,
     ).toBe("active");
   });
 
   it("reports offline when configured but not fully connected", () => {
     expect(
-      buildBridgeSignal({ configured: true, running: true, modConnected: false })
+      buildGameIntegrationSignal({ configured: true, running: true, modConnected: false })
         .status,
     ).toBe("offline");
     expect(
-      buildBridgeSignal({ configured: true, running: false, modConnected: false })
+      buildGameIntegrationSignal({ configured: true, running: false, modConnected: false })
         .status,
     ).toBe("offline");
   });
@@ -181,7 +181,7 @@ describe("composeServerStatus", () => {
       server: {},
       isRunning: true,
       rcon: { connected: false, host: "host.docker.internal", port: 27015 },
-      bridge: { configured: true, running: false, modConnected: false },
+      gameIntegration: { configured: true, running: false, modConnected: false },
     });
 
     expect(result).toEqual({
@@ -193,7 +193,7 @@ describe("composeServerStatus", () => {
         label: "RCON",
         detail: "host.docker.internal:27015",
       },
-      bridge: { status: "offline", label: "PanelBridge", detail: null },
+      gameIntegration: { status: "offline", label: "Game integration", detail: null },
       state: "running-not-ready",
       summary: "Process running, RCON disconnected",
     });
@@ -204,12 +204,12 @@ describe("composeServerStatus", () => {
       server: {},
       isRunning: true,
       rcon: { connected: true, host: "127.0.0.1", port: 27015 },
-      bridge: { configured: true, running: true, modConnected: true },
+      gameIntegration: { configured: true, running: true, modConnected: true },
     });
 
     expect(result.host.status).toBe("running");
     expect(result.server.status).toBe("connected");
-    expect(result.bridge.status).toBe("active");
+    expect(result.gameIntegration.status).toBe("active");
     expect(result.selected).toBe(true);
   });
 
@@ -219,7 +219,7 @@ describe("composeServerStatus", () => {
       isRunning: false,
       scanFailed: true,
       rcon: { connected: false },
-      bridge: { configured: false },
+      gameIntegration: { configured: false },
     });
 
     expect(result.provider).toBe("native");
@@ -233,7 +233,7 @@ describe("composeServerStatus", () => {
       scanFailed: false,
       dockerContainer: { handled: true, ref: "pz-server", running: true },
       rcon: { connected: true, host: "pz-server", port: 27015 },
-      bridge: { configured: true, running: true, modConnected: true },
+      gameIntegration: { configured: true, running: true, modConnected: true },
     });
 
     expect(result.provider).toBe("docker-local");
@@ -246,7 +246,7 @@ describe("composeServerStatus", () => {
       isRunning: false,
       dockerContainer: { handled: false },
       rcon: { connected: false },
-      bridge: { configured: false },
+      gameIntegration: { configured: false },
     });
 
     expect(result.provider).toBe("docker-local");

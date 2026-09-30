@@ -32,7 +32,7 @@ function normalizeApiPath(input: RequestInfo | URL): string {
 
     const apiIndex = parsed.pathname.indexOf('/api/')
     if (apiIndex >= 0) {
-      return parsed.pathname.slice(apiIndex).replace(/^\/api\/servers\/[^/]+\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|panel-bridge)(\/.*)?$/, "/api/$1$2")
+      return parsed.pathname.slice(apiIndex).replace(/^\/api\/servers\/[^/]+\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|game-integration)(\/.*)?$/, "/api/$1$2")
     }
 
     return parsed.pathname
@@ -417,7 +417,7 @@ function demoComposedStatus() {
     selected: true,
     host: { status: 'stopped', label: 'Stopped', detail: null },
     server: { status: 'disconnected', label: 'Disconnected', detail: null },
-    bridge: { status: 'offline', label: 'Offline', detail: null },
+    gameIntegration: { status: 'offline', label: 'Offline', detail: null },
     summary: 'Demo server is offline',
   }
 }
@@ -472,8 +472,26 @@ export function installDemoFetchShim(): void {
     if (path === '/api/players') {
       return jsonResponse({ players: [] })
     }
-    if (path === '/api/panel-bridge/status') {
-      return jsonResponse({ configured: true, isRunning: false, modConnected: false, modStatus: null })
+    if (path === '/api/game-integration/status') {
+      return jsonResponse({
+        configured: true,
+        isRunning: false,
+        modConnected: false,
+        path: null,
+        modStatus: null,
+        connection: {
+          healthy: false,
+          canSendCommands: false,
+          issues: [],
+          summary: 'Game integration is offline in demo mode.',
+        },
+        localInstall: {
+          installed: false,
+          canAutoInstall: false,
+          needsUpdate: false,
+          restartRequired: false,
+        },
+      })
     }
     if (path === '/api/panel-info') {
       return jsonResponse({ localIp: '127.0.0.1', port: 3001, url: 'http://demo.local:3001' })

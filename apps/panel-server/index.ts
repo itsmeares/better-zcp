@@ -82,15 +82,6 @@ export {
 } from "./http/panelUpdateHandlers.ts";
 import { resolvePanelPort } from "./utils/panelInfo.ts";
 import {
-  autoInstallBridgeIfNeeded,
-  resolveInstallDir,
-} from "./services/panelBridgeInstaller.ts";
-import {
-  getEmbeddedPanelBridgeLua,
-  compareModVersions,
-  writeLuaAtomic,
-} from "./utils/embeddedLua.ts";
-import {
   getEmbeddedClientDistPath,
   resolveClientDistPath,
 } from "./utils/embeddedClient.ts";

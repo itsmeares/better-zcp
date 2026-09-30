@@ -1388,14 +1388,15 @@ export class RconService extends EventEmitter {
     return this.execute(`teleport "${safeP1}"`);
   }
 
-  async teleportTo(x: unknown, y: unknown, z: unknown) {
+  async teleportTo(x: unknown, y: unknown, z: unknown, username?: unknown) {
     const nx = Number(x),
       ny = Number(y),
       nz = Number(z);
-    if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) {
-      throw new Error("Coordinates must be valid numbers");
+    if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isInteger(nz) || Math.abs(nx) > 1000000 || Math.abs(ny) > 1000000 || nz < -32 || nz > 31) {
+      throw new Error("Coordinates must be finite, with integer Z from -32 to 31.");
     }
-    return this.execute(`teleportto ${nx},${ny},${nz}`);
+    const target = username ? `"${this.sanitizeQuotedArg(username, "Username", 64)}" ` : "";
+    return this.execute(`teleportto ${target}${nx},${ny},${nz}`);
   }
 
   async addItem(username: unknown, item: unknown, count: unknown = 1) {

@@ -1,10 +1,48 @@
 import { describe, expect, it } from "vite-plus/test";
 import fs from "fs";
+import { validateArgusBundle } from "../../../scripts/release/build.mjs";
 
 const readRepoFile = (relativePath) =>
   fs.readFileSync(new URL(`../../../${relativePath}`, import.meta.url), "utf8");
 
 describe("Deployment contracts", () => {
+  it("requires one matching Argus runtime and mod.info version before a package build", () => {
+    expect(
+      validateArgusBundle(
+        'local Argus = { VERSION = "1.0.0", PROTOCOL = 1 }',
+        "id=Argus\nmodversion=1.0.0\n",
+      ),
+    ).toBe("1.0.0");
+    expect(() =>
+      validateArgusBundle('local Argus = { PROTOCOL = 1 }', "modversion=1.0.0\n"),
+    ).toThrow("exactly one runtime and mod.info version");
+    expect(() =>
+      validateArgusBundle(
+        'local Argus = { VERSION = "1.0.1" }',
+        "modversion=1.0.0\n",
+      ),
+    ).toThrow("runtime and mod.info versions differ");
+  });
+
+  it("keeps local data and runtime secrets out of the Docker build context", () => {
+    const dockerignore = readRepoFile(".dockerignore");
+
+    for (const pattern of [
+      ".plans/",
+      "data/",
+      "newdata/",
+      "logs/",
+      "**/.env.*",
+      "**/paths.config.json",
+      "**/*.secret",
+      "**/*.token",
+      "**/*.sqlite",
+      "**/*.db",
+    ]) {
+      expect(dockerignore).toContain(pattern);
+    }
+  });
+
   it("keeps the panel's game data mounts and Docker control while game ports belong to game containers", () => {
     const compose = readRepoFile("infra/docker/all-in-one/docker-compose.yml");
     expect(compose).toContain("pz-server:/pz-server");
@@ -54,7 +92,9 @@ describe("Deployment contracts", () => {
 
     expect(workflow).toContain("node scripts/verify-release-version.mjs");
     expect(verifier).toContain("pnpm-lock.yaml");
-    expect(verifier).toContain("PanelBridge must contain exactly one");
+    expect(verifier).toContain(
+      "Game integration must contain exactly one runtime and mod.info version",
+    );
     expect(verifier).toContain("release-manifest.json client file inventory differs");
   });
 

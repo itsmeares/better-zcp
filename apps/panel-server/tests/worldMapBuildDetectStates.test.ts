@@ -1,5 +1,4 @@
 import { setPanelRuntime, setServerRuntime } from "../utils/panelRuntime.ts";
-const { PanelBridge } = await import("../services/panelBridge.ts");
 import { requireServerId } from "../utils/serverScope.ts";
 import { scopedTests } from "./helpers/serverScope.ts";
 import { createServer } from "../database/init.ts";
@@ -22,6 +21,15 @@ vi.mock("../routes/mapProxy.ts", async () => {
 });
 
 const { default: debugRouter } = await import("../routes/debug.ts");
+const gameIntegration = {
+  getStatus: () => ({
+    configured: false,
+    isRunning: false,
+    modConnected: false,
+    path: null,
+    modStatus: null,
+  }),
+};
 
 let originalFetch;
 beforeEach(() => {
@@ -62,7 +70,7 @@ function getLayer(routePath, method) {
 
 async function runRoute(routePath, method, req) {
   setPanelRuntime({});
-  setServerRuntime(requireServerId(), {panelBridge: new PanelBridge()});
+  setServerRuntime(requireServerId(), { gameIntegration });
   const res = createResponse();
   const layer = getLayer(routePath, method);
   if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);

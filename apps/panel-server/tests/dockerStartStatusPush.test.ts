@@ -13,10 +13,18 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const runManagedLifecycle = vi.fn();
+const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: false }));
+const getDockerClient = vi.fn(() => ({ enabled: true, available: true }));
+const ensureGameIntegrationInstalled = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle,
+  resolveDockerHostSignal,
+  getDockerClient,
   isBundledGameProfile: () => false,
   ensureBundledGameContainer: vi.fn(async () => false),
+}));
+vi.mock("../services/gameIntegrationInstaller.ts", () => ({
+  ensureGameIntegrationInstalled,
 }));
 
 const { default: router } = await import("../routes/server.ts");
@@ -59,6 +67,9 @@ function makeApp(overrides = {}) {
 describe("POST /start -- Docker start pushes server:status immediately", () => {
   beforeEach(() => {
     runManagedLifecycle.mockReset();
+    resolveDockerHostSignal.mockReset();
+    resolveDockerHostSignal.mockResolvedValue({ running: false, scanFailed: false });
+    ensureGameIntegrationInstalled.mockReset();
   });
 
   it("emits a starting state synchronously for a managed container start, without touching the local process scan", async () => {
@@ -76,6 +87,10 @@ describe("POST /start -- Docker start pushes server:status immediately", () => {
 
     expect(app._values.io.emit).toHaveBeenCalledWith("server:status", { state: "starting" });
     expect(app._values.serverManager.getServerProcessDetails).not.toHaveBeenCalled();
+    expect(ensureGameIntegrationInstalled).toHaveBeenCalledOnce();
+    expect(ensureGameIntegrationInstalled.mock.invocationCallOrder[0]).toBeLessThan(
+      runManagedLifecycle.mock.invocationCallOrder[0],
+    );
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),
     );

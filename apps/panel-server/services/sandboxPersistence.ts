@@ -3,11 +3,8 @@ import path from "path";
 import { getCurrentServer, getAllSettings } from "../database/init.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { backupWarningFor, createBackup } from "../utils/configBackup.ts";
-import { escapeRegExp } from "../utils/regex.ts";
-import { createLogger } from "../utils/logger.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
-const log = createLogger("SandboxPersistence");
 
 type JsonRecord = Record<string, any>;
 
@@ -107,190 +104,90 @@ export async function getCurrentServerContext(): Promise<ActiveServerContext> {
 }
 
 export function escapeLuaString(str: unknown): string {
-  return String(str).replace(/[\\"'\n\r\t\0\[\]]/g, (c) => {
-    const escapes: Record<string, string> = {
-      "\\": "\\\\",
-      '"': '\\"',
-      "'": "\\'",
-      "\n": "\\n",
-      "\r": "\\r",
-      "\t": "\\t",
-      "\0": "\\0",
-      "[": "\\[",
-      "]": "\\]",
-    };
-    return escapes[c] || c;
-  });
+  return String(str).replace(/[\\"\n\r\t\0]/g, (c) => ({
+    "\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t", "\0": "\\000",
+  })[c]!);
 }
 
-function formatLuaNumber(newValue: number, originalValueStr?: string): string {
-  const trimmed = originalValueStr
-    ? originalValueStr.trim().replace(/,\s*$/, "")
-    : "";
-  if (Number.isInteger(newValue) && trimmed.includes(".")) {
-    return newValue.toFixed(1);
+// Ignore strings and comments while locating table fields, keeping the original offsets.
+function maskedLua(content: string): string {
+  return content.replace(/--\[(=*)\[[\s\S]*?\]\1\]|--[^\n]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|\[(=*)\[[\s\S]*?\]\2\]/g,
+    (value) => value.replace(/[^\n]/g, " "));
+}
+
+function tableFields(content: string, start: number) {
+  const mask = maskedLua(content);
+  const fields: Array<{ name: string; start: number; end: number }> = [];
+  let depth = 1, fieldStart = start + 1;
+  for (let i = start + 1; i < mask.length; i++) {
+    if (mask[i] === "{") depth++;
+    if (mask[i] === "}") depth--;
+    if (depth === 0 || (depth === 1 && (mask[i] === "," || mask[i] === ";"))) {
+      const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(mask.slice(fieldStart, i));
+      if (match) {
+        let valueStart = fieldStart + match[0].length;
+        while (/\s/.test(content[valueStart] || "") && valueStart < i) valueStart++;
+        fields.push({ name: match[1], start: valueStart, end: i });
+      }
+      fieldStart = i + 1;
+    }
+    if (depth === 0) return { fields, end: i };
   }
-  return newValue.toString();
+  throw new Error("SandboxVars has an unclosed table. Repair the file before editing options.");
 }
 
 export function modifySandboxValue(
-  originalContent: string,
-  key: string,
-  newValue: unknown,
-  nestedBlock: string | null = null,
+  content: string, key: string, value: unknown, nestedBlock: string | null = null, create = false,
 ): string {
-  let content = originalContent;
-
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
-    log.warn(`Invalid sandbox key skipped: ${key}`);
-    return content;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || (nestedBlock && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(nestedBlock))) {
+    throw new Error("Invalid sandbox option name.");
   }
-
-  function formatValue(originalValueStr: string): string {
-    if (typeof newValue === "boolean") {
-      return newValue.toString();
-    } else if (typeof newValue === "number") {
-      return formatLuaNumber(newValue, originalValueStr);
-    } else {
-      return `"${escapeLuaString(String(newValue))}"`;
-    }
+  if (!["string", "number", "boolean"].includes(typeof value) || (typeof value === "number" && !Number.isFinite(value))) {
+    throw new Error("Sandbox value must be a finite number, boolean, or string.");
   }
-
-  const escapedKey = escapeRegExp(key);
-
+  const literal = typeof value === "string" ? `"${escapeLuaString(value)}"` : String(value);
+  const root = /\bSandboxVars\s*=\s*\{/.exec(maskedLua(content));
+  if (!root) throw new Error("SandboxVars table was not found.");
+  const rootStart = root.index + root[0].length - 1;
+  let tableStart = rootStart;
   if (nestedBlock) {
-    const escapedBlock = escapeRegExp(nestedBlock);
-    const blockStartPattern = new RegExp(`${escapedBlock}\\s*=\\s*\\{`);
-    const blockStartMatch = content.match(blockStartPattern);
-    if (blockStartMatch) {
-      const blockStart = blockStartMatch.index ?? -1;
-      if (blockStart < 0) return content;
-      const blockEnd = content.indexOf(
-        "}",
-        blockStart + blockStartMatch[0].length,
-      );
-      if (blockEnd !== -1) {
-        const before = content.substring(0, blockStart);
-        const blockSection = content.substring(blockStart, blockEnd + 1);
-        const after = content.substring(blockEnd + 1);
-        const updatedBlock = blockSection.replace(
-          new RegExp(
-            `(^(?!\\s*--)[^\\n]*?)(${escapedKey})(\\s*=\\s*)("(?:[^"\\\\]|\\\\.)*"|[^,\\n}]+)(,?)`,
-            "m",
-          ),
-          (_: string, prefix: string, k: string, eq: string, oldVal: string, comma: string) =>
-            `${prefix}${k}${eq}${formatValue(oldVal)}${comma}`,
-        );
-        content = before + updatedBlock + after;
-      }
+    const group = tableFields(content, rootStart).fields.find((field) => field.name === nestedBlock);
+    if (!group) {
+      if (!create) return content;
+      const end = tableFields(content, rootStart).end;
+      return insertField(content, end, `${nestedBlock} = { ${key} = ${literal}, }`);
     }
-  } else {
-    const knownBlocks = [
-      "ZombieLore",
-      "ZombieConfig",
-      "MultiplierConfig",
-      "Map",
-      "Basement",
-      "Music",
-      "Debug",
-    ];
-    const blockRanges: Array<{ start: number; end: number }> = [];
-    for (const blockName of knownBlocks) {
-      const blockPattern = new RegExp(`${escapeRegExp(blockName)}\\s*=\\s*\\{`);
-      const blockMatch = content.match(blockPattern);
-      if (blockMatch) {
-        const start = blockMatch.index ?? -1;
-        if (start < 0) continue;
-        const end = content.indexOf("}", start + blockMatch[0].length);
-        if (end !== -1) blockRanges.push({ start, end: end + 1 });
-      }
-    }
-
-    const pattern = new RegExp(
-      `(^\\s*)(${escapedKey})(\\s*=\\s*)("(?:[^"\\\\]|\\\\.)*"|[^,\\n}]+)(,?)(\\s*(?:--.*)?$)`,
-      "gm",
-    );
-    content = content.replace(
-      pattern,
-      (
-        fullMatch: string,
-        indent: string,
-        k: string,
-        eq: string,
-        oldVal: string,
-        comma: string,
-        comment: string,
-        offset: number,
-      ) => {
-        for (const range of blockRanges) {
-          if (offset >= range.start && offset < range.end) return fullMatch;
-        }
-        return `${indent}${k}${eq}${formatValue(oldVal)}${comma}${comment}`;
-      },
-    );
+    if (maskedLua(content)[group.start] !== "{") throw new Error("Sandbox option group is not a table.");
+    tableStart = group.start;
   }
-
-  return content;
+  const { fields, end } = tableFields(content, tableStart);
+  const field = fields.find((entry) => entry.name === key);
+  if (!field) return create ? insertField(content, end, `${key} = ${literal}`) : content;
+  const raw = content.slice(field.start, field.end);
+  const primitive = /^\s*("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|true\b|false\b|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/.exec(raw);
+  if (!primitive || maskedLua(raw.slice(primitive[0].length)).trim()) throw new Error("Sandbox option value is not a literal. Edit the Lua file directly.");
+  return content.slice(0, field.start) + literal + raw.slice(primitive[0].length) + content.slice(field.end);
 }
 
-async function writeSandboxValues(
-  entries: Array<[string, any]>,
-  configPath: string,
-  serverName: string,
-): Promise<JsonRecord> {
-  const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
-  if (!fs.existsSync(filePath)) {
-    return { persisted: false, reason: "SandboxVars.lua not found" };
-  }
+function insertField(content: string, end: number, field: string): string {
+  const prefix = content.slice(0, end);
+  const mask = maskedLua(prefix).trimEnd();
+  const separator = ["{", ",", ";"].includes(mask.at(-1) || "") ? "" : ",";
+  return prefix + separator + `\n    ${field},\n` + content.slice(end);
+}
 
-  let persisted = false;
-  let reason = null;
-  await withFileLock(filePath, async () => {
-    const originalContent = fs.readFileSync(filePath, "utf-8");
-    let content = originalContent;
-
-    const missing = entries
-      .map(([key]: [string, any]) => key)
-      .filter(
-        (key: string) => !new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`, "m").test(content),
-      );
-    if (missing.length > 0) {
-      reason = `not present in SandboxVars.lua: ${missing.join(", ")}`;
-      return;
-    }
-
-    for (const [key, value] of entries) {
-      content = modifySandboxValue(content, key, value, null);
-    }
-    if (content === originalContent) {
-      reason = "values already match";
-      return;
-    }
-    const backupWarning = backupWarningFor(
-      await createBackup(configPath, `${serverName}_SandboxVars.lua`),
-    );
-    writeFileAtomic(filePath, content, "utf-8");
-    persisted = true;
-    if (backupWarning) reason = backupWarning;
+export async function persistSandboxOption(name: string, value: unknown) {
+  const parts = name.split(".");
+  if (parts.length > 2 || !parts.every((part) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) throw new Error("Invalid sandbox option name.");
+  const configPath = await getServerConfigPath();
+  const filename = `${await getServerName()}_SandboxVars.lua`;
+  const file = path.join(configPath, filename);
+  return withFileLock(file, async () => {
+    const original = fs.readFileSync(file, "utf8");
+    const content = modifySandboxValue(original, parts.at(-1)!, value, parts.length === 2 ? parts[0] : null, true);
+    if (content === original) return { persisted: true, changed: false };
+    const backupWarning = backupWarningFor(await createBackup(configPath, filename));
+    writeFileAtomic(file, content, "utf8");
+    return { persisted: true, changed: true, ...(backupWarning ? { backupWarning } : {}) };
   });
-
-  return { persisted, reason };
-}
-
-export async function persistSandboxValues(values: JsonRecord): Promise<JsonRecord> {
-  const entries = Object.entries(values || {});
-  if (entries.length === 0) return { persisted: false, reason: "nothing to do" };
-
-  try {
-    return await writeSandboxValues(
-      entries,
-      await getServerConfigPath(),
-      await getServerName(),
-    );
-  } catch (err: unknown) {
-    if (err instanceof ServerNotConfiguredError) {
-      return { persisted: false, reason: "no server configured" };
-    }
-    throw err;
-  }
 }

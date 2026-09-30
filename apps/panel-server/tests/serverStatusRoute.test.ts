@@ -6,8 +6,14 @@ vi.mock("../database/init.ts", () => ({
   getCurrentServer,
 }));
 
-const fakeBridge = { bridgePath: null, isRunning: false, isModConnected: () => false };
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: fakeBridge }) }));
+const fakeGameIntegration = {
+  path: null,
+  isRunning: false,
+  modConnected: false,
+  getStatus: () => ({ configured: !!fakeGameIntegration.path }),
+  isConnected: () => fakeGameIntegration.modConnected,
+};
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ gameIntegration: fakeGameIntegration }) }));
 
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
@@ -36,9 +42,9 @@ describe("GET /api/servers/active/status", () => {
     getCurrentServer.mockReset();
     resolveDockerHostSignal.mockReset();
     resolveDockerHostSignal.mockResolvedValue({ running: false, scanFailed: true });
-    fakeBridge.bridgePath = null;
-    fakeBridge.isRunning = false;
-    fakeBridge.isModConnected = () => false;
+    fakeGameIntegration.path = null;
+    fakeGameIntegration.isRunning = false;
+    fakeGameIntegration.modConnected = false;
   });
 
   it("returns 404 when no server is configured", async () => {
@@ -52,7 +58,7 @@ describe("GET /api/servers/active/status", () => {
 
   it("reports container running but RCON disconnected without collapsing to one flag", async () => {
     getCurrentServer.mockResolvedValue({ id: 1 });
-    fakeBridge.bridgePath = "/data/panelbridge";
+    fakeGameIntegration.path = "/data/Lua/argus/servertest";
     const response = createResponse();
 
     await handleActiveServerStatus(
@@ -76,7 +82,7 @@ describe("GET /api/servers/active/status", () => {
         selected: true,
         host: expect.objectContaining({ status: "running" }),
         server: expect.objectContaining({ status: "disconnected" }),
-        bridge: expect.objectContaining({ status: "offline" }),
+        gameIntegration: expect.objectContaining({ status: "offline" }),
         state: "running-not-ready",
       }),
     );
@@ -166,17 +172,17 @@ describe("GET /api/servers/active/status", () => {
     );
   });
 
-  it("reports an active bridge only when running and mod-connected", async () => {
+  it("reports an active integration only when running and mod-connected", async () => {
     getCurrentServer.mockResolvedValue({ id: 1 });
-    fakeBridge.bridgePath = "/data/panelbridge";
-    fakeBridge.isRunning = true;
-    fakeBridge.isModConnected = () => true;
+    fakeGameIntegration.path = "/data/Lua/argus/servertest";
+    fakeGameIntegration.isRunning = true;
+    fakeGameIntegration.modConnected = true;
     const response = createResponse();
 
     await handleActiveServerStatus({ app: fakeApp() }, response);
 
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ bridge: expect.objectContaining({ status: "active" }) }),
+      expect.objectContaining({ gameIntegration: expect.objectContaining({ status: "active" }) }),
     );
   });
 

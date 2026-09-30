@@ -39,7 +39,7 @@ export function resolveClientProvider(
 export interface ComposedStatusSignals {
   host: { status: string }
   server: { status: string }
-  bridge: { status: string }
+  gameIntegration: { status: string }
 }
 
 export function resolveServerCardRunning(
@@ -72,13 +72,13 @@ export function resolveServerCardRunning(
     if (
       composedStatus.host.status === 'running' ||
       composedStatus.server.status === 'connected' ||
-      composedStatus.bridge.status === 'active'
+      composedStatus.gameIntegration.status === 'active'
     )
       return true
     if (
       composedStatus.host.status === 'stopped' &&
       composedStatus.server.status === 'disconnected' &&
-      composedStatus.bridge.status !== 'active'
+      composedStatus.gameIntegration.status !== 'active'
     )
       return false
     return null
@@ -110,7 +110,7 @@ export interface DashboardStatusInput {
 export interface DashboardStatusOutput {
   hostRunning: boolean
   rconConnected: boolean
-  bridgeActive: boolean
+  gameIntegrationActive: boolean
   hostUnknown: boolean
   online: boolean
 }
@@ -136,16 +136,23 @@ export function deriveDashboardStatus({
   const rconConnected = composedStatus
     ? composedStatus.server.status === 'connected'
     : Boolean(status?.rcon?.connected)
-  const bridgeActive = composedStatus?.bridge.status === 'active'
+  const gameIntegrationActive =
+    composedStatus?.gameIntegration.status === 'active'
   const hostUnknown = composedStatus
     ? ['unknown', 'not-applicable'].includes(composedStatus.host.status)
     : false
   const online =
     hasServer &&
     (composedStatus
-      ? hostRunning || rconConnected || bridgeActive
+      ? hostRunning || rconConnected || gameIntegrationActive
       : (localProcessStatus ?? !!status?.running))
-  return { hostRunning, rconConnected, bridgeActive, hostUnknown, online }
+  return {
+    hostRunning,
+    rconConnected,
+    gameIntegrationActive,
+    hostUnknown,
+    online,
+  }
 }
 
 export async function resolveServerRunning(
@@ -168,11 +175,11 @@ export async function resolveServerRunning(
     const composed = await fetchComposedStatus()
     const hostRunning = composed.host.status === 'running'
     const rconConnected = composed.server.status === 'connected'
-    const bridgeActive = composed.bridge.status === 'active'
+    const gameIntegrationActive = composed.gameIntegration.status === 'active'
     const hostUnknown = ['unknown', 'not-applicable'].includes(
       composed.host.status,
     )
-    if (hostRunning || rconConnected || bridgeActive) return true
+    if (hostRunning || rconConnected || gameIntegrationActive) return true
     return hostUnknown ? null : false
   } catch {
     return null

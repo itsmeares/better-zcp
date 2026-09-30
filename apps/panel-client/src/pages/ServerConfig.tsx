@@ -107,14 +107,12 @@ import {
   serverApi,
   serverFilesApi,
   serversApi,
-  panelBridgeApi,
-  ApiError,
+  gameIntegrationApi,
   SpawnPointsByProfession,
   SpawnRegion,
   SandboxData,
 } from '@/lib/api'
 import { resolveServerRunning } from '@/lib/serverStatus'
-import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import {
   formatModSettingDescription,
@@ -255,12 +253,6 @@ function rawChangePreview(previous: string, current: string) {
     items.push(`Line ${index + 1}: ${previewValue(key, oldLines[index])} → ${previewValue(key, newLines[index])}`)
   }
   return items
-}
-
-export function isWorldSaveFailure(
-  data: { persisted?: unknown } | null | undefined,
-): boolean {
-  return data?.persisted === false
 }
 
 export function getUnpersistedSandboxKeys(
@@ -1443,45 +1435,16 @@ export default function ServerConfig() {
     setModSettingsLoading(true)
     setModSettingsError(null)
     try {
-      const response = (await panelBridgeApi.sendCommand(
-        'getAllSandboxOptions',
-        {},
-      )) as {
-        success?: boolean
-        data?: {
-          options: Record<
-            string,
-            Array<{
-              name?: string
-              shortName?: string
-              tableName?: string
-              value?: unknown
-              type?: string
-              min?: number
-              max?: number
-              default?: unknown
-              enumValues?: string[]
-              selectedIndex?: number
-              translatedName?: string
-              tooltip?: string
-              tooltipText?: string
-              pageName?: string
-            }>
-          >
-          groups: Array<{ name: string; count: number }>
-          totalCount: number
-          enumerated: boolean
-        }
-        error?: string
-      }
+      const response = await gameIntegrationApi.getSandboxOptions()
       if (modSettingsLoadIdRef.current !== loadId) return
-      if (response?.success && response.data) {
+      const data = response.data ?? response
+      if (data.options && data.groups) {
         const options = Object.fromEntries(
-          Object.entries(response.data.options).filter(
+          Object.entries(data.options).filter(
             ([groupName]) => !VANILLA_SANDBOX_GROUPS.has(groupName),
           ),
         )
-        const groups = response.data.groups.filter(
+        const groups = data.groups.filter(
           (group) => !VANILLA_SANDBOX_GROUPS.has(group.name),
         )
         setModSettings(options)
@@ -1490,8 +1453,7 @@ export default function ServerConfig() {
         setModSettingsError(null)
       } else {
         setModSettingsError(
-          response?.error ||
-            'Failed to load mod settings. Is PanelBridge connected?',
+          response.error || 'Game integration did not return mod sandbox metadata.',
         )
       }
     } catch (error) {
@@ -1499,7 +1461,7 @@ export default function ServerConfig() {
       setModSettingsError(
         getUserErrorMessage(
           error,
-          'Failed to load mod settings. Check PanelBridge connection.',
+          'Failed to load mod settings. Check the game integration connection.',
         ),
       )
     } finally {
@@ -1550,7 +1512,11 @@ export default function ServerConfig() {
   const handleOptionChange = useCallback(
     async (optName: string, newValue: unknown, groupName: string) => {
       if (serverChangedSinceLoad) {
-        toast({ title: 'Server changed', description: 'Reload before changing a server option.', variant: 'destructive' })
+        toast({
+          title: 'Server changed',
+          description: 'Reload before changing a server option.',
+          variant: 'destructive',
+        })
         return
       }
       setSavingOptions((prev) => {
@@ -1560,122 +1526,45 @@ export default function ServerConfig() {
         return next
       })
       try {
-        const response = (await panelBridgeApi.sendCommand('setSandboxOption', {
-          name: optName,
-          value: newValue,
-        })) as {
-          success?: boolean
-          data?: {
-            name: string
-            value: unknown
-            type: string
-            verified?: unknown
-            persisted?: unknown
-            saveError?: unknown
-          }
-          error?: string
+        const response = await gameIntegrationApi.setSandboxOption(optName, newValue)
+        const data = response.data
+        if (!response.success || !data) {
+          throw new Error(response.error || 'The option update was not confirmed.')
         }
-        if (response?.success && response.data) {
-          const confirmedVal = response.data.value ?? newValue
-          setModSettings((prev) => {
-            if (!prev) return prev
-            const updated = { ...prev }
-            const groupOpts = updated[groupName]
-            if (groupOpts) {
-              updated[groupName] = groupOpts.map((o) => {
-                if (o.name !== optName) return o
-                const patched = { ...o, value: confirmedVal }
-                if (o.type === 'enum' && typeof confirmedVal === 'number') {
-                  patched.selectedIndex = confirmedVal
-                }
-                return patched
-              })
-            }
-            return updated
-          })
-          const verifyState = getBridgeVerifiedState(
-            'setSandboxOption',
-            response.data,
-          )
-          toast(
-            verifyState === 'unverifiable'
-              ? {
-                  title: 'Option Updated',
-                  description:
-                    String(optName) +
-                    ' was sent, but the mod could not confirm it took effect.',
-                  variant: 'default',
-                }
-              : verifyState === 'old-bridge'
-                ? {
-                    title: 'Option Updated',
-                    description:
-                      String(optName) +
-                      " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
-                    variant: 'default',
-                  }
-                : {
-                    title: 'Option Updated',
-                    description: String(optName) + ' set successfully',
-                  },
-          )
 
-          if (isWorldSaveFailure(response.data)) {
-            toast({
-              title: 'Applied, but not saved',
-              description:
-                String(optName) +
-                " was applied, but the server's world save failed (" +
-                String(
-                  typeof response.data.saveError === 'string'
-                    ? response.data.saveError
-                    : 'Unknown error',
-                ) +
-                '), so it may not survive the next restart.',
-              variant: 'destructive',
+        const confirmedValue = data.value ?? newValue
+        setModSettings((prev) => {
+          if (!prev) return prev
+          const updated = { ...prev }
+          const groupOptions = updated[groupName]
+          if (groupOptions) {
+            updated[groupName] = groupOptions.map((option) => {
+              if (option.name !== optName) return option
+              const patched = { ...option, value: confirmedValue }
+              if (option.type === 'enum' && typeof confirmedValue === 'number') {
+                patched.selectedIndex = confirmedValue
+              }
+              return patched
             })
           }
+          return updated
+        })
 
-          try {
-            const saved = await serverFilesApi.saveSandboxOption(
-              optName,
-              confirmedVal as string | number | boolean,
-              pathsInfo?.serverId ?? null,
-            )
-            if (!saved.persisted) {
-              toast({
-                title: 'Applied, but not saved',
-                description:
-                  String(optName) +
-                  ' is not in SandboxVars.lua, so it will reset when the server restarts.',
-                variant: 'destructive',
-              })
-            }
-          } catch (error) {
-            const isServerRunningRefusal =
-              error instanceof ApiError && error.code === 'SERVER_RUNNING'
-            toast({
-              title: 'Applied, but not saved',
-              description: isServerRunningRefusal
-                ? String(optName) + ' will reset when the server restarts.'
-                : getUserErrorMessage(
-                    error,
-                    String(optName) + ' will reset when the server restarts.',
-                  ),
-              variant: 'destructive',
-            })
-          }
-        } else {
-          toast({
-            title: 'Failed to Update',
-            description: response?.error || 'Unknown error',
-            variant: 'destructive',
-          })
-        }
+        const applied = data.applied === true
+        const persisted = data.persisted === true
+        const outcome = [
+          applied ? 'applied live' : 'live application was not confirmed',
+          persisted ? 'saved' : 'not saved',
+        ].filter(Boolean).join('; ')
+        toast({
+          title: applied && persisted ? 'Option updated' : 'Option update needs attention',
+          description: `${optName}: ${outcome}. Restart the game server to ensure all saved changes take effect.`,
+          variant: applied && persisted ? 'success' : 'warning',
+        })
       } catch (error) {
         toast({
-          title: 'Error',
-          description: getUserErrorMessage(error, 'Failed to set option'),
+          title: 'Failed to update option',
+          description: getUserErrorMessage(error, 'Failed to set option.'),
           variant: 'destructive',
         })
       } finally {
@@ -1686,7 +1575,7 @@ export default function ServerConfig() {
         })
       }
     },
-    [toast, pathsInfo?.serverId, serverChangedSinceLoad],
+    [toast, serverChangedSinceLoad],
   )
 
   const handleSaveIni = async () => {
@@ -2878,7 +2767,7 @@ export default function ServerConfig() {
                       <span className="min-w-0 flex-1">
                         <>
                           {
-                            'PanelBridge modifies server-side Lua files. With Lua Checksum enabled, clients will fail verification and cannot connect. Disable '
+                            'The game integration modifies server-side Lua files. With Lua Checksum enabled, clients will fail verification and cannot connect. Disable '
                           }
                           <strong>{'DoLuaChecksum'}</strong>
                           {' in the Mods category to allow players to join.'}
@@ -4398,10 +4287,10 @@ export default function ServerConfig() {
                 modSettings
                   ? Number(modSettingsGroups.length) === 1
                     ? String(modSettingsGroups.length) +
-                      ' mod · live from bridge'
+                      ' mod · live from Game integration'
                     : String(modSettingsGroups.length) +
-                      ' mods · live from bridge'
-                  : 'panelbridge · live'
+                      ' mods · live from Game integration'
+                  : 'game integration · live'
               }
               icon={Puzzle}
               tone={modifiedModSettingsCount > 0 ? 'warning' : 'info'}
@@ -4536,19 +4425,19 @@ export default function ServerConfig() {
                   description={
                     <span>
                       {
-                        'Click load to fetch sandbox options from all installed mods via PanelBridge'
+                        'Click load to fetch sandbox options from installed mods through Game integration.'
                       }
                       <HelpTip
-                        label={'PanelBridge'}
+                        label={'Game integration'}
                         side="bottom"
                         className="mx-1 align-[-2px]"
                       >
                         {
-                          "PanelBridge is the Lua mod that runs on the game server and gives this panel live access to sandbox options, weather, teleport, and item control. Mod settings only load once it's installed on the server and the server is running."
+                          "Game integration runs on the game server and provides live access to mod sandbox settings and the item catalog. Mod settings load while the configured server is running."
                         }
                       </HelpTip>
                       {
-                        '. The PZ server must be running with PanelBridge active.'
+                        '. The game server must be running with Game integration active.'
                       }
                     </span>
                   }
@@ -4838,7 +4727,7 @@ export default function ServerConfig() {
                                           {opt.enumValues.map((ev, ei) => (
                                             <SelectItem
                                               key={ei}
-                                              value={String(ei)}
+                                              value={String(ei + 1)}
                                               className="text-xs font-mono"
                                             >
                                               {ev}
@@ -4857,20 +4746,41 @@ export default function ServerConfig() {
                                         min={opt.min}
                                         max={opt.max}
                                         step={
-                                          typeLabel === 'integer' &&
-                                          Number.isInteger(opt.min ?? 0)
-                                            ? 1
-                                            : 'any'
+                                          typeLabel === 'integer' ? 1 : 'any'
                                         }
                                         disabled={isSaving}
                                         aria-label={displayName}
                                         onBlur={(e) => {
                                           let num = parseFloat(e.target.value)
                                           if (isNaN(num) || !opt.name) return
+                                          if (
+                                            typeLabel === 'integer' &&
+                                            !Number.isInteger(num)
+                                          ) {
+                                            toast({
+                                              title: 'Invalid option value',
+                                              description: 'Enter a whole number.',
+                                              variant: 'destructive',
+                                            })
+                                            e.target.value = String(rawVal)
+                                            return
+                                          }
                                           if (opt.min !== undefined)
                                             num = Math.max(opt.min, num)
                                           if (opt.max !== undefined)
                                             num = Math.min(opt.max, num)
+                                          if (
+                                            typeLabel === 'integer' &&
+                                            !Number.isInteger(num)
+                                          ) {
+                                            toast({
+                                              title: 'Invalid option value',
+                                              description: 'Enter a whole number.',
+                                              variant: 'destructive',
+                                            })
+                                            e.target.value = String(rawVal)
+                                            return
+                                          }
                                           if (num === rawVal) return
                                           e.target.value = String(num)
                                           handleOptionChange(
