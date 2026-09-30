@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
@@ -7,6 +8,9 @@ import path from "path";
 let logServerEventShouldThrow = false;
 
 vi.mock("../database/init.ts", () => ({
+  exportServerPanelSettings: vi.fn(() => ({ settings: {}, tasks: [] })),
+  validateServerPanelSettings: vi.fn(value => value),
+  restoreServerPanelSettings: vi.fn(),
   getCurrentServer: async () => null,
   getSetting: async () => undefined,
   setSetting: async () => {},
@@ -60,7 +64,7 @@ describe("BackupService.deleteBackup() diagnostics", () => {
     logServerEventShouldThrow = false;
     warnCalls.length = 0;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-delete-diag-"));
-    service = new BackupService();
+    service = archiveService(BackupService);
     backupsPath = await service.getBackupsPath();
   });
 

@@ -143,7 +143,6 @@ describe("backup routes keep safety options under server control", () => {
     expect(createBackup).toHaveBeenCalledWith({
       io: services.io,
       activeServer: { id: "server-a", serverName: "A" },
-      includeDb: true,
     });
   });
 

@@ -111,6 +111,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
 
     const expectedPath = path.join(zomboidDataPath, "Server", "servertest.ini");
     expect(fs.existsSync(expectedPath)).toBe(true);
+    expect(fs.readFileSync(expectedPath, "utf-8")).toContain("BackupsPeriod=60\nBackupsCount=5");
     expect(fs.readFileSync(expectedPath, "utf-8")).toContain(
       "RCONPassword=secret123",
     );

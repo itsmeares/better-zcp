@@ -5,6 +5,7 @@ import path from "path";
 import {
   clearActiveSteamOperation,
   getActiveSteamOperations,
+  steamInstallKey,
 } from "../services/activeSteamOperations.ts";
 import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
@@ -57,7 +58,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearActiveSteamOperation(path.normalize(savePath).toLowerCase());
+  clearActiveSteamOperation(steamInstallKey(savePath));
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -76,7 +77,7 @@ it("refuses a wipe when its save path is inside a SteamCMD target install path",
     ...buildServerManager(),
     serverPath: root,
   };
-  const normalizedInstallPath = path.normalize(root).toLowerCase();
+  const normalizedInstallPath = steamInstallKey(root);
   getActiveSteamOperations().set(normalizedInstallPath, {
     type: "update",
     pid: process.pid,

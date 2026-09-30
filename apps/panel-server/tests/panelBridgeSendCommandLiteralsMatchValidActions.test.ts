@@ -10,8 +10,7 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const SCAN_FILES = [
   "apps/panel-server/routes/panelBridge.ts",
   "apps/panel-server/services/panelBridge.ts",
-  "apps/panel-server/services/scheduler.ts",
-  "apps/panel-server/services/modChecker.ts",
+  "apps/panel-server/services/serverMaintenance.ts",
 ];
 
 const CALL_PATTERN = /(?:bridge|panelBridge|this)\s*\.\s*sendCommand\(\s*["']([A-Za-z0-9_]+)["']/g;

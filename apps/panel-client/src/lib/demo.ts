@@ -573,7 +573,7 @@ export function installDemoFetchShim(): void {
     }
     if (path === '/api/backup/status') {
       return jsonResponse({
-        enabled: false, schedule: '0 */6 * * *', maxBackups: 10, includeDb: false,
+        enabled: false, schedule: '0 */6 * * *', maxBackups: 10, waitMinutes: 60,
         forceAfterMinutes: null, forceWarningMinutes: 15,
         backupInProgress: false, restoreInProgress: false, lastBackup: null,
         backupCount: 0, savesPath: '/home/pz/Zomboid/Saves/Multiplayer/DoomerZDemo',

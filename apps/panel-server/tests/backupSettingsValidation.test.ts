@@ -1,9 +1,13 @@
+import { archiveService } from "./archiveService.ts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getSetting = vi.fn(async () => null);
 const setSetting = vi.fn(async () => {});
 
 vi.mock("../database/init.ts", () => ({
+  exportServerPanelSettings: vi.fn(() => ({ settings: {}, tasks: [] })),
+  validateServerPanelSettings: vi.fn(value => value),
+  restoreServerPanelSettings: vi.fn(),
   getCurrentServer: vi.fn(async () => null),
   getSetting,
   setSetting,
@@ -18,7 +22,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects seconds-precision schedules before persisting them", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ schedule: "*/5 * * * * *" }),
@@ -27,7 +31,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects a five-field schedule that runs every minute", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ schedule: "* * * * *" }),
@@ -36,7 +40,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects a bare minute range that runs more often than every five minutes", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ schedule: "1-4 * * * *" }),
@@ -45,7 +49,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("accepts a schedule that runs every five minutes", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await service.updateSettings({ schedule: "*/5 * * * *" });
 
@@ -56,7 +60,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects malformed schedules before persisting them", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ schedule: "not a cron" }),
@@ -65,7 +69,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("persists a valid five-field schedule", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await service.updateSettings({ schedule: "0 */6 * * *" });
 
@@ -73,7 +77,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects a malformed backup count instead of silently substituting a default", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ maxBackups: "not-a-number" }),
@@ -82,7 +86,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("does not coerce a string boolean into a different persisted value", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ enabled: "false" }),
@@ -91,7 +95,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("does not partially persist other fields when the schedule is invalid", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(
       service.updateSettings({ enabled: true, schedule: "not a cron" }),
@@ -100,7 +104,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects a forced deadline shorter than its player warning before saving anything", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(service.updateSettings({
       enabled: true, forceAfterMinutes: 15, forceWarningMinutes: 30,
@@ -109,7 +113,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects non-finite bulk-delete day values at the service boundary", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
 
     await expect(service.deleteBackupsOlderThan(Number.NaN)).resolves.toEqual({
       success: false,
@@ -118,7 +122,7 @@ describe("BackupService.updateSettings schedule validation", () => {
   });
 
   it("rejects a fractional bulk-delete day value instead of letting it reach date arithmetic", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
     const listBackups = vi.spyOn(service, "listBackups");
 
     await expect(service.deleteBackupsOlderThan(1.5)).resolves.toEqual({

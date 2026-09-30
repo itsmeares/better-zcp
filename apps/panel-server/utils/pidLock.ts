@@ -79,8 +79,8 @@ function claimLock(lockPath: string): LockResult {
   };
 }
 
-export function acquireLock(dataDir: string): LockResult {
-  const nextLockPath = path.join(dataDir, "panel.lock");
+export function acquireLock(dataDir: string, fileName = "panel.lock"): LockResult {
+  const nextLockPath = path.join(dataDir, fileName);
   lockFilePath = nextLockPath;
 
   try {
@@ -92,11 +92,7 @@ export function acquireLock(dataDir: string): LockResult {
     return result;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    log.warn(
-      `Could not create lock file: ${message} — continuing without duplicate-instance protection`,
-    );
-    lockFilePath = null;
-    return { acquired: true, lockPath: null };
+    return { acquired: false, reason: `Could not create panel lock: ${message}`, existingPid: null, lockPath: nextLockPath };
   }
 }
 

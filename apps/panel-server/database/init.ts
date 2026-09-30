@@ -14,6 +14,8 @@ import {
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { currentServerId, requireServerId } from "../utils/serverScope.ts";
+import { isCronTooFrequent, isSupportedFiveFieldCron } from "../utils/cronValidation.ts";
+import { isSchedulableCommand } from "../utils/schedulerCommands.ts";
 
 type AnyRecord = Record<string, any>;
 export type ServerRecord = AnyRecord & {
@@ -706,6 +708,54 @@ export async function getScheduledTasks(): Promise<ScheduledTaskRecord[]> {
     : (db()
         .prepare("SELECT * FROM scheduled_tasks ORDER BY id")
         .all() as unknown as ScheduledTaskRecord[]);
+}
+
+export type ServerPanelSettings = {
+  settings: Record<string, any>;
+  tasks: Array<Pick<ScheduledTaskRecord, "name" | "cron_expression" | "command" | "enabled">>;
+};
+
+export function exportServerPanelSettings(): ServerPanelSettings {
+  const id = requireServerId();
+  return {
+    settings: Object.fromEntries(db().prepare("SELECT key,value FROM settings WHERE server_id=?").all(id)
+      .filter(row => !PANEL_SETTINGS.test(String(row.key)) && !PROFILE_FIELDS[String(row.key)])
+      .map(row => [String(row.key), JSON.parse(String(row.value))])),
+    tasks: db().prepare("SELECT name,cron_expression,command,enabled FROM scheduled_tasks WHERE server_id=? ORDER BY id").all(id) as ServerPanelSettings["tasks"],
+  };
+}
+
+export function validateServerPanelSettings(input: unknown): ServerPanelSettings {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Backup panel settings are missing or invalid");
+  const { settings, tasks } = input as ServerPanelSettings;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings) || !Array.isArray(tasks) || tasks.length > 1000 || JSON.stringify(input).length > 1024 * 1024) {
+    throw new Error("Backup panel settings are invalid or too large");
+  }
+  for (const key of Object.keys(settings)) {
+    if (!key || key.length > 200 || PANEL_SETTINGS.test(key) || PROFILE_FIELDS[key] || ["__proto__", "constructor", "prototype"].includes(key)) {
+      throw new Error(`Backup cannot restore panel-level setting: ${key}`);
+    }
+  }
+  const restoredTasks = tasks.map(task => {
+    if (!task || typeof task.name !== "string" || task.name.length > 256 || typeof task.command !== "string" || !task.command || task.command.length > 4096 || /[\r\n]/.test(task.command) || !isSchedulableCommand(task.command) || !isSupportedFiveFieldCron(task.cron_expression) || isCronTooFrequent(task.cron_expression) || ![0, 1].includes(task.enabled)) {
+      throw new Error("Backup contains an invalid scheduled task");
+    }
+    return { name: task.name, cron_expression: task.cron_expression, command: task.command, enabled: task.enabled };
+  });
+  return { settings, tasks: restoredTasks };
+}
+
+export function restoreServerPanelSettings(input: ServerPanelSettings): void {
+  const restored = validateServerPanelSettings(input), id = requireServerId();
+  if (!readServer(id)) throw new Error("Server no longer exists");
+  transaction(() => {
+    db().prepare("DELETE FROM settings WHERE server_id=?").run(id);
+    const setting = db().prepare("INSERT INTO settings(server_id,key,value) VALUES(?,?,?)");
+    for (const [key, value] of Object.entries(restored.settings)) setting.run(id, key, JSON.stringify(value));
+    db().prepare("DELETE FROM scheduled_tasks WHERE server_id=?").run(id);
+    const task = db().prepare("INSERT INTO scheduled_tasks(server_id,name,cron_expression,command,enabled,created_at) VALUES(?,?,?,?,?,?)");
+    for (const row of restored.tasks) task.run(id, row.name, row.cron_expression, row.command, row.enabled, new Date().toISOString());
+  });
 }
 export async function createScheduledTask(
   name: string,

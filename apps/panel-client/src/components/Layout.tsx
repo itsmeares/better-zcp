@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils'
 import { ConnectionStatus } from './ConnectionStatus'
 import { SystemHealthBanner } from './SystemHealthBanner'
+import { MaintenanceNotice } from './MaintenanceNotice'
 import {
   serversApi,
   ServerInstance,
@@ -1421,6 +1422,7 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
           )}
+          <MaintenanceNotice />
           {children}
         </div>
       </main>

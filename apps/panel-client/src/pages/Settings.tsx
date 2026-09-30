@@ -54,7 +54,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { HelpTip } from '@/components/HelpTip'
-import { AutoUpdateResultBanner } from '@/components/AutoUpdateResultBanner'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
@@ -81,6 +80,7 @@ import {
   authApi,
   serversApi,
   serverApi,
+  updateApi,
   panelUpdateApi,
   ApiError,
   BackupStatus,
@@ -93,6 +93,7 @@ import {
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useSocket } from '@/contexts/SocketContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useConfirm } from '@/contexts/ConfirmContext'
 import { useTheme, type ThemeName } from '@/contexts/ThemeContext'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
 import { BridgeStatusBadge } from '@/components/BridgeStatusBadge'
@@ -125,8 +126,6 @@ interface AppSettings {
   modCheckInterval: string
   modAutoRestart: boolean
   modRestartDelay: string
-  serverAutoUpdate: boolean
-  serverAutoUpdateWarningMinutes: string
   steamUpdateAccount: string
 
   steamApiKey: string
@@ -214,8 +213,6 @@ export default function Settings() {
     modCheckInterval: '5',
     modAutoRestart: true,
     modRestartDelay: '15',
-    serverAutoUpdate: false,
-    serverAutoUpdateWarningMinutes: '15',
     steamUpdateAccount: '',
     steamApiKey: '',
     workshopCollectionId: '',
@@ -249,6 +246,9 @@ export default function Settings() {
   const [testingRcon, setTestingRcon] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [gameUpdating, setGameUpdating] = useState(false)
+  const [gameUpdateResult, setGameUpdateResult] = useState<string | null>(null)
+
   const [panelUpdateStatus, setPanelUpdateStatus] =
     useState<PanelUpdateStatus | null>(null)
   const [panelUpdateStatusError, setPanelUpdateStatusError] = useState<
@@ -256,17 +256,15 @@ export default function Settings() {
   >(null)
   const [checkingPanelUpdate, setCheckingPanelUpdate] = useState(false)
   const [downloadingPanelUpdate, setDownloadingPanelUpdate] = useState(false)
-  const [panelUpdateReady, setPanelUpdateReady] = useState(false)
   const [panelUpdatePreflight, setPanelUpdatePreflight] =
     useState<PanelUpdatePreflight | null>(null)
-  const [panelApplyLog, setPanelApplyLog] = useState<string | null>(null)
   const [panelApplyResultDismissed, setPanelApplyResultDismissed] =
     useState(false)
   const [restartConfirmOpen, setRestartConfirmOpen] = useState(false)
   const [restartRiskConfirmed, setRestartRiskConfirmed] = useState(false)
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false)
-  const [applyRiskConfirmed, setApplyRiskConfirmed] = useState(false)
   const { toast } = useToast()
+  const confirm = useConfirm()
   const { user, authEnabled, logout } = useAuth()
 
   const [currentPassword, setCurrentPassword] = useState('')
@@ -570,33 +568,30 @@ export default function Settings() {
       .catch(() => setNetworkInterfaces([]))
   }, [])
 
+  const handleGameUpdate = async () => {
+    const accepted = await confirm({ title: 'Update game server?', description: 'This server will save and stop while SteamCMD updates its game files. If the update fails, it stays stopped so you can inspect the result. Online players receive a 15-minute warning; an empty server updates immediately.', confirmLabel: 'Save, stop and update', variant: 'warning' })
+    if (!accepted) return
+    setGameUpdating(true)
+    try { await updateApi.install(); setGameUpdateResult('Saving and stopping the server before the update…') }
+    catch (error) { setGameUpdating(false); toast({ title: 'Game update failed', description: getUserErrorMessage(error, 'Could not start game update'), variant: 'destructive' }) }
+  }
+  useEffect(() => {
+    let cancelled = false
+    const refresh = async () => {
+      try { const status = await updateApi.getStatus(); if (!cancelled) { setGameUpdating(status.updating); setGameUpdateResult(status.lastUpdateResult?.message || null) } }
+      catch (error) { reportClientError('Could not read game update status.', error) }
+    }
+    void refresh()
+    const timer = setInterval(refresh, 5000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [searchStr])
+
   const fetchPanelUpdateStatus = useCallback(async () => {
     try {
       const status = await panelUpdateApi.getStatus()
       setPanelUpdateStatus(status)
       setPanelUpdateStatusError(null)
-      if (
-        status.lastApplyResult?.status === 'failed' &&
-        status.lastApplyResult.canRetryApply === false
-      ) {
-        setPanelUpdateReady(false)
-      } else if (status.stagedUpdate) {
-        setPanelUpdateReady(true)
-      } else if (!status.updateAvailable) {
-        setPanelUpdateReady(false)
-      }
-      if (status.lastApplyResult?.status === 'failed') {
-        if (status.lastApplyResult.helperLog) {
-          setPanelApplyLog(status.lastApplyResult.helperLog)
-        } else {
-          try {
-            const { log: helperLog } = await panelUpdateApi.getApplyLog()
-            setPanelApplyLog(helperLog)
-          } catch {
-            setPanelApplyLog(null)
-          }
-        }
-      }
+
     } catch (error) {
       const message = getUserErrorMessage(
         error,
@@ -628,14 +623,9 @@ export default function Settings() {
   const isDockerPanelUpdate = panelUpdateStatus?.updateMode === 'docker'
   const stagedPanelUpdatePath = panelUpdateStatus?.stagedUpdate?.path
   const panelRestartAssessment = runtimeInfo?.restartAssessment
-  const updateRestartAssessment =
-    panelUpdatePreflight?.info.restartAssessment ?? panelRestartAssessment
   const panelRestartIsRisky =
     panelRestartAssessment?.gameServers !== 'preserved' ||
     Boolean(panelRestartAssessment?.requiresConfirmation)
-  const updateRestartIsRisky =
-    updateRestartAssessment?.gameServers !== 'preserved' ||
-    Boolean(updateRestartAssessment?.requiresConfirmation)
   const restartAssessmentMessage = (
     assessment: typeof panelRestartAssessment,
     scope: 'general' | 'updates',
@@ -888,7 +878,6 @@ export default function Settings() {
             ').',
         })
       } else {
-        setPanelUpdateReady(false)
         toast({
           title: 'Up to Date',
           description:
@@ -912,54 +901,41 @@ export default function Settings() {
     }
   }
 
-  const handleDownloadPanelUpdate = async () => {
-    if (!panelUpdateStatus?.updateAvailable) {
-      toast({
-        title: 'No Update Available',
-        description:
-          'No newer release was found. Run Check for Updates to refresh status.',
-      })
-      return
-    }
-
+  const handleInstallPanelUpdate = async () => {
     setDownloadingPanelUpdate(true)
     setPanelUpdateStatusError(null)
     try {
       const pre = await fetchPanelUpdatePreflight()
-      if (!pre || !pre.ok) {
-        throw new Error(
-          pre?.blockers[0] || 'Update blocked by preflight check.',
-        )
+      if (!pre?.ok) throw new Error(pre?.blockers[0] || 'Update blocked by preflight check.')
+      const previous = await fetch('/api/health').then(response => response.json())
+      const previousResult = (await panelUpdateApi.getStatus()).lastApplyResult?.at
+      await panelUpdateApi.install()
+      setRestarting(true)
+      toast({ title: 'Updating panel', description: 'Backing up panel data and restarting. Game servers remain online.' })
+      const deadline = Date.now() + 300000
+      while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        try {
+          const response = await fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(2000) })
+          if (response.ok) {
+            const health = await response.json()
+            if (health.status === 'ok' && health.instanceId && health.instanceId !== previous.instanceId) {
+              const result = (await panelUpdateApi.getStatus()).lastApplyResult
+              if (!result?.at || result.at === previousResult) continue
+              window.location.reload()
+              return
+            }
+          }
+        } catch { /* The panel is offline during the restart and possible rollback. */ }
       }
-
-      const result = await panelUpdateApi.download()
-
-      setPanelUpdateReady(true)
-      toast({
-        title: 'Update Downloaded',
-        description:
-          result.message ||
-          'The update files are ready. Restart the panel to apply this version.',
-        variant: 'success' as const,
-      })
-      await fetchPanelUpdateStatus()
+      throw new Error('The panel has not reconnected. Check the panel log before trying again.')
     } catch (error) {
-      const data =
-        error instanceof ApiError
-          ? (error.data as { preflight?: PanelUpdatePreflight } | undefined)
-          : undefined
+      setRestarting(false)
+      const data = error instanceof ApiError ? error.data as { preflight?: PanelUpdatePreflight } : undefined
       if (data?.preflight) setPanelUpdatePreflight(data.preflight)
-      toast({
-        title: 'Download Failed',
-        description: getUserErrorMessage(
-          error,
-          'The panel could not download the update. Check network access, disk space, and permissions.',
-        ),
-        variant: 'destructive',
-      })
-    } finally {
-      setDownloadingPanelUpdate(false)
-    }
+      toast({ title: 'Panel update could not complete', description: getUserErrorMessage(error, 'Check network access, disk space and the panel log.'), variant: 'destructive' })
+      await fetchPanelUpdateStatus()
+    } finally { setDownloadingPanelUpdate(false) }
   }
 
   const formatTimestamp = (value: string | null): string => {
@@ -1040,65 +1016,12 @@ export default function Settings() {
       })
     }
 
-    const handlePanelUpdateReady = (data: { version?: string }) => {
-      setPanelUpdateReady(true)
-      toast({
-        title: 'Update Ready',
-        description: data.version
-          ? 'Panel v' +
-            String(data.version) +
-            ' is downloaded. Restart the panel to switch to the new version.'
-          : 'The update is downloaded. Restart the panel to switch to the new version.',
-        variant: 'success' as const,
-      })
-      setPanelUpdateStatusError(null)
-      fetchPanelUpdateStatus()
-    }
-
-    const handlePanelUpdateApplied = (data: { version?: string }) => {
-      setPanelUpdateReady(false)
-      setPanelApplyResultDismissed(false)
-      setPanelApplyLog(null)
-      toast({
-        title: 'Update Applied',
-        description: data.version
-          ? 'Panel successfully updated to v' + String(data.version) + '.'
-          : 'Panel update applied successfully.',
-        variant: 'success' as const,
-      })
-      fetchPanelUpdateStatus()
-    }
-
-    const handlePanelUpdateApplyFailed = (data: {
-      pendingVersion?: string
-      helperLog?: string | null
-    }) => {
-      setPanelApplyResultDismissed(false)
-      if (data?.helperLog) setPanelApplyLog(data.helperLog)
-      toast({
-        title: 'Update Failed to Apply',
-        description: data?.pendingVersion
-          ? 'Panel is still running the previous version. The v' +
-            String(data.pendingVersion) +
-            ' update did not install.'
-          : 'The downloaded update did not install. Review the helper log for details.',
-        variant: 'destructive',
-      })
-      fetchPanelUpdateStatus()
-    }
-
     socket.on('panel:updateAvailable', handlePanelUpdateAvailable)
     socket.on('panel:downloadProgress', handlePanelDownloadProgress)
-    socket.on('panel:updateReady', handlePanelUpdateReady)
-    socket.on('panel:updateApplied', handlePanelUpdateApplied)
-    socket.on('panel:updateApplyFailed', handlePanelUpdateApplyFailed)
 
     return () => {
       socket.off('panel:updateAvailable', handlePanelUpdateAvailable)
       socket.off('panel:downloadProgress', handlePanelDownloadProgress)
-      socket.off('panel:updateReady', handlePanelUpdateReady)
-      socket.off('panel:updateApplied', handlePanelUpdateApplied)
-      socket.off('panel:updateApplyFailed', handlePanelUpdateApplyFailed)
     }
   }, [socket, toast, fetchPanelUpdateStatus])
 
@@ -1905,7 +1828,6 @@ export default function Settings() {
 
   return (
     <div className="page-transition">
-      <AutoUpdateResultBanner />
       {isDirty && (
         <div
           role="status"
@@ -2484,12 +2406,12 @@ export default function Settings() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-medium">
-                    {isDockerPanelUpdate ? 'Panel Updates' : 'Panel Auto Update'}
+                    {'Panel updates'}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {isDockerPanelUpdate
                       ? 'Check for a new release, then update from the Docker host.'
-                      : 'Check for a new release, download it, then apply on restart.'}
+                      : 'Check for a release, verify the download, back up panel data, and restart the panel.'}
                   </p>
                 </div>
                 {checkingPanelUpdate || panelUpdateStatus?.isChecking ? (
@@ -2601,254 +2523,17 @@ export default function Settings() {
                 </Alert>
               )}
 
-              {panelUpdateStatus?.lastApplyResult &&
-                !panelApplyResultDismissed &&
-                (panelUpdateStatus.lastApplyResult.status === 'success' ? (
-                  (panelUpdateStatus.lastApplyResult.appliedVersion &&
-                    panelUpdateStatus.currentVersion &&
-                    panelUpdateStatus.lastApplyResult.appliedVersion !==
-                      panelUpdateStatus.currentVersion) ||
-                  panelUpdateStatus.stagedUpdate ? null : (
-                    <Alert variant="success">
-                      <AlertTitle>{'Update Applied'}</AlertTitle>
-                      <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <span>
-                          {'Panel is now running v' +
-                            String(
-                              panelUpdateStatus.lastApplyResult
-                                .appliedVersion ||
-                                panelUpdateStatus.currentVersion,
-                            ) +
-                            String(
-                              panelUpdateStatus.lastApplyResult.at
-                                ? ' (applied ' +
-                                    String(
-                                      formatTimestamp(
-                                        panelUpdateStatus.lastApplyResult.at,
-                                      ),
-                                    ) +
-                                    ')'
-                                : '',
-                            ) +
-                            '.'}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPanelApplyResultDismissed(true)}
-                          className="self-start"
-                        >
-                          {'Dismiss'}
-                        </Button>
-                      </AlertDescription>
-                    </Alert>
-                  )
-                ) : (
-                  <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>{'Update Failed to Apply'}</AlertTitle>
-                    <AlertDescription className="flex flex-col gap-2">
-                      <span className="break-words">
-                        {'Panel is still running v' +
-                          String(
-                            panelUpdateStatus.lastApplyResult.currentVersion ||
-                              panelUpdateStatus.currentVersion,
-                          ) +
-                          '.'}
-                        {panelUpdateStatus.lastApplyResult.pendingVersion
-                          ? ' Expected v' +
-                            String(
-                              panelUpdateStatus.lastApplyResult.pendingVersion,
-                            ) +
-                            '.'
-                          : ''}
-                        {panelUpdateStatus.lastApplyResult.stagedStillPresent
-                          ? ' The downloaded file is still on disk; you can retry the restart.'
-                          : ' The staged binary is gone — re-download the update before retrying.'}
-                      </span>
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'av_quarantine' &&
-                        runtimeInfo?.family === 'windows' && (
-                          <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                            <strong className="text-destructive-foreground">
-                              {'Likely cause:'}
-                            </strong>{' '}
-                            {
-                              'antivirus or Controlled Folder Access deleted the new binary after it was placed.'
-                            }
-                            {panelUpdateStatus.lastApplyResult.panelFolder && (
-                              <div className="mt-1">
-                                {
-                                  'Add this folder to your AV exclusions and retry:'
-                                }
-                                <pre className="mt-1 rounded bg-background/70 p-1 text-[11px]">
-                                  {
-                                    panelUpdateStatus.lastApplyResult
-                                      .panelFolder
-                                  }
-                                </pre>
-                                <div className="mt-1 text-[11px] opacity-80">
-                                  {'Windows Defender:'}{' '}
-                                  <code>
-                                    Add-MpPreference -ExclusionPath{' '}
-                                    {JSON.stringify(
-                                      panelUpdateStatus.lastApplyResult
-                                        .panelFolder,
-                                    )}
-                                  </code>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'rename_locked' && (
-                        <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                          <strong className="text-destructive-foreground">
-                            {'Likely cause:'}
-                          </strong>{' '}
-                          {
-                            'another process (OneDrive, AV, or a file watcher) held the exe locked. Pause OneDrive or close explorer windows pointing at the folder, then retry.'
-                          }
-                        </div>
-                      )}
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'permission' && (
-                        <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                          <strong className="text-destructive-foreground">
-                            {'Likely cause:'}
-                          </strong>{' '}
-                          {runtimeInfo?.family === 'windows'
-                            ? 'access denied writing to the panel folder. Relaunch the panel as Administrator or move it out of Program Files.'
-                            : runtimeInfo?.family === 'posix'
-                              ? 'access denied writing to the panel folder. Check ownership and write permissions for the panel service user.'
-                              : 'access denied writing to the panel folder. Check the permissions for the account running the panel.'}
-                        </div>
-                      )}
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'helper_blocked' &&
-                        runtimeInfo?.family === 'windows' && (
-                          <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                            <strong className="text-destructive-foreground">
-                              {'Likely cause:'}
-                            </strong>{' '}
-                            {
-                              'the update helper script was blocked from running (Windows Defender ASR, AppLocker, or Group Policy). The staged binary is still on disk.'
-                            }
-                            {panelUpdateStatus.lastApplyResult.panelFolder && (
-                              <div className="mt-1">
-                                <strong>{'Recovery:'}</strong>{' '}
-                                <>
-                                  {'close this panel and double-click '}
-                                  <code>{'Start.bat'}</code>
-                                  {' in:'}
-                                </>
-                                <pre className="mt-1 rounded bg-background/70 p-1 text-[11px]">
-                                  {
-                                    panelUpdateStatus.lastApplyResult
-                                      .panelFolder
-                                  }
-                                </pre>
-                                <div className="mt-1 text-[11px] opacity-80">
-                                  {
-                                    'Start.bat picks the newest binary automatically, so the update will apply. To prevent this in the future, add the panel folder to AV exclusions.'
-                                  }
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'no_helper_log' && (
-                        <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                          <strong className="text-destructive-foreground">
-                            {'No helper log was written.'}
-                          </strong>{' '}
-                          {
-                            'The helper script may have been blocked by execution policy or AV. Check Windows Defender protection history.'
-                          }
-                        </div>
-                      )}
-                      {panelUpdateStatus.lastApplyResult.likelyCause ===
-                        'rollback_failed' &&
-                        runtimeInfo?.family === 'windows' && (
-                          <div className="rounded-md border border-destructive/40 bg-background/50 p-2 text-xs leading-relaxed">
-                            <strong className="text-destructive-foreground">
-                              {'Likely cause:'}
-                            </strong>{' '}
-                            {panelUpdateStatus.lastApplyResult
-                              .rollbackRetryLikely
-                              ? 'the automatic rollback did not fully complete. The panel is likely to retry this exact update again on the next restart and fail the same way, until this is cleared by hand.'
-                              : 'the update rolled back successfully. One leftover file could not be removed automatically and is safe to delete by hand.'}
-                            {panelUpdateStatus.lastApplyResult.panelFolder && (
-                              <div className="mt-1">
-                                <strong>{'Files to delete:'}</strong>{' '}
-                                {panelUpdateStatus.lastApplyResult
-                                  .rollbackRetryLikely
-                                  ? 'close this panel first, then delete these three files from the install folder below:'
-                                  : 'delete this file from the install folder below:'}
-                                <pre className="mt-1 rounded bg-background/70 p-1 text-[11px]">
-                                  {panelUpdateStatus.lastApplyResult
-                                    .rollbackRetryLikely
-                                    ? '.update-pending\n.update-applying\nupdate-bundle.json'
-                                    : 'update-bundle.json'}
-                                </pre>
-                                <div className="mt-1 text-[11px] opacity-80">
-                                  {
-                                    panelUpdateStatus.lastApplyResult
-                                      .panelFolder
-                                  }
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      {panelApplyLog && (
-                        <details className="mt-1 text-xs">
-                          <summary className="cursor-pointer font-medium">
-                            {'Show helper log'}
-                          </summary>
-                          <pre className="mt-2 max-h-64 overflow-auto rounded-md border border-destructive/30 bg-background/60 p-2 text-[11px] leading-snug whitespace-pre-wrap break-all">
-                            {panelApplyLog}
-                          </pre>
-                        </details>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPanelApplyResultDismissed(true)}
-                        >
-                          {'Dismiss'}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              const { log: helperLog } =
-                                await panelUpdateApi.getApplyLog()
-                              setPanelApplyLog(
-                                helperLog || 'No helper log found.',
-                              )
-                            } catch (error) {
-                              toast({
-                                title: 'Could not read log',
-                                description: getUserErrorMessage(
-                                  error,
-                                  'Failed to read helper log.',
-                                ),
-                                variant: 'destructive',
-                              })
-                            }
-                          }}
-                        >
-                          {'Refresh log'}
-                        </Button>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                ))}
+              {panelUpdateStatus?.lastApplyResult && !panelApplyResultDismissed && (
+                <div className="rounded-lg border p-4 text-sm space-y-2" role="status">
+                  <p className="font-medium">{panelUpdateStatus.lastApplyResult.status === 'success' ? 'Panel update complete' : 'Panel update failed'}</p>
+                  <p className="text-muted-foreground">
+                    {panelUpdateStatus.lastApplyResult.status === 'success'
+                      ? `Running v${panelUpdateStatus.currentVersion}. Game servers stayed online.`
+                      : panelUpdateStatus.lastApplyResult.message || 'The previous panel was restored. Check the panel log before retrying.'}
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={() => setPanelApplyResultDismissed(true)}>Dismiss</Button>
+                </div>
+              )}
 
               {panelUpdatePreflight &&
                 !panelUpdatePreflight.ok &&
@@ -2939,150 +2624,27 @@ export default function Settings() {
                     </div>
                   ) : null
                 ) : (
-                  <Button
-                    onClick={handleDownloadPanelUpdate}
-                    disabled={
-                      !panelUpdateStatus?.updateAvailable ||
-                      checkingPanelUpdate ||
-                      downloadingPanelUpdate ||
-                      restarting ||
-                      panelUpdatePreflight?.ok === false
-                    }
-                    className="gap-2"
-                  >
-                    {downloadingPanelUpdate ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                    {downloadingPanelUpdate
-                      ? 'Downloading...'
-                      : 'Download Update'}
-                  </Button>
-                )}
-
-                {!isDockerPanelUpdate && (
-                  <AlertDialog
-                    open={applyConfirmOpen}
-                    onOpenChange={(open) => {
-                      setApplyConfirmOpen(open)
-                      if (!open) setApplyRiskConfirmed(false)
-                    }}
-                  >
+                  <AlertDialog open={applyConfirmOpen} onOpenChange={setApplyConfirmOpen}>
                     <AlertDialogTrigger asChild>
-                      <Button
-                        variant="warning"
-                        disabled={
-                          !panelUpdateReady ||
-                          restarting ||
-                          isDirty ||
-                          downloadingPanelUpdate ||
-                          Boolean(panelUpdateStatus?.isDownloading) ||
-                          panelUpdatePreflight?.ok === false
-                        }
-                        className="gap-2"
-                      >
-                        {restarting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <RotateCw className="w-4 h-4" />
-                        )}
-                        {'Restart and Apply Update'}
+                      <Button disabled={!hasActionablePanelUpdate || checkingPanelUpdate || downloadingPanelUpdate || restarting || isDirty || panelUpdatePreflight?.ok === false} className="gap-2">
+                        {downloadingPanelUpdate || restarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {restarting ? 'Reconnecting…' : downloadingPanelUpdate ? 'Downloading…' : 'Update panel'}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {'Apply panel update?'}
-                        </AlertDialogTitle>
+                        <AlertDialogTitle>Update panel to v{panelUpdateStatus?.stagedUpdate?.version || panelUpdateStatus?.latestVersion}?</AlertDialogTitle>
                         <AlertDialogDescription asChild>
                           <div className="space-y-3 text-sm">
-                            <p>
-                              {
-                                'The panel will exit immediately. A helper process will swap the executable and relaunch it in a few seconds.'
-                              }
-                              {panelUpdateStatus?.stagedUpdate?.version
-                                ? ' You are about to install v' +
-                                  String(
-                                    panelUpdateStatus.stagedUpdate.version,
-                                  ) +
-                                  '.'
-                                : ''}
-                            </p>
-                            <p
-                              className={
-                                updateRestartIsRisky
-                                  ? 'font-medium text-destructive'
-                                  : 'text-foreground'
-                              }
-                            >
-                              {restartAssessmentMessage(
-                                updateRestartAssessment,
-                                'updates',
-                              )}
-                            </p>
-                            {panelUpdatePreflight?.warnings.length ? (
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {'Please confirm before continuing:'}
-                                </p>
-                                <ul className="mt-1 list-disc space-y-1 ps-5">
-                                  {translatePanelUpdateMessages(
-                                    panelUpdatePreflight.warnings,
-                                    panelUpdatePreflight.warningDetails,
-                                  ).map((w, i) => (
-                                    <li
-                                      key={`confirm-wrn-${i}`}
-                                      className="break-words"
-                                    >
-                                      {w}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                            <p className="text-xs text-muted-foreground">
-                              If the new version does not return online within a
-                              minute, inspect{' '}
-                              <code>
-                                {panelUpdatePreflight?.info.applyLogPath ||
-                                  runtimeInfo?.temporaryDirectory ||
-                                  'the panel log directory'}
-                              </code>
-                              {runtimeInfo?.family === 'posix'
-                                ? ' or journalctl -u zomboid-panel.'
-                                : '.'}
-                            </p>
-                            {updateRestartIsRisky && (
-                              <label className="flex items-start gap-2 text-sm text-foreground">
-                                <Checkbox
-                                  checked={applyRiskConfirmed}
-                                  onCheckedChange={(checked) =>
-                                    setApplyRiskConfirmed(checked === true)
-                                  }
-                                />
-                                <span>
-                                  {
-                                    'I understand that running game servers may be stopped.'
-                                  }
-                                </span>
-                              </label>
-                            )}
+                            <p>The panel downloads and verifies the release, backs up its data and restarts. Your game servers remain online.</p>
+                            <p>If the new panel fails its health check, the previous version and panel data are restored automatically.</p>
+                            {panelUpdatePreflight?.warnings.length ? <ul className="list-disc ps-5">{panelUpdatePreflight.warnings.map(message => <li key={message}>{message}</li>)}</ul> : null}
                           </div>
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
-                        <AlertDialogAction
-                          disabled={updateRestartIsRisky && !applyRiskConfirmed}
-                          onClick={() =>
-                            restartPanelWithReconnect(
-                              'Applying downloaded update. Restarting panel...',
-                            )
-                          }
-                        >
-                          {'Restart and apply'}
-                        </AlertDialogAction>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleInstallPanelUpdate}>Update now</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -3108,21 +2670,55 @@ export default function Settings() {
               <p className="text-xs text-muted-foreground">
                 {isDirty
                   ? 'Save settings before applying an update.'
-                  : panelUpdateReady
-                    ? 'Update files are ready. Restart to switch to the new version.'
-                    : panelUpdateStatus?.updateAvailable
+                  : panelUpdateStatus?.updateAvailable
                       ? isDockerPanelUpdate
                         ? 'Update the Docker image from the host using the command above.'
-                        : 'Download the update, then restart to apply it.'
+                        : 'Download, verification and panel restart run together. Game servers remain online.'
                       : 'No update is ready to install.'}
               </p>
 
               <p className="text-xs text-muted-foreground">
                 {isDockerPanelUpdate
                   ? 'Docker updates are started by the host operator.'
-                  : 'Auto-update only works in packaged builds. In a dev checkout, update with git.'}
+                  : 'Native packages support one-click updates. Source checkouts update with git.'}
               </p>
             </div>
+            <Card className="mt-5" id="settings-game-updates">
+              <CardHeader><CardTitle>{'Game server updates'}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">{'Updates run when you start them. The panel saves the world, stops this server, runs SteamCMD, and starts it again if it was running. Other servers sharing the install must be stopped first.'}</p>
+                    <Button disabled={gameUpdating || isDirty} onClick={handleGameUpdate}>
+                      {gameUpdating ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : <Download className="w-4 h-4 me-2" />}
+                      {gameUpdating ? 'Game maintenance in progress' : 'Update game server'}
+                    </Button>
+                    {gameUpdateResult && <p role="status" className="text-sm text-muted-foreground">{gameUpdateResult}</p>}
+                  </div>
+                  <div className="max-w-md space-y-2 ps-4 pt-4 border-s-2 border-primary/30">
+                    <Label htmlFor="steam-update-account" className="text-base">
+                      {'SteamCMD update account'}
+                    </Label>
+                    <Input
+                      id="steam-update-account"
+                      value={settings.steamUpdateAccount}
+                      onChange={(e) =>
+                        updateSetting('steamUpdateAccount', e.target.value)
+                      }
+                      placeholder={'Leave blank to use anonymous login'}
+                      autoComplete="username"
+                      className="h-11"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      {
+                        'Use a Steam account that owns Project Zomboid when anonymous updates cannot access a depot. Only the account name is saved; SteamCMD keeps its own encrypted login session and may ask for Steam Guard again.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
           </TabsContent>
 
           <TabsContent value="connection" className="mt-0 space-y-5">
@@ -3984,80 +3580,7 @@ export default function Settings() {
                     </p>
                   </div>
                 )}
-                <div className="border-t border-border/60 pt-6">
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50">
-                    <Switch
-                      checked={settings.serverAutoUpdate}
-                      onCheckedChange={(value) =>
-                        updateSetting('serverAutoUpdate', value)
-                      }
-                      aria-label={
-                        'Automatically update the server when a new build is detected'
-                      }
-                    />
-                    <div>
-                      <Label className="text-base">
-                        {'Automatically update the game server'}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {
-                          'Save, stop, update through SteamCMD, then start again when a new build is detected.'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <div className="max-w-md space-y-2 ps-4 pt-4 border-s-2 border-primary/30">
-                    <Label htmlFor="steam-update-account" className="text-base">
-                      {'SteamCMD update account'}
-                    </Label>
-                    <Input
-                      id="steam-update-account"
-                      value={settings.steamUpdateAccount}
-                      onChange={(e) =>
-                        updateSetting('steamUpdateAccount', e.target.value)
-                      }
-                      placeholder={'Leave blank to use anonymous login'}
-                      autoComplete="username"
-                      className="h-11"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      {
-                        'Use a Steam account that owns Project Zomboid when anonymous updates cannot access a depot. Only the account name is saved; SteamCMD keeps its own encrypted login session and may ask for Steam Guard again.'
-                      }
-                    </p>
-                  </div>
-                  {settings.serverAutoUpdate && (
-                    <div className="max-w-md space-y-2 ps-4 pt-4 border-s-2 border-primary/30">
-                      <Label
-                        htmlFor="server-update-warning-minutes"
-                        className="text-base"
-                      >
-                        {'Player warning (minutes)'}
-                      </Label>
-                      <Input
-                        id="server-update-warning-minutes"
-                        type="number"
-                        value={settings.serverAutoUpdateWarningMinutes}
-                        onChange={(e) =>
-                          updateSetting(
-                            'serverAutoUpdateWarningMinutes',
-                            e.target.value,
-                          )
-                        }
-                        onWheel={(e) => e.currentTarget.blur()}
-                        min="0"
-                        max="60"
-                        className="h-11"
-                        inputMode="numeric"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        {
-                          'Defaults to 15 minutes. Set 0 to update immediately when no players are online.'
-                        }
-                      </p>
-                    </div>
-                  )}
-                </div>
+
               </CardContent>
             </Card>
 

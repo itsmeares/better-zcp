@@ -7,6 +7,7 @@ import path from "path";
 import {
   clearActiveSteamOperation,
   getActiveSteamOperations,
+  steamInstallKey,
 } from "../services/activeSteamOperations.ts";
 import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
@@ -51,7 +52,7 @@ describe("POST /api/server/delete-files safety guards", () => {
   });
 
   afterEach(() => {
-    clearActiveSteamOperation(path.normalize(installDir).toLowerCase());
+    clearActiveSteamOperation(steamInstallKey(installDir));
     fs.rmSync(installDir, { recursive: true, force: true });
   });
 
@@ -166,7 +167,7 @@ describe("POST /api/server/delete-files safety guards", () => {
   });
 
   it("refuses while SteamCMD is writing the target install path", async () => {
-    const normalizedInstallPath = path.normalize(installDir).toLowerCase();
+    const normalizedInstallPath = steamInstallKey(installDir);
     getActiveSteamOperations().set(normalizedInstallPath, {
       type: "update",
       pid: process.pid,

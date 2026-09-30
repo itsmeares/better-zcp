@@ -206,6 +206,9 @@ jobs:
           RUN_AUTH_SMOKE: "1"
         run: node scripts/smoke-release.mjs
 
+      - name: Exercise native update and health rollback with the packaged executable
+        run: node --experimental-strip-types scripts/smoke-panel-update.mjs
+
       - name: Verify packaged updater artifacts
         shell: pwsh
         run: |

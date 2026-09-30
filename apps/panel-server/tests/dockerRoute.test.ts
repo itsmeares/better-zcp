@@ -1,3 +1,4 @@
+import { getActiveSteamOperations, steamInstallKey } from "../services/activeSteamOperations.ts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { getServer, connect, save, disconnect } = vi.hoisted(() => ({
@@ -29,6 +30,7 @@ vi.mock("../services/rcon.ts", () => ({
 const { default: router } = await import("../routes/docker.ts");
 
 beforeEach(() => {
+  getActiveSteamOperations().clear();
   getServer.mockReset();
   connect.mockReset();
   save.mockReset();
@@ -100,6 +102,18 @@ describe("GET /api/docker/status", () => {
 });
 
 describe("POST /api/docker/containers/:id/:action", () => {
+  it("blocks a mapped container start while Steam owns its installation", async () => {
+    const response = createResponse(), runManagedAction = vi.fn();
+    const installPath = "/fixture-game";
+    getServer.mockResolvedValue({ id: "server-1", dockerContainerName: "managed", installPath });
+    getActiveSteamOperations().set(steamInstallKey(installPath), { type: "update", startTime: Date.now() });
+    await runRoute("/containers/:id/:action", "post", {
+      params: { id: "managed", action: "start" }, body: { serverId: "server-1" },
+      app: { get: () => ({ enabled: true, available: true, inspectManagedContainer: async () => ({ State: { Running: false } }), runManagedAction }) },
+    }, response);
+    expect(runManagedAction).not.toHaveBeenCalled(); expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: expect.stringContaining("Steam operation") }));
+  });
+
   it("only runs an action through the managed-container client", async () => {
     const response = createResponse();
     const runManagedAction = vi.fn(async () => ({ success: true }));
@@ -133,7 +147,7 @@ describe("POST /api/docker/containers/:id/:action", () => {
     );
 
     expect(runManagedAction).toHaveBeenCalledWith("managed", "restart");
-    expect(response.json).toHaveBeenCalledWith({ success: true });
+    expect(response.json).toHaveBeenCalledWith({ handled: true, success: true });
   });
 
   it("does not stop a container when the world save fails", async () => {

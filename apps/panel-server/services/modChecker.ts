@@ -15,7 +15,6 @@ import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 import { sanitizeError } from "../utils/sanitize.ts";
-import { getPanelRuntime } from "../utils/panelRuntime.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -174,9 +173,6 @@ export class ModChecker extends EventEmitter {
   forceAfterDeadline: boolean;
   lastUpdateDetected: Date | null;
   pendingRestart: boolean;
-  pendingServerId: string | number | null;
-  pendingRestartStartedAt: number | null;
-  playerCheckInterval: NodeJS.Timeout | null;
   modNameCache: Map<string, AnyRecord>;
   checkInProgress: boolean;
   lastSteamTimestamps: Map<string, AnyRecord>;
@@ -210,9 +206,6 @@ export class ModChecker extends EventEmitter {
     this.forceAfterDeadline = false;
     this.lastUpdateDetected = null;
     this.pendingRestart = false;
-    this.pendingServerId = null;
-    this.pendingRestartStartedAt = null;
-    this.playerCheckInterval = null;
 
     this.modNameCache = new Map();
     this.checkInProgress = false;
@@ -655,10 +648,6 @@ export class ModChecker extends EventEmitter {
       clearTimeout(this.initialCheckTimeout);
       this.initialCheckTimeout = null;
     }
-    if (this.playerCheckInterval) {
-      clearInterval(this.playerCheckInterval);
-      this.playerCheckInterval = null;
-    }
   }
 
   async setUpdateCallback(callback: any): Promise<void> {
@@ -709,355 +698,37 @@ export class ModChecker extends EventEmitter {
     );
   }
 
-  async handleModUpdate(updatedMods: AnyRecord[]): Promise<AnyRecord | undefined> {
-    if (this.pendingRestart) {
-      log.info("Restart already pending, ignoring handleModUpdate");
-      return;
-    }
-
-    log.info(
-      `handleModUpdate called with ${updatedMods.length} mod(s): ${updatedMods.map((m: AnyRecord) => m.name).join(", ")}`,
-    );
-
-    let selectedServer;
-    try {
-      selectedServer = await getCurrentServer();
-    } catch {
-      return { success: false, retry: true, reason: "server_unknown" };
-    }
+  async handleModUpdate(updatedMods: AnyRecord[]): Promise<AnyRecord> {
+    if (this.pendingRestart) return { success: true, pending: true };
+    if (!this.scheduler?.maintenance) return { success: false, retry: true, reason: "scheduler_unavailable" };
     this.pendingRestart = true;
-    this.pendingServerId = selectedServer?.id ?? null;
-    this.pendingRestartStartedAt = Date.now();
-
     this.lastUpdateDetected = new Date();
-
-    if (this.io) {
-      this.io.emit("mods:update_detected", {
-        mods: updatedMods,
-        timestamp: this.lastUpdateDetected.toISOString(),
-        autoRestart: this.autoRestartEnabled,
-        warningMinutes: this.restartWarningMinutes,
-      });
-    }
+    this.io?.emit("mods:update_detected", { mods: updatedMods, timestamp: this.lastUpdateDetected.toISOString(), autoRestart: true });
     this.emit("update_detected", updatedMods);
+    // pendingRestart prevents another window while this one is waiting. Deferred updates remain eligible at the next check.
+    void this.triggerModRestart(updatedMods);
+    return { success: true, pending: true };
+  }
 
-    if (!this.scheduler) {
-      log.warn("Scheduler not available, cannot trigger restart");
-      this.pendingRestart = false;
-      return { success: false, retry: true, reason: "scheduler_unavailable" };
-    }
-
-    if (!this.scheduler.rconService?.connected && this.serverManager?.getServerProcessDetails) {
-      try {
-        const state = await this.serverManager.getServerProcessDetails();
-        if (state && !state.running && !state.scanFailed) {
-          this.pendingRestart = false;
-          return { success: true, skipped: true, markProcessed: true, reason: "server_offline" };
-        }
-      } catch { /* uncertain state must wait for RCON */ }
-    }
-
-    const playerCount = await this.getOnlinePlayerCount();
-    if (playerCount === null) {
-      log.warn("Cannot verify player count before mod restart; retrying on the next check");
-      this.pendingRestart = false;
-      return { success: false, retry: true, reason: "player_count_unknown" };
-    }
-    if (playerCount > 0) {
-      try {
-        await this.scheduler.rconService?.serverMessage(
-          "Workshop updates detected. Restart pending until players leave.",
-        );
-      } catch (error: unknown) {
-        log.warn(`Could not announce pending Workshop restart: ${errorMessage(error)}`);
-      }
-      this.io?.emit("mods:restart_pending", { reason: "waiting_for_players", playerCount });
-      this.startPlayerMonitoring(updatedMods);
-      return { success: true, pending: true, markProcessed: true, reason: "waiting_for_players" };
-    }
-
+  async triggerModRestart(updatedMods: AnyRecord[]): Promise<AnyRecord> {
     try {
-      return await this.triggerModRestart(updatedMods);
-    } catch (e: any) {
-      log.error(`handleModUpdate: triggerModRestart threw: ${e.message}`);
-      this.pendingRestart = false;
-      return { success: false, retry: true, reason: "restart_error" };
-    }
-  }
-
-  async getOnlinePlayerCount(): Promise<number | null> {
-    if (!this.scheduler?.rconService) return null;
-
-    try {
-      const result = await this.scheduler.rconService.getPlayers();
-      if (result.success && result.players) {
-        return result.players.length;
-      }
-    } catch (error: any) {
-      log.debug(`Failed to get player count: ${error.message}`);
-    }
-    return null;
-  }
-
-  startPlayerMonitoring(updatedMods: AnyRecord[]): void {
-    if (this.playerCheckInterval) {
-      clearInterval(this.playerCheckInterval);
-    }
-
-    this.pendingRestart = true;
-    const startTime = this.pendingRestartStartedAt ?? Date.now();
-    const maxWaitMs = this.maxDelayMinutes * 60 * 1000;
-    let checking = false;
-
-    this.playerCheckInterval = setInterval(async () => {
-      if (checking) return;
-      checking = true;
-      try {
-        if (this.pendingServerId != null) {
-          let activeId;
-          try {
-            activeId = (await getCurrentServer())?.id;
-          } catch (error: unknown) {
-            log.warn(`Could not verify Workshop restart target: ${errorMessage(error)}`);
-            return;
-          }
-          if (String(activeId ?? "") !== String(this.pendingServerId)) {
-            log.info("Workshop restart cancelled because the active server changed");
-            this.cancelPendingRestart();
-            return;
-          }
-        }
-        const elapsed = Date.now() - startTime;
-
-        const playerCount = await this.getOnlinePlayerCount();
-
-        if (playerCount === null) {
-          log.warn("Player count unavailable (RCON); keeping mod restart on hold");
-          return;
-        }
-
-        if (this.forceAfterDeadline && playerCount > 0 &&
-            elapsed >= maxWaitMs - this.restartWarningMinutes * 60_000) {
-          log.info("Explicit Workshop restart deadline reached; starting warning countdown");
-          clearInterval(this.playerCheckInterval!);
-          this.playerCheckInterval = null;
-          try {
-            const result: AnyRecord = await this.triggerModRestart(updatedMods, true);
-            if (!result?.success) {
-              log.error(
-                `Player monitor: mod restart did not run: ${result?.error || result?.message || "unknown error"}`,
-              );
-              this.pendingRestart = false;
-            }
-          } catch (e: any) {
-            log.error(`Player monitor: triggerModRestart threw: ${e.message}`);
-            this.pendingRestart = false;
-          }
-          return;
-        }
-
-        if (playerCount === 0) {
-          log.info("No players online, triggering restart");
-          clearInterval(this.playerCheckInterval!);
-          this.playerCheckInterval = null;
-          try {
-            const result: AnyRecord = await this.triggerModRestart(updatedMods);
-            if (!result?.success) {
-              log.error(
-                `Player monitor: mod restart did not run: ${result?.error || result?.message || "unknown error"}`,
-              );
-              this.pendingRestart = false;
-            }
-          } catch (e: any) {
-            log.error(`Player monitor: triggerModRestart threw: ${e.message}`);
-            this.pendingRestart = false;
-          }
-        } else {
-          const remainingMin = Math.round((maxWaitMs - elapsed) / 60000);
-          log.debug(
-            `${playerCount} players still online, ${remainingMin} min remaining`,
-          );
-        }
-      } catch (error: any) {
-        log.error(`Player monitoring error: ${error.message}`);
-        clearInterval(this.playerCheckInterval!);
-        this.playerCheckInterval = null;
-        this.pendingRestart = false;
-      } finally {
-        checking = false;
-      }
-    }, 120000);
-  }
-
-  async triggerModRestart(updatedMods: AnyRecord[], force = false): Promise<AnyRecord> {
-    log.info(`Triggering restart for ${updatedMods.length} updated mod(s)`);
-
-    if (this.pendingServerId != null) {
-      let activeId;
-      try { activeId = (await getCurrentServer())?.id; } catch { activeId = null; }
-      if (String(activeId ?? "") !== String(this.pendingServerId)) {
-        this.pendingRestart = false;
-        for (const mod of updatedMods) this.processedUpdates.delete(mod.workshopId);
-        return { success: false, retry: true, reason: "server_changed" };
-      }
-    }
-
-    const rconService = this.scheduler?.rconService;
-    if (!rconService || !rconService.connected) {
-      let confirmedOffline = false;
-      if (
-        this.serverManager &&
-        typeof this.serverManager.getServerProcessDetails === "function"
-      ) {
-        try {
-          const details = await this.serverManager.getServerProcessDetails();
-          confirmedOffline = !details.running && !details.scanFailed;
-        } catch (error: any) {
-          log.debug(
-            `Could not verify server process before mod restart retry decision: ${error.message}`,
-          );
-        }
-      }
-
-      if (confirmedOffline) {
-        log.info(
-          "Mod updates detected while the PZ server is offline — no restart needed until the server is running.",
-        );
-        this.pendingRestart = false;
-        return {
-          success: true,
-          skipped: true,
-          markProcessed: true,
-          reason: "server_offline",
-        };
-      }
-
-      log.warn(
-        "RCON not connected while server appears to be running — cannot trigger mod restart safely. Will retry on next check cycle.",
-      );
-      for (const m of updatedMods) {
-        this.processedUpdates.delete(m.workshopId);
-      }
-      this.pendingRestart = false;
-      return { success: false, retry: true, reason: "rcon_disconnected" };
-    }
-
-    const modNames = updatedMods
-      .map((m) => String(m.name || "Unknown").replace(/[\r\n]/g, ""))
-      .join(", ");
-
-    if (this.io) {
-      this.io.emit("mods:restart_starting", {
-        mods: updatedMods,
-        warningMinutes: force ? this.restartWarningMinutes : 0,
+      const result = await this.scheduler.maintenance.run({ kind: "workshop", label: "Workshop update restart", automatic: true,
+        policy: { waitMinutes: this.maxDelayMinutes, forceAfterDeadline: this.forceAfterDeadline, warningMinutes: Math.min(this.restartWarningMinutes, this.maxDelayMinutes) },
       });
-    }
-
-    try {
-      const trimmedNames =
-        modNames.length > 100 ? `${modNames.substring(0, 100)}...` : modNames;
-      const warningMessage = force
-        ? `Workshop updates detected: ${trimmedNames}. Server will restart in ${this.restartWarningMinutes} minute(s).`
-        : `Workshop updates detected: ${trimmedNames}. Server is restarting now because no players are online.`;
-      log.info(
-        `Sending mod-restart warning: ${trimmedNames}`,
-      );
-
-      let rconBroadcastOk = false;
-      let bridgeBroadcastOk = false;
-      try {
-        const rconResult =
-          await this.scheduler.rconService?.serverMessage(warningMessage);
-        if (rconResult?.success && !rconResult.rejected) {
-          rconBroadcastOk = true;
-        } else if (rconResult?.rejected) {
-          log.warn(
-            "RCON servermsg was rejected by PZ — will rely on PanelBridge fallback",
-          );
+      if (result.success) {
+        for (const mod of updatedMods) {
+          const timestamp = mod.latestTimestamp?.getTime?.();
+          if (timestamp) this.processedUpdates.set(mod.workshopId, timestamp);
         }
-      } catch (rconErr: any) {
-        log.warn(`RCON serverMessage failed: ${rconErr?.message || rconErr}`);
       }
-
-      try {
-        if (getPanelRuntime().panelBridge?.isRunning && getPanelRuntime().panelBridge?.isModConnected?.()) {
-          const sent = await getPanelRuntime().panelBridge.sendCommand("sendToServerChat", {
-            message: warningMessage,
-            alert: true,
-          });
-          bridgeBroadcastOk = sent?.success === true;
-        } else if (!rconBroadcastOk) {
-          log.warn(
-            "Mod restart warning: neither RCON broadcast nor PanelBridge succeeded — players may not see the warning",
-          );
-        }
-      } catch (bridgeErr: any) {
-        log.warn(
-          `PanelBridge sendToServerChat failed: ${bridgeErr?.message || bridgeErr}`,
-        );
-      }
-
-      if (force && !rconBroadcastOk && !bridgeBroadcastOk) {
-        for (const mod of updatedMods) this.processedUpdates.delete(mod.workshopId);
-        return { success: false, retry: true, reason: "warning_unavailable", message: "Could not warn online players" };
-      }
-
-      const result = await this.scheduler.performRestart(force ? this.restartWarningMinutes : 0, {
-        onlyWhenEmpty: !force,
-        requireWarnings: force,
-        label: "Workshop update restart",
-      });
-
-      if (result?.deferred) {
-        this.startPlayerMonitoring(updatedMods);
-        return { success: true, pending: true, markProcessed: true, reason: "waiting_for_players" };
-      }
-
-      if (result && result.success === false) {
-        log.warn(
-          `Mod restart did not complete: ${result.message || "unknown reason"}`,
-        );
-        if (this.io) {
-          this.io.emit("mods:restart_failed", {
-            error: result.message || "Restart did not complete",
-          });
-        }
-        for (const m of updatedMods) {
-          this.processedUpdates.delete(m.workshopId);
-        }
-        return { success: false, retry: true, reason: "restart_incomplete" };
-      }
-
-      log.info(
-        `Mod restart completed successfully for: ${modNames.substring(0, 200)}`,
-      );
-      await (logServerEvent as any)(
-        "mod_update_restart",
-        `Restarted for mod updates: ${modNames}`,
-      );
-
-      if (this.io) {
-        this.io.emit("mods:restart_complete", { mods: updatedMods });
-      }
-      return { success: true, markProcessed: true, reason: "restart_complete" };
-    } catch (error: any) {
-      log.error(`Restart failed: ${error.message}`);
-      if (this.io) {
-        this.io.emit("mods:restart_failed", {
-          error: sanitizeError(error.message),
-        });
-      }
-      for (const m of updatedMods) {
-        this.processedUpdates.delete(m.workshopId);
-      }
-      return { success: false, retry: true, reason: "restart_error" };
-    } finally {
-      this.pendingRestart = this.playerCheckInterval !== null;
-      if (!this.pendingRestart) {
-        this.pendingServerId = null;
-        this.pendingRestartStartedAt = null;
-      }
-    }
+      this.io?.emit(result.success ? "mods:restart_complete" : "mods:restart_failed", { mods: updatedMods, error: result.message });
+      await (logServerEvent as any)("mod_update_restart", result.message || "Workshop restart complete");
+      return result;
+    } catch (error: unknown) {
+      const message = sanitizeError(errorMessage(error));
+      this.io?.emit("mods:restart_failed", { error: message });
+      return { success: false, message };
+    } finally { this.pendingRestart = false; }
   }
 
   async getConfiguredWorkshopIds(): Promise<Set<string> | null> {
@@ -1496,7 +1167,7 @@ export class ModChecker extends EventEmitter {
             const callbackResult = await this.onUpdateCallback(
               restartEligibleUpdates,
             );
-            if (this.pendingRestart || callbackResult?.markProcessed === true) {
+            if (callbackResult?.markProcessed === true) {
               for (const m of restartEligibleUpdates) {
                 const steamTs = m.latestTimestamp?.getTime?.() || 0;
                 if (steamTs) {
@@ -1711,19 +1382,12 @@ export class ModChecker extends EventEmitter {
   }
 
   cancelPendingRestart() {
-    if (this.playerCheckInterval) {
-      clearInterval(this.playerCheckInterval);
-      this.playerCheckInterval = null;
-    }
-    this.pendingRestart = false;
-    this.pendingServerId = null;
-    this.pendingRestartStartedAt = null;
-    this.processedUpdates.clear();
-    this.scheduler?.cancelRestart();
+    if (!this.scheduler?.maintenance.cancel("workshop")) return false;
     log.info("Pending restart cancelled");
 
     if (this.io) {
       this.io.emit("mods:restart_cancelled", {});
     }
+    return true;
   }
 }

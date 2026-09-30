@@ -2988,7 +2988,7 @@ export default function Mods() {
                     <p className="text-xs text-muted-foreground">
                       {status.forceAfterDeadline
                         ? 'Waiting for players to leave. The warning countdown starts before the selected deadline.'
-                        : 'Waiting for players to leave before restarting.'}
+                        : `Waiting for an empty server for up to ${status.maxDelayMinutes} minutes, then deferring the restart.`}
                     </p>
                   </div>
                 </div>
@@ -4003,10 +4003,9 @@ export default function Mods() {
                           />
                         </div>
 
-                        {forceAfterDeadline && (
-                          <div>
+                        <div>
                             <Label htmlFor="restart-max-delay">
-                              {'Restart deadline (minutes)'}
+                              {'Player waiting window (minutes)'}
                             </Label>
                             <NumberInput
                               id="restart-max-delay"
@@ -4017,11 +4016,10 @@ export default function Mods() {
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                               {
-                                'Minutes from update detection to the restart. The warning countdown begins before this deadline.'
+                                forceAfterDeadline ? 'The warning countdown begins before this deadline.' : 'When this window expires, the restart is deferred. The game downloads Workshop updates at its next start.'
                               }
                             </p>
-                          </div>
-                        )}
+                        </div>
 
                       </div>
                       <DialogFooter className="flex-col sm:flex-row gap-2">

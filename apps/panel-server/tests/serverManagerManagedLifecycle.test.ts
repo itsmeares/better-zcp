@@ -17,6 +17,7 @@ vi.mock("../database/init.ts", () => ({
 const { ServerManager } = await import("../services/serverManager.ts");
 const {
   getActiveSteamOperations,
+  steamInstallKey,
   clearActiveSteamOperation,
 } = await import("../services/activeSteamOperations.ts");
 
@@ -75,7 +76,7 @@ describe("ServerManager managed Linux lifecycle", () => {
   });
 
   describe("SteamCMD guard also covers the managed-lifecycle start path", () => {
-    const normalizedInstallPath = path.normalize(profile.installPath).toLowerCase();
+    const normalizedInstallPath = steamInstallKey(profile.installPath);
 
     afterEach(() => {
       clearActiveSteamOperation(normalizedInstallPath);

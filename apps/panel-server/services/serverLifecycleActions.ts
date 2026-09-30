@@ -1,3 +1,4 @@
+import { hasActiveSteamOperation, steamInstallKey } from "./activeSteamOperations.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getCurrentServer, logServerEvent } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
@@ -108,6 +109,7 @@ export async function startServerAction(
       throw lifecycleError("No active server configured", 404);
     }
 
+    if (activeServer.installPath && hasActiveSteamOperation(steamInstallKey(activeServer.installPath))) throw lifecycleError("A Steam operation is in progress for this game install.", 409);
     autoInstallBridgeIfNeeded(activeServer);
 
     if (isFirstBootMissingAdminPassword(activeServer)) {
@@ -440,7 +442,6 @@ export async function restartServerAction(
     );
     if (warningMinutes > 60) warningMinutes = 60;
 
-    autoInstallBridgeIfNeeded(activeServerForLock);
     const restartPromise = Promise.resolve(
       runtime.scheduler.performRestart(warningMinutes, {
         label: "Manual restart",

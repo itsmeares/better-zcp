@@ -1,7 +1,5 @@
-import { createLogger } from "../utils/logger.ts";
-
-const log = createLogger("SteamOperations");
-
+import fs from "node:fs";
+import path from "node:path";
 export interface SteamOperation {
   type?: string;
   pid?: number;
@@ -14,6 +12,12 @@ export interface SteamOperation {
 
 const activeSteamOperations = new Map<string, SteamOperation>();
 export const STEAM_OPERATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+
+export function steamInstallKey(installPath: string): string {
+  let resolved = path.resolve(installPath);
+  try { resolved = fs.realpathSync(resolved); } catch (error: any) { if (error.code !== "ENOENT") throw error; }
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
 
 export function isSteamOperationIdle(
   operation: SteamOperation | null | undefined,
@@ -36,28 +40,5 @@ export function clearActiveSteamOperation(normalizedPath: string): void {
 }
 
 export function hasActiveSteamOperation(normalizedPath: string): boolean {
-  const operation = activeSteamOperations.get(normalizedPath);
-  if (!operation) return false;
-
-  if (Number.isInteger(operation.pid)) {
-    try {
-      process.kill(operation.pid as number, 0);
-      return true;
-    } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "ESRCH"
-      ) {
-        clearActiveSteamOperation(normalizedPath);
-        log.warn(
-          `Cleared stale Steam ${operation.type} operation for ${normalizedPath}`,
-        );
-        return false;
-      }
-    }
-  }
-
-  return true;
+  return activeSteamOperations.has(normalizedPath);
 }

@@ -7,6 +7,7 @@ import { RconService } from "./rcon.ts";
 import { ServerManager } from "./serverManager.ts";
 import { ModChecker, refreshWorkshopChecker } from "./modChecker.ts";
 import { LogTailer } from "./logTailer.ts";
+import { ServerMaintenance } from "./serverMaintenance.ts";
 import { Scheduler } from "./scheduler.ts";
 import { BackupService } from "./backupService.ts";
 import { UpdateChecker } from "./updateChecker.ts";
@@ -91,8 +92,9 @@ async function initializeServerRuntime(
     const serverManager = new ServerManager();
     const modChecker = new ModChecker();
     const logTailer = new LogTailer();
-    const scheduler = new Scheduler(rconService, serverManager);
-    const backupService = new BackupService();
+    const maintenance = new ServerMaintenance(String(serverId), rconService, serverManager, io);
+    const scheduler = new Scheduler(rconService, serverManager, maintenance);
+    const backupService = new BackupService(maintenance);
     const panelBridge = new PanelBridge();
     const diskMonitor = new DiskMonitor(io);
     rconService.setServerManager(serverManager);
@@ -246,7 +248,7 @@ async function initializeServerRuntime(
     backupService.setServerManager(serverManager);
     backupService.setRconService(rconService);
 
-    const updateChecker = new UpdateChecker(io, { rconService, serverManager });
+    const updateChecker = new UpdateChecker(io, { rconService, serverManager, maintenance });
 
     let lastPlayerList: PlayerRecord[] = [];
     let playerPollingInterval: ReturnType<typeof setInterval> | null = null;
@@ -503,6 +505,7 @@ async function initializeServerRuntime(
       modChecker,
       logTailer,
       scheduler,
+      maintenance,
       backupService,
       panelBridge,
       updateChecker,
@@ -521,6 +524,7 @@ async function initializeServerRuntime(
           modChecker.stop();
           logTailer.stopWatching();
           updateChecker.stop();
+          await maintenance.shutdown();
           diskMonitor.stop();
           panelBridge.stop();
           rconService.stopAutoReconnect();

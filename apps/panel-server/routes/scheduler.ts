@@ -68,6 +68,11 @@ router.get('/status', async (req, res) => {
   }
 });
 
+router.post('/maintenance/cancel', async (req, res) => {
+  const success = req.app.get('maintenance').cancel();
+  res.status(success ? 200 : 409).json({ success, message: success ? 'Maintenance cancellation requested' : 'Maintenance cannot be cancelled after stopping begins' });
+});
+
 router.put('/timezone', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');

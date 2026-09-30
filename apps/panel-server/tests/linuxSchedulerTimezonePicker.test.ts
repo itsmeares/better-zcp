@@ -35,7 +35,7 @@ const { Scheduler } = await import("../services/scheduler.ts");
 const { getScheduledTasks } = await import("../database/init.ts");
 
 function makeScheduler() {
-  return new Scheduler({}, {});
+  return new Scheduler({}, {}, { active: null, cancel: () => false, run: async () => ({ success: true }) });
 }
 
 beforeEach(() => {

@@ -160,6 +160,7 @@ export default function Backups() {
   const [backupSchedule, setBackupSchedule] = useState('0 */6 * * *')
   const [backupMaxCount, setBackupMaxCount] = useState(10)
   const [forceAfterMinutes, setForceAfterMinutes] = useState<number | null>(null)
+  const [waitMinutes, setWaitMinutes] = useState(60)
   const [forceWarningMinutes, setForceWarningMinutes] = useState(15)
   const [savingSettings, setSavingSettings] = useState(false)
 
@@ -189,6 +190,7 @@ export default function Backups() {
     if (!backupStatus) return
     setBackupSchedule(backupStatus.schedule)
     setBackupMaxCount(backupStatus.maxBackups)
+    setWaitMinutes(backupStatus.waitMinutes ?? 60)
     setForceAfterMinutes(backupStatus.forceAfterMinutes)
     setForceWarningMinutes(backupStatus.forceWarningMinutes)
     if (backupStatus.backupInProgress) {
@@ -570,6 +572,7 @@ export default function Backups() {
         enabled: backupStatus?.enabled || false,
         schedule: backupSchedule,
         maxBackups: backupMaxCount,
+        waitMinutes,
         forceAfterMinutes,
         forceWarningMinutes,
       })
@@ -981,7 +984,7 @@ export default function Backups() {
               {'Backup Settings'}
             </CardTitle>
             <CardDescription>
-              {'Scheduled full backups wait for an empty server, then save, stop, archive, and restart it. Occupied servers are checked again every five minutes.'}
+              {'Scheduled full backups wait for an empty server, then save, stop, archive, and restart it. If its waiting window expires, the backup is deferred until the next scheduled run.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1061,16 +1064,17 @@ export default function Backups() {
                 <Switch
                   id="backup-force-deadline"
                   checked={forceAfterMinutes !== null}
-                  onCheckedChange={(checked) => setForceAfterMinutes(checked ? 60 : null)}
+                  onCheckedChange={(checked) => setForceAfterMinutes(checked ? waitMinutes : null)}
                 />
+              </div>
+              <div>
+                <Label htmlFor="backup-wait-minutes">{'Player waiting window (minutes)'}</Label>
+                <NumberInput id="backup-wait-minutes" min={15} max={1440} value={forceAfterMinutes ?? waitMinutes}
+                  onChange={value => { if (value !== null) { setWaitMinutes(value); if (forceAfterMinutes !== null) setForceAfterMinutes(value) } }} />
+                <p className="text-xs text-muted-foreground mt-1">{forceAfterMinutes === null ? 'If players are still online when this window expires, this backup is deferred until the next scheduled run.' : 'The warning countdown begins before this deadline.'}</p>
               </div>
               {forceAfterMinutes !== null && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="backup-force-after">{'Deadline after scheduled time (minutes)'}</Label>
-                    <NumberInput id="backup-force-after" min={15} max={1440}
-                      value={forceAfterMinutes} onChange={setForceAfterMinutes} />
-                  </div>
                   <div>
                     <Label htmlFor="backup-force-warning">{'Warning countdown (minutes)'}</Label>
                     <NumberInput id="backup-force-warning" min={1} max={30}

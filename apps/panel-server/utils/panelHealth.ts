@@ -10,6 +10,7 @@ export function buildPanelHealthPayload(
 ) {
   return {
     status: "ok",
+    ...(process.env.PANEL_INSTANCE_ID ? { instanceId: process.env.PANEL_INSTANCE_ID } : {}),
     version: metadata.panelVersion,
     ...metadata,
     timestamp: now.toISOString(),

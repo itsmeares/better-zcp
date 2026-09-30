@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { scopedTests } from "./helpers/serverScope.ts";
 import { createServer } from "../database/init.ts";
 const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
@@ -15,7 +16,7 @@ describe("BackupService.getStatus() -- surfaces the newest SCHEDULED backup atte
     await logScheduleExecution(null, "Scheduled Backup", "backup", false, "disk full", 120);
     await setSetting("backupEnabled", false);
 
-    const status = await new BackupService().getStatus();
+    const status = await archiveService(BackupService).getStatus();
     expect(status.lastScheduledBackupAttempt).toBeNull();
   });
 
@@ -24,7 +25,7 @@ describe("BackupService.getStatus() -- surfaces the newest SCHEDULED backup atte
     await logScheduleExecution(null, "Scheduled Backup", "backup", true, "Created: old-one.zip", 50);
     await logScheduleExecution(null, "Scheduled Backup", "backup", false, "ENOSPC: no space left on device", 30);
 
-    const status = await new BackupService().getStatus();
+    const status = await archiveService(BackupService).getStatus();
     expect(status.lastScheduledBackupAttempt).toEqual(
       expect.objectContaining({ success: false, message: "ENOSPC: no space left on device" }),
     );
@@ -35,7 +36,7 @@ describe("BackupService.getStatus() -- surfaces the newest SCHEDULED backup atte
     await logScheduleExecution(null, "Scheduled Backup", "backup", false, "ENOSPC: no space left on device", 30);
     await logScheduleExecution(null, "Scheduled Backup", "backup", true, "Created: recovered.zip", 40);
 
-    const status = await new BackupService().getStatus();
+    const status = await archiveService(BackupService).getStatus();
     expect(status.lastScheduledBackupAttempt).toEqual(
       expect.objectContaining({ success: true, message: "Created: recovered.zip" }),
     );
@@ -46,7 +47,7 @@ describe("BackupService.getStatus() -- surfaces the newest SCHEDULED backup atte
     await logScheduleExecution(null, "Scheduled Backup", "backup", true, "Created: base.zip", 40);
     await logScheduleExecution(null, "Auto-Restart", "restart", false, "RCON not available", 10);
 
-    const status = await new BackupService().getStatus();
+    const status = await archiveService(BackupService).getStatus();
     expect(status.lastScheduledBackupAttempt).toEqual(
       expect.objectContaining({ success: true, message: "Created: base.zip" }),
     );

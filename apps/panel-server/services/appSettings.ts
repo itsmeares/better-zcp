@@ -13,8 +13,6 @@ const log = createLogger("AppSettings");
 
 const MOD_RESTART_DELAY_MIN = 1;
 const MOD_RESTART_DELAY_MAX = 30;
-const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
-const SERVER_AUTO_UPDATE_WARNING_MINUTES_MAX = 60;
 const MOD_CHECK_INTERVAL_MINUTES_MIN = 1;
 const MOD_CHECK_INTERVAL_MINUTES_MAX = 120;
 
@@ -42,8 +40,6 @@ const VALID_SETTINGS_KEYS = [
   "modCheckInterval",
   "modAutoRestart",
   "modRestartDelay",
-  "serverAutoUpdate",
-  "serverAutoUpdateWarningMinutes",
   "darkMode",
   "autoReconnect",
   "reconnectInterval",
@@ -61,7 +57,6 @@ const VALID_SETTINGS_KEYS = [
 
 const FEATURE_GATED_FIELDS: Record<string, string> = {
   modRestartDelay: "modAutoRestart",
-  serverAutoUpdateWarningMinutes: "serverAutoUpdate",
   reconnectInterval: "autoReconnect",
 };
 
@@ -77,7 +72,6 @@ const BOOLEAN_SETTINGS = new Set([
   "panelBridgeAutoUpdate",
   "enablePublicIpLookup",
   "modAutoRestart",
-  "serverAutoUpdate",
   "darkMode",
   "autoReconnect",
   "autoStartServer",
@@ -272,22 +266,6 @@ export async function saveAppSettings(
         MOD_RESTART_DELAY_MIN,
         MOD_RESTART_DELAY_MAX,
         "Mod restart delay (minutes)",
-      );
-      if (!check.ok) {
-        invalid(
-          check.message,
-          ErrorCode.CONFIG_INVALID_NUMERIC_FIELD,
-          sanitizeErrorParams({ message: check.message }),
-        );
-      }
-    }
-
-    if (key === "serverAutoUpdateWarningMinutes") {
-      const check = requireIntInRange(
-        value,
-        SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN,
-        SERVER_AUTO_UPDATE_WARNING_MINUTES_MAX,
-        "Server auto-update warning (minutes)",
       );
       if (!check.ok) {
         invalid(

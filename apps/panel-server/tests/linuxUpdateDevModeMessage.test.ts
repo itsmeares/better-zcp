@@ -18,14 +18,13 @@ describe("dev-mode upgrade guidance branches on containerization", () => {
 
   it("tells a real git checkout to pull with git", () => {
     expect(getDevModeUpgradeInstruction(false)).toBe(
-      "In dev mode, pull the latest code with git.",
+      "Pull the latest code with git, rebuild, and restart the panel.",
     );
   });
 
   it("tells a plain container to pull and recreate the image instead of pulling git", () => {
     const instruction = getDevModeUpgradeInstruction(true);
-    expect(instruction).toContain("docker compose pull");
-    expect(instruction).toContain("docker compose up -d");
+    expect(instruction).toContain("host update command");
     expect(instruction).not.toContain("git");
   });
 
@@ -34,11 +33,9 @@ describe("dev-mode upgrade guidance branches on containerization", () => {
     const checker = new PanelUpdateChecker();
     const result = await checker.preflight();
     expect(result.ok).toBe(false);
-    expect(result.blockers[0]).toContain("pull the latest code with git");
+    expect(result.blockers[0]).toContain("Pull the latest code with git");
     expect(result.blockers[0]).not.toContain("docker compose");
-    expect(result.blockerDetails).toEqual([
-      { key: "updates.preflight.packagedBuildGit", params: {} },
-    ]);
+
   });
 
   it("preflight() surfaces the docker compose instruction inside a plain container (no update sidecar)", async () => {
@@ -46,11 +43,9 @@ describe("dev-mode upgrade guidance branches on containerization", () => {
     const checker = new PanelUpdateChecker();
     const result = await checker.preflight();
     expect(result.ok).toBe(false);
-    expect(result.blockers[0]).toContain("docker compose pull");
-    expect(result.blockers[0]).not.toContain("pull the latest code with git");
-    expect(result.blockerDetails).toEqual([
-      { key: "updates.preflight.packagedBuildDocker", params: {} },
-    ]);
+    expect(result.blockers[0]).toContain("from the host");
+    expect(result.blockers[0]).not.toContain("Pull the latest code with git");
+
   });
 
   it("does not change the refusal itself: still fail-closed (ok:false) either way", async () => {

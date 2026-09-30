@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -150,6 +151,52 @@ async function reloadWithRefresh(page, refreshUrl, label) {
   await waitForVisible(page, 'button[title="Sign out"]', label);
 }
 
+async function checkUpdateResultReload(page, baseUrl) {
+  // Exercise the real UI without downloading or restarting this fixture panel.
+  for (const outcome of ['success', 'failed']) {
+    let installed = false, committed = false, staleReads = 0, navigations = 0;
+    const status = {
+      currentVersion: '2.0.0-rc5', latestVersion: '2.0.0-rc6', updateAvailable: true,
+      updateMode: 'binary', supervisorAvailable: true,
+      lastApplyResult: { status: 'success', at: '2026-01-01T00:00:00Z' },
+    };
+    const statusRoute = async route => {
+      if (installed && !committed) staleReads++;
+      await route.fulfill({ json: { ...status, lastApplyResult: committed
+        ? { status: outcome, at: '2026-01-02T00:00:00Z' } : status.lastApplyResult } });
+    };
+    const healthRoute = route => route.fulfill({ json: { status: 'ok', instanceId: installed ? 'new-instance' : 'old-instance' } });
+    const preflightRoute = route => route.fulfill({ json: { ok: true, blockers: [], warnings: [], info: { isPackaged: true } } });
+    const installRoute = route => { installed = true; return route.fulfill({ json: { success: true } }); };
+    await page.route('**/api/panel/update-status', statusRoute);
+    await page.route('**/api/health', healthRoute);
+    await page.route('**/api/panel/update-preflight', preflightRoute);
+    await page.route('**/api/panel/update', installRoute);
+    const onNavigation = request => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++; };
+    try {
+      await page.goto(new URL('/settings?tab=updates', baseUrl).href);
+      await page.getByRole('button', { name: 'Update panel', exact: true }).click();
+      page.on('request', onNavigation);
+      await page.getByRole('button', { name: 'Update now', exact: true }).click();
+      const deadline = Date.now() + 15000;
+      while (staleReads < 2 && Date.now() < deadline) await delay(100);
+      assert.ok(staleReads >= 2, 'Update UI must poll the final apply result');
+      assert.equal(navigations, 0, 'A new instance with an old apply result must not reload the UI');
+      const reloaded = page.waitForEvent('load', { timeout: 15000 });
+      committed = true;
+      await reloaded;
+      assert.equal(navigations, 1, `The ${outcome} apply result must reload the UI`);
+      await waitForVisible(page, 'button[title="Sign out"]', 'authenticated panel after update result');
+    } finally {
+      page.off('request', onNavigation);
+      await page.unroute('**/api/panel/update-status', statusRoute);
+      await page.unroute('**/api/health', healthRoute);
+      await page.unroute('**/api/panel/update-preflight', preflightRoute);
+      await page.unroute('**/api/panel/update', installRoute);
+    }
+  }
+}
+
 async function runAuthSmoke(baseUrl, setupToken) {
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: true });
@@ -185,6 +232,8 @@ async function runAuthSmoke(baseUrl, setupToken) {
       refreshUrl,
       'authenticated dashboard after second hard reload',
     );
+
+    await checkUpdateResultReload(page, baseUrl);
 
     await page.locator('button[title="Sign out"]').click();
     await waitForVisible(page, '#login-form', 'login screen after dashboard logout');
@@ -313,12 +362,11 @@ async function main() {
         ? 'ZomboidControlPanel.exe'
         : 'ZomboidControlPanel',
     );
-    child = spawn(binary, [], {
+    child = spawn(binary, ['--panel-child'], {
       cwd: smokeReleaseDir,
       env: {
         ...process.env,
-        PANEL_NO_SUPERVISOR: '1',
-        PORT: String(port),
+                PORT: String(port),
         ...(authSmokeEnabled ? { SETUP_TOKEN: authSmokeSetupToken } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -381,7 +429,7 @@ async function main() {
     }
 
     console.log(
-      `${platform} release smoke passed: ${manifest.version}, /api/health, ${assetPath} GET/HEAD${authSmokeEnabled ? ', browser auth persistence' : ''}`,
+      `${platform} release smoke passed: ${manifest.version}, /api/health, ${assetPath} GET/HEAD${authSmokeEnabled ? ', browser auth persistence and update-result reload' : ''}`,
     );
   } finally {
     if (child) await stopChild(child);

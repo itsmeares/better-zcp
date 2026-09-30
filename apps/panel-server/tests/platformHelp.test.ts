@@ -8,13 +8,13 @@ describe("platform-specific updater guidance", () => {
   it("does not tell Linux operators to run as Administrator", () => {
     const message = getPanelFolderPermissionGuidance("linux", "EACCES");
     expect(message).toContain("service user");
-    expect(message).not.toContain("Administrator");
+    expect(message).not.toContain("your account");
     expect(message).not.toContain("Program Files");
   });
 
   it("keeps Windows remediation on Windows", () => {
     const message = getPanelFolderPermissionGuidance("win32", "EACCES");
-    expect(message).toContain("Administrator");
+    expect(message).toContain("your account");
   });
 
   it("marks an unprotected Linux service restart as destructive", () => {
@@ -35,7 +35,7 @@ describe("platform-specific updater guidance", () => {
         packaged: true,
         environment: {
           INVOCATION_ID: "service-run",
-          PANEL_SUPERVISOR_V: "2",
+          PANEL_SUPERVISOR_V: "3",
           PANEL_PRESERVE_GAME_SERVERS: "1",
         },
         launcherProtected: true,
@@ -50,7 +50,7 @@ describe("platform-specific updater guidance", () => {
         packaged: true,
         environment: {
           INVOCATION_ID: "service-run",
-          PANEL_SUPERVISOR_V: "2",
+          PANEL_SUPERVISOR_V: "3",
           PANEL_PRESERVE_GAME_SERVERS: "1",
         },
       }),

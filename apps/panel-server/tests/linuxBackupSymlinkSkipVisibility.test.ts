@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
@@ -7,6 +8,9 @@ import path from "path";
 const logServerEvent = vi.fn(async () => {});
 
 vi.mock("../database/init.ts", () => ({
+  exportServerPanelSettings: vi.fn(() => ({ settings: {}, tasks: [] })),
+  validateServerPanelSettings: vi.fn(value => value),
+  restoreServerPanelSettings: vi.fn(),
   getCurrentServer: vi.fn(async () => null),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -25,7 +29,7 @@ let savesPath;
 let backupsPath;
 
 function createService() {
-  const service = new BackupService();
+  const service = archiveService(BackupService);
   service.getSavesPath = async () => savesPath;
   service.getBackupsPath = async () => backupsPath;
   service.setServerManager({

@@ -1,1955 +1,288 @@
-
-import fs from "fs";
-import os from "os";
-import path from "path";
-import https from "https";
-import crypto from "crypto";
-import { spawn } from "child_process";
-import { createLogger } from "../utils/logger.ts";
-import {
-  getSetting,
-  setSetting,
-  getAdmin,
-  getServers,
-  getDatabaseFilePath,
-} from "../database/init.ts";
+import { readRegularFile } from "../utils/regularFile.ts";
+import fs from "node:fs";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pipeline } from "node:stream/promises";
+import { Readable, Transform } from "node:stream";
+import unzipper from "unzipper";
+import { getAdmin, getServers, getDatabaseFilePath } from "../database/init.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
-import { stageUpdateBundle } from "./updateBundle.ts";
-import { getRestartAssessment } from "./runtimeInfo.ts";
+import { getRestartAssessment, PANEL_SUPERVISOR_VERSION } from "./runtimeInfo.ts";
+import { hashUpdatePath, stageUpdateBundle, readUpdateBundleJournalIfPresent, validateBuildCompatibility } from "./updateBundle.ts";
+import { createLogger } from "../utils/logger.ts";
 
 export { getRestartAssessment } from "./runtimeInfo.ts";
-
 const log = createLogger("PanelUpdater");
-
-type AnyRecord = Record<string, any>;
-type ReleaseAsset = {
-  name: string;
-  size: number;
-  downloadUrl: string;
-};
-type LatestRelease = {
-  version: string;
-  tag: string;
-  name: string;
-  body: string;
-  publishedAt: string | null;
-  htmlUrl: string | null;
-  assets: ReleaseAsset[];
-};
-
-declare global {
-  interface Error {
-    rateLimited?: boolean;
-  }
-}
-
-const GITHUB_OWNER = "itsmeares";
-const GITHUB_REPO = "better-zcp";
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const GITHUB_API_TIMEOUT_MS = 15000;
-const DOWNLOAD_TIMEOUT_MS = 60000;
-const MAX_GITHUB_RETRIES = 3;
-const MAX_DOWNLOAD_REDIRECTS = 5;
+const github = "https://api.github.com/repos/itsmeares/better-zcp";
+const command = promisify(execFile);
+type ReleaseAsset = { name: string; size: number; downloadUrl: string };
+type LatestRelease = { version: string; tag: string; name: string; body: string; publishedAt: string | null; htmlUrl: string | null; assets: ReleaseAsset[] };
 
 export function getPanelFolderPermissionGuidance(platform: string, detail: unknown) {
-  const prefix = `Panel folder is not writable by this process: ${detail}.`;
-  if (platform === "win32") {
-    return `${prefix} Try running as Administrator, or move the panel out of a protected folder.`;
-  }
-  if (platform === "linux") {
-    return `${prefix} Check that the panel service user owns the installation directory and can write to it.`;
-  }
-  return `${prefix} Check the installation directory permissions for the account running the panel.`;
+  return `Panel folder is not writable: ${detail}. ${platform === "win32" ? "Move the panel to a folder your account can write to." : "The service user must be able to write to the installation directory."}`;
 }
-
-export function getDevModeUpgradeInstruction(containerized: boolean = isContainerized()) {
-  if (!containerized) return "In dev mode, pull the latest code with git.";
-  if (process.env.PANEL_DOCKER_INSTALL_KIND === "aio") {
-    return "Save and stop the game once, then run the host update command shown in Settings.";
-  }
-  return process.env.PANEL_DOCKER_INSTALL_KIND === "split"
-    ? "Run the host update command shown in Settings."
-    : "Pull the newer image and recreate the container: docker compose pull && docker compose up -d.";
+export function getDevModeUpgradeInstruction(containerized = isContainerized()) {
+  return containerized ? "Run the host update command shown in Settings." : "Pull the latest code with git, rebuild, and restart the panel.";
 }
-
 export function getDockerUpgradeInstruction(tag: string | null | undefined): string {
   if (["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "")) {
     const version = tag?.match(/^v(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/)?.[1];
-    if (!version) return "";
-    return `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/${tag}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}`;
+    return version ? `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/${tag}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}` : "";
   }
   return "docker compose pull panel && docker compose up -d --no-deps panel";
 }
-
-function addPreflightMessage(messages: string[], details: AnyRecord[], key: string, params: AnyRecord, fallback: string) {
-  messages.push(fallback);
-  details.push({ key, params });
-}
-
-export function createUpdateDataBackup(dataPaths: AnyRecord, version: unknown, fsModule: typeof fs = fs) {
-  const dbPath = dataPaths?.dbPath;
-  if (!dbPath || !fsModule.existsSync(dbPath)) return null;
-  const safeVersion = String(version || "unknown").replace(/[^a-zA-Z0-9._-]/g, "_");
-  const backupPath = `${dbPath}.pre-update-${safeVersion}-${Date.now()}`;
-  const tempPath = `${backupPath}.tmp`;
-  fsModule.copyFileSync(dbPath, tempPath);
-  try {
-    fsModule.renameSync(tempPath, backupPath);
-  } catch (error: any) {
-    try { fsModule.unlinkSync(tempPath); } catch { /* best effort */ }
-    throw error;
-  }
-  return backupPath;
-}
-
-export function restorePreUpdateDataBackup(dataPaths: AnyRecord, backupPath: string, fsModule: typeof fs = fs) {
-  const dbPath = dataPaths?.dbPath;
-  if (!dbPath || !backupPath || !fsModule.existsSync(backupPath)) return false;
-  fsModule.copyFileSync(backupPath, dbPath);
-  return true;
-}
-
-export function validateReleaseManifest(
-  manifest: AnyRecord | null,
-  expectedVersion: unknown,
-  artifactName: string | null,
-  artifactHash: string | null,
-) {
-  if (!manifest || typeof manifest !== "object") {
-    return "Release archive does not contain a valid release manifest.";
-  }
-  if (manifest.version !== expectedVersion) {
-    return `Release archive version ${manifest.version || "unknown"} does not match release v${expectedVersion}.`;
-  }
-  if (!artifactName) return null;
-
-  const artifact = Array.isArray(manifest.artifacts)
-    ? manifest.artifacts.find((candidate) => candidate?.file === artifactName)
-    : null;
-  if (!artifact) {
-    return `Release manifest is missing the ${artifactName} artifact.`;
-  }
-  if (
-    artifactHash &&
-    String(artifact.sha256).toLowerCase() !== artifactHash.toLowerCase()
-  ) {
-    return `Release manifest checksum does not match downloaded ${artifactName}.`;
-  }
+export function validateReleaseManifest(manifest: Record<string, any> | null, version: unknown, artifactName: string | null, hash: string | null) {
+  if (!manifest || typeof manifest !== "object") return "Release archive does not contain a valid release manifest.";
+  if (manifest.version !== version) return `Release archive version ${manifest.version || "unknown"} does not match release v${version}.`;
+  const artifact = Array.isArray(manifest.artifacts) && manifest.artifacts.find(a => a?.file === artifactName);
+  if (!artifact) return `Release manifest is missing the ${artifactName} artifact.`;
+  if (typeof artifact.sha256 !== "string" || artifact.sha256.toLowerCase() !== hash?.toLowerCase()) return `Release manifest checksum does not match downloaded ${artifactName}.`;
   return null;
+}
+
+/** Redirects, byte limits and an absolute deadline apply to JSON and downloads alike. */
+export async function fetchReleaseResponse(url: string, timeout = 15000): Promise<Response> {
+  const signal = AbortSignal.timeout(timeout);
+  for (let redirects = 0; redirects <= 5; redirects++) {
+    const target = new URL(url);
+    if (target.protocol !== "https:" || target.username || target.password || (target.port && target.port !== "443") || !["github.com", "api.github.com", "githubusercontent.com"].includes(target.hostname) && !target.hostname.endsWith(".githubusercontent.com")) throw new Error("Release URL must use HTTPS on a trusted GitHub host.");
+    const response = await fetch(target, { redirect: "manual", signal, headers: { "User-Agent": "Better-ZCP", Accept: "application/vnd.github+json" } });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      await response.body?.cancel();
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Release redirect has no location.");
+      url = new URL(location, target).href;
+      continue;
+    }
+    return response;
+  }
+  throw new Error("Too many release redirects.");
+}
+
+async function releaseText(url: string, limit = 1024 * 1024): Promise<string> {
+  const response = await fetchReleaseResponse(url);
+  if (!response.ok) { await response.body?.cancel(); throw new Error(`GitHub returned HTTP ${response.status}.`); }
+  let length = 0;
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.body!) {
+    length += chunk.length;
+    if (length > limit) { await response.body?.cancel().catch(() => {}); throw new Error("Release response exceeds the size limit."); }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function safeArchiveName(name: string): boolean {
+  const normalized = name.replace(/\/$/, "");
+  return normalized !== "" && !name.includes("\\") && !name.includes("\0") && !path.posix.isAbsolute(name) && normalized.split("/").every(part => part !== ".." && part !== "." && part !== "");
+}
+
+export async function extractUpdateArchive(archive: string, destination: string, windows: boolean): Promise<void> {
+  if (windows) {
+    const directory = await unzipper.Open.file(archive);
+    let total = 0;
+    for (const entry of directory.files) {
+      if (!safeArchiveName(entry.path) || !["File", "Directory"].includes(entry.type) || ((entry.externalFileAttributes >>> 16) & 0o170000) === 0o120000) throw new Error("Unsafe release archive entry.");
+      total += entry.uncompressedSize;
+    }
+    if (total > 1024 * 1024 * 1024) throw new Error("Release archive is too large.");
+    await directory.extract({ path: destination });
+  } else {
+    const options = { timeout: 120000, maxBuffer: 8 * 1024 * 1024 };
+    const [{ stdout: names }, { stdout: types }] = await Promise.all([
+      command("tar", ["-tzf", archive], options), command("tar", ["-tvzf", archive], options),
+    ]);
+    if (names.trim().split("\n").some(name => !safeArchiveName(name)) || types.trim().split("\n").some(line => !["-", "d"].includes(line[0]))) throw new Error("Unsafe release archive entry.");
+    await command("tar", ["-xzf", archive, "--no-same-owner", "--no-same-permissions", "-C", destination], options);
+  }
 }
 
 export class PanelUpdateChecker {
   io: any;
-  checkInterval: ReturnType<typeof setInterval> | null;
-  initialTimeout: ReturnType<typeof setTimeout> | null;
-  latestRelease: LatestRelease | null;
-  currentVersion: string | null;
-  updateAvailable: boolean;
-  isChecking: boolean;
-  isDownloading: boolean;
-  downloadProgress: number;
-  lastCheck: string | null;
-  lastError: string | null;
-  isApplying: boolean;
-  _downloadAttemptSeq = 0;
-  _stagedVersionCache: string | null = null;
-  lastApplyResult: AnyRecord | null = null;
-
-  constructor(io?: any) {
-    this.io = io;
-    this.checkInterval = null;
-    this.initialTimeout = null;
-    this.latestRelease = null;
-    this.currentVersion = null;
-    this.updateAvailable = false;
-    this.isChecking = false;
-    this.isDownloading = false;
-    this.downloadProgress = 0;
-    this.lastCheck = null;
-    this.lastError = null;
-    this.isApplying = false;
+  currentVersion: string | null = null;
+  latestRelease: LatestRelease | null = null;
+  updateAvailable = false;
+  isChecking = false;
+  isDownloading = false;
+  isApplying = false;
+  downloadProgress = 0;
+  lastCheck: string | null = null;
+  lastError: string | null = null;
+  checkInterval: ReturnType<typeof setInterval> | null = null;
+  initialTimeout: ReturnType<typeof setTimeout> | null = null;
+  constructor(io?: any) { this.io = io; }
+  start(version: string) {
+    this.currentVersion = version;
+    this.stop();
+    this.initialTimeout = setTimeout(() => void this.checkForUpdate(), 30000);
+    this.checkInterval = setInterval(() => void this.checkForUpdate(), 6 * 3600000);
   }
-
-  nextPartialCallId(): string {
-    this._downloadAttemptSeq += 1;
-    return `${process.pid}-${this._downloadAttemptSeq}`;
-  }
-
-  async start(currentVersion: string) {
-    this.currentVersion = currentVersion || "0.0.0";
-    log.info(`Panel update checker started (current: v${this.currentVersion})`);
-
-    await this.loadStagedVersionCache();
-
-    try {
-      await this.reconcilePendingUpdate();
-    } catch (err: any) {
-      log.warn(`Could not reconcile pending panel update: ${err.message}`);
-    }
-
-    try {
-      this.cleanupOldHelperArtifacts();
-    } catch (err: any) {
-      log.debug(`Helper artifact cleanup failed: ${err.message}`);
-    }
-
-    try {
-      this.cleanupOrphanPartials();
-    } catch (err: any) {
-      log.debug(`Orphan partial cleanup failed: ${err.message}`);
-    }
-
-    this.initialTimeout = setTimeout(() => this.checkForUpdate(), 30000);
-
-    this.checkInterval = setInterval(
-      () => this.checkForUpdate(),
-      CHECK_INTERVAL_MS,
-    );
-  }
-
   stop() {
-    if (this.initialTimeout) {
-      clearTimeout(this.initialTimeout);
-      this.initialTimeout = null;
-    }
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-      this.checkInterval = null;
-    }
+    if (this.initialTimeout) clearTimeout(this.initialTimeout);
+    if (this.checkInterval) clearInterval(this.checkInterval);
+    this.initialTimeout = this.checkInterval = null;
   }
-
+  extractVersion(tag: unknown): string | null {
+    return typeof tag === "string" && /^v?\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(tag) ? tag.replace(/^v/, "") : null;
+  }
+  isNewer(latest: string, current: string): boolean {
+    const [a, apre] = latest.split("-"), [b, bpre] = current.split("-");
+    const aa = a.split(".").map(Number), bb = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(aa.length, bb.length); i++) if ((aa[i] || 0) !== (bb[i] || 0)) return (aa[i] || 0) > (bb[i] || 0);
+    if (apre === bpre) return false;
+    if (!apre || !bpre) return !apre;
+    // This project's release tags use rc5/rc10, so compare their numeric suffix naturally.
+    return apre.localeCompare(bpre, "en", { numeric: true }) > 0;
+  }
   async checkForUpdate() {
     if (this.isChecking) return this.getStatus();
     this.isChecking = true;
-    this.lastCheck = new Date().toISOString();
-
     try {
-      const release = await this.fetchLatestRelease();
-      if (!release) {
-        this.lastError = null;
-        this.isChecking = false;
-        return this.getStatus();
+      const prerelease = Boolean(this.currentVersion?.includes("-"));
+      const response = await fetchReleaseResponse(`${github}/releases${prerelease ? "?per_page=20" : "/latest"}`);
+      if (response.status === 404) { await response.body?.cancel(); this.latestRelease = null; this.updateAvailable = false; }
+      else {
+        if (!response.ok) { await response.body?.cancel(); throw new Error(`GitHub returned HTTP ${response.status}.`); }
+        let text = "";
+        for await (const chunk of response.body!) { text += Buffer.from(chunk).toString(); if (Buffer.byteLength(text) > 1024 * 1024) throw new Error("Release response is too large."); }
+        const payload: unknown = JSON.parse(text);
+        const releases = prerelease ? payload : [payload];
+        if (!Array.isArray(releases)) throw new Error("Invalid GitHub release response.");
+        const candidates = releases.filter(r => r && !r.draft && this.extractVersion(r.tag_name) && (prerelease || !r.prerelease));
+        candidates.sort((a, b) => this.isNewer(this.extractVersion(a.tag_name)!, this.extractVersion(b.tag_name)!) ? -1 : 1);
+        const release = candidates[0];
+        this.latestRelease = release ? {
+          version: this.extractVersion(release.tag_name)!, tag: release.tag_name, name: String(release.name || release.tag_name), body: String(release.body || ""),
+          publishedAt: release.published_at || null, htmlUrl: release.html_url || null,
+          assets: Array.isArray(release.assets) ? release.assets.filter((asset: any) => typeof asset.name === "string" && Number.isSafeInteger(asset.size) && asset.size > 0 && typeof asset.browser_download_url === "string").map((asset: any) => ({ name: asset.name, size: asset.size, downloadUrl: asset.browser_download_url })) : [],
+        } : null;
+        this.updateAvailable = Boolean(this.latestRelease && this.currentVersion && this.isNewer(this.latestRelease.version, this.currentVersion));
       }
-
-      const releaseVersion = this.extractVersion(release.tag_name);
-      if (!releaseVersion) {
-        throw new Error(
-          "Latest GitHub release is missing a valid version tag.",
-        );
-      }
-
-      this.latestRelease = {
-        version: releaseVersion,
-        tag: release.tag_name,
-        name:
-          typeof release.name === "string" ? release.name : release.tag_name,
-        body: typeof release.body === "string" ? release.body : "",
-        publishedAt: release.published_at || null,
-        htmlUrl: release.html_url || null,
-        assets: (release.assets || []).map((a: AnyRecord) => ({
-          name: a.name,
-          size: a.size,
-          downloadUrl: a.browser_download_url,
-        })),
-      };
-
-      this.updateAvailable = this.isNewer(
-        this.latestRelease.version,
-        this.currentVersion ?? "0.0.0",
-      );
       this.lastError = null;
-
-      if (this.updateAvailable) {
-        log.info(
-          `Panel update available: v${this.currentVersion} → v${this.latestRelease.version}`,
-        );
-        this.io?.emit("panel:updateAvailable", {
-          currentVersion: this.currentVersion,
-          latestVersion: this.latestRelease.version,
-          releaseUrl: this.latestRelease.htmlUrl,
-        });
-      } else {
-        log.debug(`Panel is up to date (v${this.currentVersion})`);
-      }
-    } catch (error: any) {
-      this.lastError = error.message;
-      log.warn(`Panel update check failed: ${error.message}`);
-    } finally {
-      this.isChecking = false;
-    }
-
+      this.lastCheck = new Date().toISOString();
+      this.io?.emit("panel:updateStatus", this.getStatus());
+      if (this.updateAvailable) this.io?.emit("panel:updateAvailable", this.getStatus());
+    } catch (e) { this.lastError = (e as Error).message; log.warn(this.lastError); }
+    finally { this.isChecking = false; this.io?.emit("panel:updateStatus", this.getStatus()); }
     return this.getStatus();
   }
-
-  fetchLatestRelease(): Promise<AnyRecord | null> {
-    return this.requestGitHubReleaseWithRetry();
-  }
-
-  async requestGitHubReleaseWithRetry(): Promise<AnyRecord | null> {
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= MAX_GITHUB_RETRIES; attempt += 1) {
-      try {
-        return await this.fetchLatestReleaseOnce();
-      } catch (error: any) {
-        lastError = error;
-        if (
-          !this.isRetryableGitHubError(error) ||
-          attempt === MAX_GITHUB_RETRIES
-        ) {
-          break;
-        }
-
-        const backoffMs = attempt * 1000;
-        log.warn(
-          `Panel update check attempt ${attempt} failed (${error.message}). Retrying in ${backoffMs}ms...`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-      }
-    }
-
-    throw lastError || new Error("Unknown GitHub update check failure");
-  }
-
-  fetchLatestReleaseOnce(): Promise<AnyRecord | null> {
-    return new Promise<AnyRecord | null>((resolve, reject) => {
-      const options = {
-        hostname: "api.github.com",
-        path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
-        headers: {
-          "User-Agent": `ZomboidControlPanel/${this.currentVersion}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      };
-
-      const req = https.get(options, (res) => {
-        res.on("error", reject);
-        res.on("aborted", () => reject(new Error("GitHub response aborted")));
-
-        const statusCode = res.statusCode || 0;
-
-        if (statusCode === 404) {
-          res.resume();
-          resolve(null);
-          return;
-        }
-
-        if (statusCode !== 200) {
-          let body = "";
-          res.on("data", (chunk) => {
-            body += chunk.toString();
-            if (body.length > 4096) body = body.slice(0, 4096);
-          });
-          res.on("end", () => {
-            const err = Object.assign(
-              new Error(
-                statusCode === 403
-                  ? "GitHub API rate limited"
-                  : `GitHub API returned ${statusCode}`,
-              ),
-              {
-                statusCode,
-                ...(body.includes("rate limit") ? { rateLimited: true } : {}),
-              },
-            );
-            reject(err);
-          });
-          return;
-        }
-
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk.toString();
-        });
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(data);
-            if (!parsed || typeof parsed !== "object") {
-              throw new Error("Invalid GitHub release payload");
-            }
-            resolve(parsed);
-          } catch (_: any) {
-            reject(new Error("Failed to parse GitHub response"));
-          }
-        });
-      });
-
-      req.on("error", reject);
-      req.setTimeout(GITHUB_API_TIMEOUT_MS, () => {
-        const timeoutError = Object.assign(new Error("GitHub API timeout"), {
-          ["code"]: "ETIMEDOUT",
-        });
-        req.destroy(timeoutError);
-      });
-    });
-  }
-
-  isRetryableGitHubError(error: AnyRecord) {
-    const statusCode = error?.statusCode;
-    const code = error?.code;
-    if ([408, 429, 500, 502, 503, 504].includes(statusCode)) return true;
-    if (
-      code &&
-      ["ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ENOTFOUND"].includes(code)
-    )
-      return true;
-    return Boolean(error?.rateLimited);
-  }
-
-  extractVersion(tag: unknown) {
-    if (typeof tag !== "string") return null;
-    const match = tag.match(/(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/);
-    if (!match) return null;
-    return match[4]
-      ? `${match[1]}.${match[2]}.${match[3]}.${match[4]}`
-      : `${match[1]}.${match[2]}.${match[3]}`;
-  }
-
-  isNewer(latest: string, current: string) {
-    const normalize = (v: string) => {
-      const match = v.match(/(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/);
-      if (!match) return [0, 0, 0, 0];
-      return [
-        parseInt(match[1]),
-        parseInt(match[2]),
-        parseInt(match[3]),
-        parseInt(match[4] || "0"),
-      ];
-    };
-
-    const [lMajor, lMinor, lPatch, lHotfix] = normalize(latest);
-    const [cMajor, cMinor, cPatch, cHotfix] = normalize(current);
-
-    if (lMajor !== cMajor) return lMajor > cMajor;
-    if (lMinor !== cMinor) return lMinor > cMinor;
-    if (lPatch !== cPatch) return lPatch > cPatch;
-    return lHotfix > cHotfix;
-  }
-
-  async downloadUpdate() {
-    if (isContainerized()) {
-      return {
-        success: false,
-        error: "Docker images must be updated from the host. See the update command in Settings.",
-        code: "docker_manual_update",
-      };
-    }
-    if (this.isDownloading) {
-      return {
-        success: false,
-        error: "Download already in progress",
-        code: "already_downloading",
-      };
-    }
-    if (this.isApplying) {
-      return {
-        success: false,
-        error: "An update apply is already in progress",
-        code: "apply_in_progress",
-      };
-    }
-    const latestRelease = this.latestRelease;
-    if (!this.updateAvailable || !latestRelease) {
-      return {
-        success: false,
-        error: "No update available",
-        code: "no_update",
-      };
-    }
-
-    // Claim before preflight: it is async, and two clicks must not both
-    // reach the shared staging slot while the first is still checking it.
-    this.isDownloading = true;
-    let pre: Awaited<ReturnType<typeof this.preflight>>;
-    try {
-      pre = await this.preflight();
-    } catch (error) {
-      this.isDownloading = false;
-      throw error;
-    }
-    if (!pre.ok) {
-      this.isDownloading = false;
-      return {
-        success: false,
-        error: pre.blockers[0] || "Preflight check failed",
-        preflight: pre,
-      };
-    }
-
-    const isWindows = process.platform === "win32";
-    const isPackaged = typeof process.pkg !== "undefined";
-
-    if (!isPackaged) {
-      this.isDownloading = false;
-      return {
-        success: false,
-        error: `Self-update is only available for standalone exe/binary builds. ${getDevModeUpgradeInstruction()}`,
-      };
-    }
-
-    const assetName = isWindows
-      ? "ZomboidControlPanel.exe"
-      : "ZomboidControlPanel";
-    const isArchive = (name: string) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
-
-    let asset = latestRelease.assets.find((a: ReleaseAsset) => a.name === assetName);
-    if (!asset) {
-      if (isWindows) {
-        asset = latestRelease.assets.find(
-          (a: ReleaseAsset) => /\.exe$/i.test(a.name) && !isArchive(a.name),
-        );
-      } else {
-        asset = latestRelease.assets.find(
-          (a: ReleaseAsset) =>
-            !isArchive(a.name) &&
-            !/\.exe$/i.test(a.name) &&
-            a.name.toLowerCase().includes("linux"),
-        );
-      }
-    }
-
-    if (!asset) {
-      this.isDownloading = false;
-      return {
-        success: false,
-        error: `No ${isWindows ? "Windows" : "Linux"} binary found in release (looked for ${assetName})`,
-      };
-    }
-
-    const archiveName = isWindows
-      ? "ZomboidControlPanel-windows.zip"
-      : "ZomboidControlPanel-linux.tar.gz";
-    const clientArchive = latestRelease.assets.find(
-      (candidate: ReleaseAsset) => candidate.name === archiveName,
-    );
-    if (!clientArchive) {
-      this.isDownloading = false;
-      return {
-        success: false,
-        error: `Release is missing ${archiveName}, required to update the web interface safely.`,
-      };
-    }
-
-    this.downloadProgress = 0;
-    this.lastError = null;
-
-    const exePath = process.execPath;
-    const exeDir = path.dirname(exePath);
-    const stagedPath = this.getStageSlotPath();
-    const partialCallId = this.nextPartialCallId();
-    const tmpDownloadPath = `${stagedPath}.partial.${partialCallId}`;
-    const clientArchiveExtension = isWindows ? ".zip" : ".tar.gz";
-    const tmpClientArchivePath = path.join(
-      exeDir,
-      `.client-dist-${latestRelease.version}.partial.${partialCallId}${clientArchiveExtension}`,
-    );
-    let incomingClientPath = null;
-
-    try {
-      log.info(
-        `Downloading update: ${asset.name} (${(asset.size / 1024 / 1024).toFixed(1)} MB)`,
-      );
-      this.io?.emit("panel:downloadProgress", {
-        progress: 0,
-        status: "downloading",
-      });
-
-      try {
-        if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
-      } catch (cleanErr: any) {
-        log.debug(`Failed to clean partial file: ${cleanErr.message}`);
-      }
-
-      await this.downloadFile(asset.downloadUrl, tmpDownloadPath, asset.size);
-
-      log.info("Download complete, staging update...");
-      this.io?.emit("panel:downloadProgress", {
-        progress: 100,
-        status: "preparing",
-      });
-
-      try {
-        const verified = await this.verifyChecksum(tmpDownloadPath, asset.name);
-        if (verified === false) {
-          throw new Error(
-            "SHA256 checksum mismatch — download corrupted or tampered with",
-          );
-        }
-        if (verified === null) {
-          throw new Error(
-            `Release v${latestRelease.version} does not publish a checksums.txt entry for ${asset.name} — refusing to apply an unverified update`,
-          );
-        }
-        log.info(`SHA256 verified against release checksums.txt`);
-      } catch (verifyErr: any) {
-        try {
-          fs.unlinkSync(tmpDownloadPath);
-        } catch {
-          /* best effort */
-        }
-        throw verifyErr;
-      }
-
-      await this.downloadFile(
-        clientArchive.downloadUrl,
-        tmpClientArchivePath,
-        clientArchive.size,
-        "archive",
-      );
-      const archiveVerified = await this.verifyChecksum(
-        tmpClientArchivePath,
-        clientArchive.name,
-      );
-      if (archiveVerified !== true) {
-        throw new Error(
-          `Could not verify ${clientArchive.name}; refusing to replace the web interface`,
-        );
-      }
-      const stagedClient = await this.stageClientDist(
-        tmpClientArchivePath,
-        isWindows,
-        tmpDownloadPath,
-        asset.name,
-      );
-      incomingClientPath = stagedClient.incomingClientPath;
-      fs.unlinkSync(tmpClientArchivePath);
-
-      try {
-        if (fs.existsSync(stagedPath)) fs.unlinkSync(stagedPath);
-      } catch (cleanErr: any) {
-        log.debug(`Failed to clean stale staged file: ${cleanErr.message}`);
-      }
-      fs.renameSync(tmpDownloadPath, stagedPath);
-
-      if (!isWindows) {
-        try {
-          fs.chmodSync(stagedPath, 0o755);
-        } catch (chmodErr: any) {
-          log.warn(`Could not chmod staged binary: ${chmodErr.message}`);
-        }
-      }
-
-      const exeBasePath = this.getExeBasePath();
-      const journalPath = stageUpdateBundle({
-        installDir: exeDir,
-        version: latestRelease.version,
-        binaryPath: exeBasePath,
-        stagedBinaryPath: stagedPath,
-        liveClientPath: path.join(exeDir, "client", "dist"),
-        incomingClientPath,
-        metadata: stagedClient.metadata,
-      });
-      fs.rmSync(incomingClientPath, { recursive: true, force: true });
-      incomingClientPath = null;
-
-      this._stagedVersionCache = latestRelease.version;
-      try {
-        await setSetting(
-          "stagedPanelUpdateVersion",
-          latestRelease.version,
-        );
-      } catch (persistErr: any) {
-        log.debug(`Could not persist staged version: ${persistErr.message}`);
-      }
-
-      log.info(
-        `Update to v${latestRelease.version} staged at ${stagedPath}. Restart to apply.`,
-      );
-      this.io?.emit("panel:updateReady", {
-        version: latestRelease.version,
-      });
-
-      return {
-        success: true,
-        message: `Update to v${latestRelease.version} downloaded. Restart the panel to apply.`,
-        journal: path.basename(journalPath),
-      };
-    } catch (error: any) {
-      this.lastError = error.message;
-      log.error(`Update download failed: ${error.message}`);
-      try {
-        if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
-      } catch (delErr: any) {
-        log.debug(`Failed to clean partial after error: ${delErr.message}`);
-      }
-      try {
-        if (fs.existsSync(tmpClientArchivePath)) fs.unlinkSync(tmpClientArchivePath);
-      } catch (delErr: any) {
-        log.debug(`Failed to clean client archive after error: ${delErr.message}`);
-      }
-      if (incomingClientPath) {
-        fs.rmSync(incomingClientPath, { recursive: true, force: true });
-      }
-      if (
-        fs.existsSync(stagedPath) &&
-        !fs.existsSync(path.join(exeDir, "update-bundle.json"))
-      ) {
-        fs.rmSync(stagedPath, { force: true });
-      }
-      return { success: false, error: error.message, code: error.code };
-    } finally {
-      this.isDownloading = false;
-    }
-  }
-
-  isSupervisorAvailable() {
-    return (
-      process.platform === "win32" && process.env.PANEL_SUPERVISOR_V === "2"
-    );
-  }
-
-  writeSupervisorMarker(staged: AnyRecord) {
-    const exeDir = path.dirname(this.getExeBasePath());
-    const markerPath = path.join(exeDir, ".update-pending");
-    const payload = {
-      version: staged?.version || null,
-      stagedFile: staged?.stagedPath ? path.basename(staged.stagedPath) : null,
-      journalFile: staged?.journalPath
-        ? path.basename(staged.journalPath)
-        : "update-bundle.json",
-      stagedAt: new Date().toISOString(),
-      requestedBy: `panel-pid-${process.pid}`,
-    };
-    fs.writeFileSync(markerPath, JSON.stringify(payload, null, 2), {
-      encoding: "utf8",
-    });
-    log.info(`Wrote supervisor marker: ${markerPath} (v${payload.version})`);
-    return markerPath;
-  }
-
-  getExeBasePath() {
-    return process.execPath.replace(/\.new2?$/i, "");
-  }
-
-  getStageSlotPath() {
-    const base = this.getExeBasePath();
-    const primary = `${base}.new`;
-    const secondary = `${base}.new2`;
-    const self = path.resolve(process.execPath);
-    return path.resolve(primary) === self ? secondary : primary;
-  }
-
-  findStagedFileOnDisk() {
-    const base = this.getExeBasePath();
-    const selfResolved = path.resolve(process.execPath);
-    const candidates = [`${base}.new`, `${base}.new2`].filter((p) => {
-      try {
-        return path.resolve(p) !== selfResolved && fs.existsSync(p);
-      } catch {
-        return false;
-      }
-    });
-    if (!candidates.length) return null;
-    candidates.sort((a, b) => {
-      try {
-        return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
-      } catch {
-        return 0;
-      }
-    });
-    return candidates[0];
-  }
-
+  getExeBasePath() { return process.execPath; }
+  isSupervisorAvailable() { return process.env.PANEL_SUPERVISOR_V === PANEL_SUPERVISOR_VERSION; }
   getStagedUpdate() {
-    if (typeof process.pkg === "undefined") return null;
-    const exePath = process.execPath;
-    const journalPath = path.join(
-      path.dirname(this.getExeBasePath()),
-      "update-bundle.json",
-    );
-    if (!fs.existsSync(journalPath)) return null;
-    let journal;
-    try {
-      journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
-    } catch (error: any) {
-      log.warn(`Ignoring invalid update bundle journal: ${error.message}`);
-      return null;
-    }
-    if (journal.phase !== "staged") return null;
-    const stagedPath = journal.paths?.stagedBinary;
-    if (!stagedPath || !fs.existsSync(journal.paths?.stagedClient || "")) {
-      log.warn("Ignoring incomplete staged update bundle");
-      return null;
-    }
-    let size;
-    try {
-      const stats = fs.statSync(stagedPath);
-      size = stats.size;
-      if (stats.size < 1024 * 1024) {
-        log.warn(
-          `Staged update at ${stagedPath} is suspiciously small (${stats.size} bytes); ignoring.`,
-        );
-        return null;
-      }
-    } catch (err: any) {
-      log.debug(`Could not stat staged update: ${err.message}`);
-      return null;
-    }
-    let version = journal.version || this._stagedVersionCache || null;
-    if (!version) version = this.latestRelease?.version || null;
-    return { stagedPath, exePath, version, size, journalPath, journal };
+    if (typeof process.pkg === "undefined" || isContainerized()) return null;
+    const journalPath = path.join(path.dirname(this.getExeBasePath()), "update-bundle.json");
+    const journal = readUpdateBundleJournalIfPresent(journalPath);
+    if (!journal || journal.phase !== "staged") return null;
+    const stagedPath = path.join(path.dirname(journalPath), `.panel-update-${journal.transactionId}`, path.basename(this.getExeBasePath()));
+    return { version: journal.version, stagedPath, path: stagedPath, journalPath };
   }
-
-  async loadStagedVersionCache() {
-    try {
-      this._stagedVersionCache = await getSetting("stagedPanelUpdateVersion");
-    } catch (err: any) {
-      log.debug(`Could not load staged version cache: ${err.message}`);
-      this._stagedVersionCache = null;
-    }
-  }
-
-
-  async stageClientDist(archivePath: string, isWindows: boolean, binaryPath: string, artifactName: string) {
-    const exeDir = path.dirname(process.execPath);
-    const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "zpanel-update-"));
-    const escapePowerShellLiteral = (value: string) => String(value).replace(/'/g, "''");
-    let extractArchivePath = archivePath;
-    let windowsArchiveCopy = null;
-
-    try {
-      if (isWindows) {
-        if (path.extname(extractArchivePath).toLowerCase() !== ".zip") {
-          windowsArchiveCopy = `${extractArchivePath}.zip`;
-          fs.copyFileSync(extractArchivePath, windowsArchiveCopy);
-          extractArchivePath = windowsArchiveCopy;
-        }
-        await this.runUpdateCommand("powershell.exe", [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          `Expand-Archive -LiteralPath '${escapePowerShellLiteral(extractArchivePath)}' -DestinationPath '${escapePowerShellLiteral(extractDir)}' -Force`,
-        ]);
-      } else {
-        await this.runUpdateCommand("tar", ["-xzf", extractArchivePath, "-C", extractDir]);
-      }
-
-      let manifest;
-      try {
-        manifest = JSON.parse(
-          fs.readFileSync(path.join(extractDir, "release-manifest.json"), "utf8"),
-        );
-      } catch (error: any) {
-        throw new Error(`Release archive manifest is invalid: ${error.message}`);
-      }
-      const manifestError = validateReleaseManifest(
-        manifest,
-        this.latestRelease?.version,
-        artifactName,
-        binaryPath ? (await this.sha256File(binaryPath)).toLowerCase() : null,
-      );
-      if (manifestError) throw new Error(manifestError);
-
-      const incoming = path.join(extractDir, "client", "dist");
-      if (!fs.existsSync(path.join(incoming, "index.html"))) {
-        throw new Error("Release archive does not contain client/dist/index.html");
-      }
-      const metadata = {
-        panelVersion: manifest.version,
-        buildSha: manifest.buildSha,
-        apiContractVersion: manifest.apiContractVersion,
-      };
-      if (
-        !metadata.buildSha ||
-        Number(metadata.apiContractVersion) !== 1
-      ) {
-        throw new Error("Release archive is missing compatible build metadata");
-      }
-      const clientMetadata = JSON.parse(
-        fs.readFileSync(path.join(incoming, "build-info.json"), "utf8"),
-      );
-      if (
-        clientMetadata.panelVersion !== metadata.panelVersion ||
-        clientMetadata.buildSha !== metadata.buildSha ||
-        Number(clientMetadata.apiContractVersion) !== metadata.apiContractVersion
-      ) {
-        throw new Error("Release frontend metadata does not match its backend artifact");
-      }
-      const incomingClientPath = path.join(
-        exeDir,
-        `.update-client-incoming-${process.pid}`,
-      );
-      fs.rmSync(incomingClientPath, { recursive: true, force: true });
-      fs.cpSync(incoming, incomingClientPath, { recursive: true });
-      log.info("Staged verified client bundle without changing live client/dist");
-
-      if (!isWindows) {
-        this.stageLinuxLauncherFiles(extractDir, exeDir);
-      }
-
-      return { incomingClientPath, metadata };
-    } finally {
-      if (windowsArchiveCopy) {
-        fs.rmSync(windowsArchiveCopy, { force: true });
-      }
-      fs.rmSync(extractDir, { recursive: true, force: true });
-    }
-  }
-
-  static LINUX_LAUNCHER_FILES = [
-    { name: "start.sh", mode: 0o755 },
-    { name: "zomboid-panel.service", mode: 0o644 },
-    { name: "install-linux-service.sh", mode: 0o755 },
-  ];
-
-  static getLinuxLauncherStageDir(exeDir: string) {
-    return path.join(exeDir, ".update-linux-files-staged");
-  }
-
-  stageLinuxLauncherFiles(extractDir: string, exeDir: string) {
-    const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
-    for (const file of PanelUpdateChecker.LINUX_LAUNCHER_FILES) {
-      if (!fs.existsSync(path.join(extractDir, file.name))) {
-        throw new Error(`Release archive does not contain ${file.name}`);
-      }
-    }
-    fs.rmSync(stageDir, { recursive: true, force: true });
-    fs.mkdirSync(stageDir, { recursive: true });
-    for (const file of PanelUpdateChecker.LINUX_LAUNCHER_FILES) {
-      fs.copyFileSync(path.join(extractDir, file.name), path.join(stageDir, file.name));
-    }
-  }
-
-  activateStagedLinuxLauncherFiles(exeDir: string) {
-    const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
-    if (!fs.existsSync(stageDir)) return false;
-
-    const swapped = [];
-    try {
-      for (const file of PanelUpdateChecker.LINUX_LAUNCHER_FILES) {
-        const source = path.join(stageDir, file.name);
-        const target = path.join(exeDir, file.name);
-        const staged = `${target}.new`;
-        const backup = `${target}.previous`;
-        fs.rmSync(staged, { force: true });
-        fs.rmSync(backup, { force: true });
-        fs.copyFileSync(source, staged);
-        fs.chmodSync(staged, file.mode);
-        if (fs.existsSync(target)) fs.renameSync(target, backup);
-        try {
-          fs.renameSync(staged, target);
-        } catch (error: any) {
-          if (fs.existsSync(backup) && !fs.existsSync(target)) {
-            fs.renameSync(backup, target);
-          }
-          throw error;
-        }
-        swapped.push({ target, backup });
-      }
-    } catch (error: any) {
-      for (const { target, backup } of swapped.reverse()) {
-        try {
-          fs.rmSync(target, { force: true });
-          if (fs.existsSync(backup)) fs.renameSync(backup, target);
-        } catch (rollbackError: any) {
-          log.error(`Could not roll back ${target}: ${rollbackError.message}`);
-        }
-      }
-      throw error;
-    }
-    for (const { backup } of swapped) fs.rmSync(backup, { force: true });
-    fs.rmSync(stageDir, { recursive: true, force: true });
-    log.info("Updated Linux launcher and service templates from verified release archive");
-    return true;
-  }
-
-  runUpdateCommand(command: string, args: string[]) {
-    return new Promise<void>((resolve, reject) => {
-      const child = spawn(command, args, { windowsHide: true });
-      let stderr = "";
-      child.stderr?.on("data", (chunk) => {
-        stderr += chunk.toString();
-      });
-      child.on("error", reject);
-      child.on("close", (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`${command} exited with code ${code}: ${stderr.trim()}`));
-      });
-    });
-  }
-
-  downloadFile(url: string, destPath: string, expectedSize: number, expectedKind: string = "binary") {
-    return new Promise<void>((resolve, reject) => {
-      let settled = false;
-      let file: ReturnType<typeof fs.createWriteStream> | null = null;
-
-      const fail = (error: any) => {
-        if (settled) return;
-        settled = true;
-        if (file && !file.destroyed) {
-          file.once("close", () => fs.unlink(destPath, () => {}));
-          file.destroy();
-        } else {
-          fs.unlink(destPath, () => {});
-        }
-        reject(error);
-      };
-
-      const succeed = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-
-      const isAllowedRedirectHost = (downloadUrl: string) => {
-        try {
-          const parsed = new URL(downloadUrl);
-          const host = parsed.hostname.toLowerCase();
-          return (
-            host === "github.com" ||
-            host === "api.github.com" ||
-            host === "objects.githubusercontent.com" ||
-            host === "github-releases.githubusercontent.com" ||
-            host.endsWith(".githubusercontent.com")
-          );
-        } catch (e: any) {
-          log.debug(`Invalid download URL: ${e.message}`);
-          return false;
-        }
-      };
-
-      const follow = (downloadUrl: string, redirectCount: number = 0) => {
-        if (redirectCount > MAX_DOWNLOAD_REDIRECTS) {
-          return fail(
-            new Error(`Too many redirects (max ${MAX_DOWNLOAD_REDIRECTS})`),
-          );
-        }
-
-        if (!downloadUrl.startsWith("https://")) {
-          return fail(new Error("Download URL must use HTTPS"));
-        }
-
-        if (!isAllowedRedirectHost(downloadUrl)) {
-          return fail(new Error("Download host is not trusted"));
-        }
-
-        const req = https.get(
-          downloadUrl,
-          {
-            headers: {
-              "User-Agent": `ZomboidControlPanel/${this.currentVersion}`,
-            },
-          },
-          (res) => {
-            if (
-              res.statusCode === 301 ||
-              res.statusCode === 302 ||
-              res.statusCode === 307 ||
-              res.statusCode === 308
-            ) {
-              const location = res.headers.location;
-              if (!location)
-                return fail(new Error("Redirect without location"));
-              if (!location.startsWith("https://"))
-                return fail(new Error("Redirect to non-HTTPS URL rejected"));
-              res.resume();
-              follow(location, redirectCount + 1);
-              return;
-            }
-
-            if (res.statusCode !== 200) {
-              res.resume();
-              return fail(new Error(`Download failed: HTTP ${res.statusCode}`));
-            }
-
-            const contentLength = res.headers["content-length"];
-            const totalBytes = contentLength
-              ? parseInt(contentLength, 10)
-              : expectedSize;
-            let receivedBytes = 0;
-            const outputFile = fs.createWriteStream(destPath);
-            file = outputFile;
-
-            let lastEmittedProgress = -1;
-            res.on("data", (chunk) => {
-              receivedBytes += chunk.length;
-              if (totalBytes > 0) {
-                this.downloadProgress = Math.round(
-                  (receivedBytes / totalBytes) * 100,
-                );
-                const bucket = Math.floor(this.downloadProgress / 5) * 5;
-                if (bucket > lastEmittedProgress) {
-                  lastEmittedProgress = bucket;
-                  this.io?.emit("panel:downloadProgress", {
-                    progress: this.downloadProgress,
-                    status: "downloading",
-                    received: receivedBytes,
-                    total: totalBytes,
-                  });
-                }
-              }
-            });
-
-            res.on("error", fail);
-            res.pipe(outputFile);
-            outputFile.on("finish", () => {
-              outputFile.close(() => {
-                if (expectedSize > 0 && receivedBytes !== expectedSize) {
-                  return fail(
-                    new Error(
-                      `Downloaded file size mismatch (expected ${expectedSize}, got ${receivedBytes})`,
-                    ),
-                  );
-                }
-                const magicErr =
-                  expectedKind === "archive"
-                    ? this.validateArchiveMagic(destPath)
-                    : this.validateBinaryMagic(destPath);
-                if (magicErr) {
-                  return fail(
-                    new Error(
-                      `Downloaded file failed integrity check: ${magicErr}`,
-                    ),
-                  );
-                }
-                succeed();
-              });
-            });
-            outputFile.on("error", (err) => {
-              fail(err);
-            });
-          },
-        );
-
-        req.on("error", fail);
-        req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
-          const timeoutError = Object.assign(new Error("Download timed out"), {
-            ["code"]: "ETIMEDOUT",
-          });
-          req.destroy(timeoutError);
-        });
-      };
-
-      follow(url);
-    });
-  }
-
   getStatus() {
     const staged = this.getStagedUpdate();
-    let lastApplyResult = this.lastApplyResult || null;
-    if (
-      lastApplyResult &&
-      lastApplyResult.status === "success" &&
-      lastApplyResult.appliedVersion &&
-      this.currentVersion &&
-      lastApplyResult.appliedVersion !== this.currentVersion
-    ) {
-      lastApplyResult = null;
+    let lastApplyResult = null;
+    if (typeof process.pkg !== "undefined" && !isContainerized()) {
+      try { const result = this.readMostRecentApplyLog(); lastApplyResult = result ? JSON.parse(result) : null; }
+      catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") log.warn("Could not read update result."); }
     }
-    return {
-      currentVersion: this.currentVersion,
-      updateAvailable: this.updateAvailable,
-      latestVersion: this.latestRelease?.version || null,
-      releaseUrl: this.latestRelease?.htmlUrl || null,
-      releaseNotes: this.latestRelease?.body || null,
-      publishedAt: this.latestRelease?.publishedAt || null,
-      isChecking: this.isChecking,
-      isDownloading: this.isDownloading,
-      downloadProgress: this.downloadProgress,
-      lastCheck: this.lastCheck,
-      lastError: this.lastError,
-      updateMode: isContainerized() ? "docker" : "binary",
-      updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.tag) || null : null,
+    return { currentVersion: this.currentVersion, latestVersion: this.latestRelease?.version || null, updateAvailable: this.updateAvailable,
+      releaseUrl: this.latestRelease?.htmlUrl || null, releaseNotes: this.latestRelease?.body || null, publishedAt: this.latestRelease?.publishedAt || null,
+      isChecking: this.isChecking, isDownloading: this.isDownloading, isApplying: this.isApplying, downloadProgress: this.downloadProgress, lastCheck: this.lastCheck, lastError: this.lastError,
+      updateMode: isContainerized() ? "docker" : "binary", updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.tag) || null : null,
       dockerInstallKind: isContainerized() && ["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "") ? process.env.PANEL_DOCKER_INSTALL_KIND : null,
-      stagedUpdate: staged
-        ? { version: staged.version, path: staged.stagedPath }
-        : null,
-      lastApplyResult,
-    };
+      stagedUpdate: staged ? { version: staged.version, path: staged.stagedPath } : null, lastApplyResult };
   }
-
-
   async preflight() {
-    const blockers: string[] = [];
-    const warnings: string[] = [];
-    const blockerDetails: AnyRecord[] = [];
-    const warningDetails: AnyRecord[] = [];
-    const info: AnyRecord = {};
-
-    const isWindows = process.platform === "win32";
-    const isPackaged = typeof process.pkg !== "undefined";
-    info.isPackaged = isPackaged;
-    info.platform = process.platform;
-    info.updateMode = isContainerized() ? "docker" : "binary";
-    info.restartAssessment = getRestartAssessment();
-    info.temporaryDirectory = os.tmpdir();
-    info.applyLogPath = path.join(getDataPaths().logsDir, "panel-update-last.log");
-
-    if (!isPackaged) {
-      const containerized = isContainerized();
-      addPreflightMessage(
-        blockers,
-        blockerDetails,
-        containerized
-          ? "updates.preflight.packagedBuildDocker"
-          : "updates.preflight.packagedBuildGit",
-        {},
-        `Self-update is only available in packaged builds. ${getDevModeUpgradeInstruction(containerized)}`,
-      );
-      return { ok: false, blockers, warnings, blockerDetails, warningDetails, info };
-    }
-
-    if (!this.latestRelease) {
-      addPreflightMessage(
-        warnings,
-        warningDetails,
-        "updates.preflight.noReleaseInfo",
-        {},
-        "No release info cached yet — click Check for Updates first.",
-      );
-      return { ok: blockers.length === 0, blockers, warnings, blockerDetails, warningDetails, info };
-    }
-    const latestRelease = this.latestRelease;
-
-    if (!this.updateAvailable) {
-      info.alreadyCurrent = true;
-    }
-
-    const exePath = process.execPath;
-    const exeDir = path.dirname(exePath);
-    info.exePath = exePath;
-    info.exeDir = exeDir;
-
-    const dataPaths = getDataPaths();
-    info.dataDir = dataPaths.dataDir;
-    info.dbPath = getDatabaseFilePath();
-    const databaseName = path.basename(info.dbPath);
-    if (fs.existsSync(info.dbPath)) {
-      try {
-        info.databaseUsers = await getAdmin() ? 1 : 0;
-        info.databaseServers = (await getServers()).length;
-        info.databaseReadable = true;
-      } catch (err: any) {
-        info.databaseReadable = false;
-        addPreflightMessage(
-          blockers,
-          blockerDetails,
-          "updates.preflight.databaseUnreadable",
-          { error: err.message },
-          `Panel database cannot be read before update: ${err.message}.`,
-        );
-      }
-    } else {
-      info.databaseReadable = false;
-      addPreflightMessage(warnings, warningDetails, "updates.preflight.databaseMissing", {},
-        `No data/${databaseName} was found beside the running panel. Verify the data folder before applying the update.`);
-    }
-
-    const assetName = isWindows
-      ? "ZomboidControlPanel.exe"
-      : "ZomboidControlPanel";
-    const isArchive = (name: string) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
-    let asset = latestRelease.assets.find((a: ReleaseAsset) => a.name === assetName);
-    if (!asset) {
-      if (isWindows) {
-        asset = latestRelease.assets.find(
-          (a: ReleaseAsset) => /\.exe$/i.test(a.name) && !isArchive(a.name),
-        );
-      } else {
-        asset = latestRelease.assets.find(
-          (a: ReleaseAsset) =>
-            !isArchive(a.name) &&
-            !/\.exe$/i.test(a.name) &&
-            a.name.toLowerCase().includes("linux"),
-        );
-      }
-    }
-    if (!asset) {
-      const platform = isWindows ? "Windows" : "Linux";
-      addPreflightMessage(
-        blockers,
-        blockerDetails,
-        "updates.preflight.binaryMissing",
-        { platform },
-        `No ${isWindows ? "Windows" : "Linux"} binary found in the latest release.`,
-      );
-    } else {
-      info.asset = { name: asset.name, size: asset.size };
-    }
-
-    const probePath = path.join(exeDir, `.panel-write-probe.${process.pid}`);
-    let probeCreated = false;
-    try {
-      fs.writeFileSync(probePath, "ok");
-      probeCreated = true;
-      info.writable = true;
-    } catch (err: any) {
-      info.writable = false;
-      const permissionKey =
-        process.platform === "win32"
-          ? "updates.preflight.folderNotWritableWindows"
-          : process.platform === "linux"
-            ? "updates.preflight.folderNotWritableLinux"
-            : "updates.preflight.folderNotWritableOther";
-      addPreflightMessage(
-        blockers,
-        blockerDetails,
-        permissionKey,
-        { detail: err.code || err.message },
-        getPanelFolderPermissionGuidance(process.platform, err.code || err.message),
-      );
-    } finally {
-      if (probeCreated) {
+    const blockers: string[] = [], warnings: string[] = [];
+    const install = path.dirname(this.getExeBasePath());
+    const paths = getDataPaths();
+    const info: Record<string, any> = { isPackaged: typeof process.pkg !== "undefined", platform: process.platform, updateMode: isContainerized() ? "docker" : "binary", restartAssessment: getRestartAssessment(), exeDir: install, exePath: this.getExeBasePath(), dataDir: paths.dataDir, dbPath: getDatabaseFilePath(), applyLogPath: path.join(install, "panel-update-result.json") };
+    if (isContainerized()) blockers.push("Docker panel updates run from the host. Game containers keep running.");
+    else if (!info.isPackaged) blockers.push(`Self-update requires a native package. ${getDevModeUpgradeInstruction(false)}`);
+    else {
+      if (!["win32", "linux"].includes(process.platform) || process.arch !== "x64") blockers.push("No native update package supports this platform.");
+      if (!this.isSupervisorAvailable()) blockers.push("Restart the panel using the launcher supplied with this package before updating.");
+      try { await getAdmin(); await getServers(); info.databaseReadable = true; } catch (e) { blockers.push(`Panel database cannot be read: ${(e as Error).message}`); }
+      let probe: string | undefined;
+      try { probe = fs.mkdtempSync(path.join(install, ".panel-write-probe-")); info.writable = true; }
+      catch (e) { blockers.push(getPanelFolderPermissionGuidance(process.platform, (e as Error).message)); }
+      finally { if (probe) fs.rmSync(probe, { recursive: true }); }
+      const archive = this.archiveAsset();
+      if (this.latestRelease && (!archive || !this.latestRelease.assets.some(a => a.name === "checksums.txt"))) blockers.push("Release must include the platform archive and checksums.txt.");
+      if (archive) {
         try {
-          fs.unlinkSync(probePath);
-        } catch (unlinkErr: any) {
-          log.debug(
-            `Could not remove write probe ${probePath}: ${unlinkErr.message}`,
-          );
-        }
+          const stat = fs.statfsSync(install); info.freeBytes = Number(stat.bavail) * Number(stat.bsize);
+          const binary = this.latestRelease!.assets.find(a => a.name === (process.platform === "win32" ? "ZomboidControlPanel.exe" : "ZomboidControlPanel"));
+          const required = archive.size + 2 * (binary?.size || archive.size * 4) + fs.statSync(info.dbPath).size;
+          if (info.freeBytes < required) blockers.push(`Not enough disk space. Need at least ${Math.ceil(required / 1024 / 1024)} MB.`);
+        } catch { warnings.push("Free disk space could not be checked. Verify space for the package and rollback backup before updating."); }
       }
     }
-
-    if (asset?.size) {
-      try {
-        const free = await this.getFreeDiskSpace(exeDir);
-        info.freeBytes = free;
-        const needed = asset.size * 2;
-        if (free === null) {
-          addPreflightMessage(
-            warnings,
-            warningDetails,
-            "updates.preflight.diskSpaceUnknown",
-            {},
-            "Could not determine free disk space before update. Proceeding without this check — verify you have enough free space manually if the apply fails partway through.",
-          );
-        } else if (free < needed) {
-          const neededMb = (needed / 1024 / 1024).toFixed(0);
-          const freeMb = (free / 1024 / 1024).toFixed(0);
-          addPreflightMessage(
-            blockers,
-            blockerDetails,
-            "updates.preflight.diskSpace",
-            { neededMb, freeMb },
-            `Not enough free disk space. Need ~${(needed / 1024 / 1024).toFixed(0)} MB, have ${(free / 1024 / 1024).toFixed(0)} MB.`,
-          );
-        }
-      } catch (err: any) {
-        info.freeBytes = null;
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.diskSpaceUnknown",
-          {},
-          "Could not determine free disk space before update. Proceeding without this check — verify you have enough free space manually if the apply fails partway through.",
-        );
-        log.debug(`Free-space check failed: ${err.message}`);
-      }
-    }
-
-    if (isWindows) {
-      const lowered = exeDir.toLowerCase();
-      const inOneDrive =
-        lowered.includes("\\onedrive\\") || lowered.includes("\\onedrive -");
-      const onDesktop = /\\desktop(\\|$)/.test(lowered);
-      const inDocuments = /\\documents(\\|$)/.test(lowered);
-      if (inOneDrive) {
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.oneDrive",
-          {},
-          "Panel lives inside a OneDrive-synced folder. Sync can briefly lock the exe while it is being replaced. Pause OneDrive before clicking Restart and Apply, or move the panel to a non-synced location (e.g. C:\\ZomboidPanel).",
-        );
-        info.oneDrive = true;
-      } else if (onDesktop || inDocuments) {
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.syncSuspect",
-          {},
-          "Panel lives on the Desktop or in Documents. If you use OneDrive Backup/Known Folder Move, that folder is sync-backed and may lock the exe during apply. Consider moving the panel to a non-synced location.",
-        );
-        info.syncSuspect = true;
-      }
-
-      const inProgramFiles = /^c:\\program files/i.test(exeDir);
-      if (inProgramFiles) {
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.programFiles",
-          {},
-          "Panel is installed under Program Files — Windows requires Administrator rights to replace files there. If apply fails, relaunch the panel as Administrator.",
-        );
-        info.programFiles = true;
-      }
-    }
-
-    const staged = this.getStagedUpdate();
-    if (staged) {
-      info.stagedUpdate = { version: staged.version, path: staged.stagedPath };
-      addPreflightMessage(
-        warnings,
-        warningDetails,
-        "updates.preflight.previousUpdateStaged",
-        { version: staged.version || "?" },
-        `A previous update (v${staged.version || "?"}) is already staged and ready to apply on next restart.`,
-      );
-    }
-
+    return { ok: blockers.length === 0, blockers, warnings, blockerDetails: [], warningDetails: [], info };
+  }
+  private archiveAsset() { return this.latestRelease?.assets.find(a => a.name === (process.platform === "win32" ? "ZomboidControlPanel-windows.zip" : "ZomboidControlPanel-linux.tar.gz")); }
+  async downloadFile(url: string, destination: string, expectedSize: number) {
+    if (!Number.isSafeInteger(expectedSize) || expectedSize < 1 || expectedSize > 1024 * 1024 * 1024) throw new Error("Invalid release asset size.");
+    const response = await fetchReleaseResponse(url, 10 * 60000);
+    if (!response.ok || !response.body) { await response.body?.cancel(); throw new Error(`Download failed: HTTP ${response.status}.`); }
+    let received = 0, lastProgress = -1, created = false;
     try {
-      const bundlePreviousPath = `${exePath}.bundle-previous`;
-      const legacyOldPath = `${exePath}.old`;
-      const lingeringPath = fs.existsSync(bundlePreviousPath)
-        ? bundlePreviousPath
-        : fs.existsSync(legacyOldPath)
-          ? legacyOldPath
-          : null;
-      if (lingeringPath) {
-        info.oldPath = lingeringPath;
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.previousBackup",
-          {},
-          "A previous backup is present next to the exe. It will be cleaned up on the next successful apply.",
-        );
-      }
-    } catch (err: any) {
-      log.debug(`Previous-backup probe failed: ${err.message}`);
-    }
-
-    return { ok: blockers.length === 0, blockers, warnings, blockerDetails, warningDetails, info };
+      const descriptor = fs.openSync(destination, "wx", 0o600);
+      created = true;
+      await pipeline(Readable.fromWeb(response.body as any), new Transform({ transform: (chunk, _encoding, callback) => {
+        received += chunk.length;
+        if (received > expectedSize) { callback(new Error("Downloaded asset exceeds the published size.")); return; }
+        this.downloadProgress = Math.floor(received / expectedSize * 100);
+        if (this.downloadProgress >= lastProgress + 5) { lastProgress = this.downloadProgress; this.io?.emit("panel:downloadProgress", { progress: this.downloadProgress, status: "downloading" }); }
+        callback(null, chunk);
+      } }), fs.createWriteStream(destination, { fd: descriptor, autoClose: true }));
+      if (received !== expectedSize) throw new Error("Downloaded asset size does not match the release.");
+    } catch (e) { if (created) fs.rmSync(destination, { force: true }); else await response.body?.cancel().catch(() => {}); throw e; }
   }
-
-  async getFreeDiskSpace(dirPath: string) {
+  async downloadUpdate() {
+    if (isContainerized()) return { success: false, code: "docker_manual_update", error: "Docker images must be updated from the host. See the update command in Settings." };
+    if (this.isDownloading || this.isApplying) return { success: false, code: "already_downloading", error: "A panel update is already in progress." };
+    if (!this.updateAvailable || !this.latestRelease) return { success: false, code: "no_update", error: "No update available." };
+    this.isDownloading = true;
+    this.downloadProgress = 0;
+    let temporary: string | undefined;
     try {
-      if (typeof fs.promises.statfs === "function") {
-        const stat = await fs.promises.statfs(dirPath);
-        return Number(stat.bavail) * Number(stat.bsize);
-      }
-    } catch (err: any) {
-      log.debug(`statfs failed: ${err.message}`);
-    }
-    return null;
+      const preflight = await this.preflight();
+      if (!preflight.ok) return { success: false, preflight, error: preflight.blockers[0] };
+      const release = this.latestRelease, asset = this.archiveAsset()!;
+      const checksums = release.assets.find(a => a.name === "checksums.txt")!;
+      const lines = await releaseText(checksums.downloadUrl, 64 * 1024);
+      const checksum = lines.split(/\r?\n/).map(line => line.match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/)).find(match => match?.[2] === asset.name)?.[1]?.toLowerCase();
+      if (!checksum) throw new Error("Release archive has no published SHA256 checksum.");
+      temporary = fs.mkdtempSync(path.join(path.dirname(this.getExeBasePath()), ".panel-download-"));
+      const archive = path.join(temporary, asset.name), unpacked = path.join(temporary, "unpacked");
+      await this.downloadFile(asset.downloadUrl, archive, asset.size);
+      if (hashUpdatePath(archive) !== checksum) throw new Error("Release archive SHA256 checksum does not match.");
+      fs.mkdirSync(unpacked);
+      await extractUpdateArchive(archive, unpacked, process.platform === "win32");
+      const binaryName = path.basename(this.getExeBasePath());
+      const binary = path.join(unpacked, binaryName), client = path.join(unpacked, "client/dist");
+      const manifest = JSON.parse(fs.readFileSync(path.join(unpacked, "release-manifest.json"), "utf8"));
+      const manifestError = validateReleaseManifest(manifest, release.version, binaryName, hashUpdatePath(binary));
+      if (manifestError) throw new Error(manifestError);
+      const metadata = { panelVersion: manifest.version, buildSha: manifest.buildSha, apiContractVersion: manifest.apiContractVersion };
+      if (!validateBuildCompatibility(JSON.parse(fs.readFileSync(path.join(client, "build-info.json"), "utf8")), metadata).compatible) throw new Error("Release frontend and backend builds do not match.");
+      const header = Buffer.alloc(4), fd = fs.openSync(binary, "r");
+      try { fs.readSync(fd, header, 0, 4, 0); } finally { fs.closeSync(fd); }
+      if (process.platform === "win32" ? header.subarray(0, 2).toString() !== "MZ" : !header.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) throw new Error("Release binary does not match this platform.");
+      const names = process.platform === "win32" ? ["Start.bat", "sql-wasm.wasm"] : ["start.sh", "zomboid-panel.service", "install-linux-service.sh", "sql-wasm.wasm"];
+      const managedFiles = Object.fromEntries(names.map(name => [name, path.join(unpacked, name)]));
+      if (process.platform !== "win32") for (const name of [binaryName, "start.sh", "install-linux-service.sh"]) fs.chmodSync(path.join(unpacked, name), 0o755);
+      stageUpdateBundle({ installDir: path.dirname(this.getExeBasePath()), version: release.version, binaryPath: this.getExeBasePath(), stagedBinaryPath: binary, liveClientPath: path.join(path.dirname(this.getExeBasePath()), "client/dist"), incomingClientPath: client, metadata, managedFiles });
+      this.lastError = null;
+      this.io?.emit("panel:updateReady", { version: release.version });
+      return { success: true, message: `Verified v${release.version}. Ready to restart the panel.` };
+    } catch (e) { this.lastError = (e as Error).message; return { success: false, error: this.lastError }; }
+    finally { if (temporary) fs.rmSync(temporary, { recursive: true, force: true }); this.isDownloading = false; }
   }
-
-  validateBinaryMagic(filePath: string) {
-    try {
-      const fd = fs.openSync(filePath, "r");
-      const header = Buffer.alloc(4);
-      let bytesRead;
-      try {
-        bytesRead = fs.readSync(fd, header, 0, 4, 0);
-      } finally {
-        try {
-          fs.closeSync(fd);
-        } catch (_: any) {
-          /* ignore */
-        }
-      }
-      if (bytesRead < 2) return "file is shorter than a file header";
-
-      if (process.platform === "win32") {
-        if (header[0] !== 0x4d || header[1] !== 0x5a) {
-          return `not a Windows executable (expected MZ header, got 0x${header[0].toString(16)}${header[1].toString(16)})`;
-        }
-      } else {
-        if (
-          bytesRead < 4 ||
-          header[0] !== 0x7f ||
-          header[1] !== 0x45 ||
-          header[2] !== 0x4c ||
-          header[3] !== 0x46
-        ) {
-          return "not a Linux ELF executable";
-        }
-      }
-      return null;
-    } catch (err: any) {
-      return `could not read downloaded file: ${err.message}`;
-    }
-  }
-
-  validateArchiveMagic(filePath: string) {
-    try {
-      const header = fs.readFileSync(filePath, { encoding: null }).subarray(0, 4);
-      if (header.length < 2) return "file is shorter than an archive header";
-
-      if (process.platform === "win32") {
-        if (
-          header[0] !== 0x50 ||
-          header[1] !== 0x4b ||
-          ![0x03, 0x05, 0x07].includes(header[2])
-        ) {
-          return "not a ZIP archive";
-        }
-      } else if (header[0] !== 0x1f || header[1] !== 0x8b) {
-        return "not a gzip archive";
-      }
-      return null;
-    } catch (err: any) {
-      return `could not read downloaded archive: ${err.message}`;
-    }
-  }
-
-  sha256File(filePath: string) {
-    return new Promise<string>((resolve, reject) => {
-      const hash = crypto.createHash("sha256");
-      const stream = fs.createReadStream(filePath);
-      stream.on("error", reject);
-      stream.on("data", (chunk) => hash.update(chunk));
-      stream.on("end", () => resolve(hash.digest("hex")));
-    });
-  }
-
-  fetchReleaseText(url: string, maxBytes: number = 64 * 1024) {
-    return new Promise<string>((resolve, reject) => {
-      const allowedHost = (u: string) => {
-        try {
-          const host = new URL(u).hostname.toLowerCase();
-          return (
-            host === "github.com" ||
-            host === "api.github.com" ||
-            host === "objects.githubusercontent.com" ||
-            host === "github-releases.githubusercontent.com" ||
-            host.endsWith(".githubusercontent.com")
-          );
-        } catch {
-          return false;
-        }
-      };
-
-      const follow = (u: string, hops: number) => {
-        if (hops > MAX_DOWNLOAD_REDIRECTS)
-          return reject(new Error("Too many redirects"));
-        if (!u.startsWith("https://"))
-          return reject(new Error("Non-HTTPS URL rejected"));
-        if (!allowedHost(u)) return reject(new Error("Untrusted host"));
-
-        const req = https.get(
-          u,
-          {
-            headers: {
-              "User-Agent": `ZomboidControlPanel/${this.currentVersion}`,
-            },
-          },
-          (res) => {
-            if ([301, 302, 307, 308].includes(res.statusCode ?? 0)) {
-              const loc = res.headers.location;
-              res.resume();
-              if (!loc) return reject(new Error("Redirect without location"));
-              return follow(loc, hops + 1);
-            }
-            if (res.statusCode !== 200) {
-              res.resume();
-              return reject(new Error(`HTTP ${res.statusCode}`));
-            }
-            let size = 0;
-            const chunks: Buffer[] = [];
-            res.on("data", (chunk) => {
-              size += chunk.length;
-              if (size > maxBytes) {
-                res.destroy(new Error(`Response exceeds ${maxBytes} bytes`));
-                return;
-              }
-              chunks.push(chunk);
-            });
-            res.on("error", reject);
-            res.on("end", () =>
-              resolve(Buffer.concat(chunks).toString("utf8")),
-            );
-          },
-        );
-        req.on("error", reject);
-        req.setTimeout(GITHUB_API_TIMEOUT_MS, () => {
-          const timeoutError = Object.assign(new Error("Timed out"), {
-            ["code"]: "ETIMEDOUT",
-          });
-          req.destroy(timeoutError);
-        });
-      };
-
-      follow(url, 0);
-    });
-  }
-
-  async verifyChecksum(filePath: string, assetName: string) {
-    if (!this.latestRelease?.assets) return null;
-    const checksumAsset = this.latestRelease.assets.find(
-      (a) => a.name === "checksums.txt",
-    );
-    if (!checksumAsset) return null;
-
-    let text;
-    try {
-      text = await this.fetchReleaseText(checksumAsset.downloadUrl);
-    } catch (err: any) {
-      throw new Error(
-        `Release publishes checksums.txt but it could not be fetched: ${err.message}`,
-      );
-    }
-
-    const want = text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const m = line.match(/^([a-fA-F0-9]{64})\s+\*?(.+?)\s*$/);
-        return m ? { hash: m[1].toLowerCase(), name: m[2] } : null;
-      })
-      .filter((entry): entry is { hash: string; name: string } => Boolean(entry))
-      .find((entry) => entry.name === assetName);
-
-    if (!want) {
-      log.warn(`checksums.txt present but has no entry for ${assetName}`);
-      return null;
-    }
-
-    const got = (await this.sha256File(filePath)).toLowerCase();
-    if (got !== want.hash) {
-      log.error(
-        `SHA256 mismatch for ${assetName}: expected ${want.hash}, got ${got}`,
-      );
-      return false;
-    }
-    return true;
-  }
-
-  async reconcilePendingUpdate() {
-    const pending = await getSetting("pendingPanelUpdate");
-    if (!pending) return;
-
-    log.info(
-      `Reconciling pending panel update: was v${pending}, now v${this.currentVersion}`,
-    );
-
-    if (this.currentVersion === pending) {
-      this.lastApplyResult = {
-        status: "success",
-        appliedVersion: pending,
-        at: new Date().toISOString(),
-      };
-      await setSetting("pendingPanelUpdate", null);
-      await setSetting("stagedPanelUpdateVersion", null);
-      this._stagedVersionCache = null;
-      log.info(`Panel update applied successfully → v${this.currentVersion}`);
-      this.io?.emit("panel:updateApplied", this.lastApplyResult);
-      return;
-    }
-
-    const helperLog = this.readMostRecentApplyLog();
-    const staged = this.getStagedUpdate();
-    const stagedStillPresent = Boolean(staged);
-
-    if (!stagedStillPresent && this.isNewer(this.currentVersion ?? "0.0.0", pending)) {
-      await setSetting("pendingPanelUpdate", null);
-      await setSetting("stagedPanelUpdateVersion", null);
-      this._stagedVersionCache = null;
-      this.lastApplyResult = null;
-      log.info(
-        `Cleared superseded pending panel update: running v${this.currentVersion}, pending v${pending}`,
-      );
-      return;
-    }
-
-    const likelyCause = this.classifyApplyFailure(
-      helperLog,
-      stagedStillPresent,
-    );
-
-    this.lastApplyResult = {
-      status: "failed",
-      pendingVersion: pending,
-      currentVersion: this.currentVersion,
-      at: new Date().toISOString(),
-      stagedStillPresent,
-      helperLog,
-      likelyCause,
-      ...(likelyCause === "rollback_failed"
-        ? { rollbackRetryLikely: this.isRollbackRetryLikely(helperLog) }
-        : {}),
-      canRetryApply: stagedStillPresent,
-      panelFolder: path.dirname(process.execPath),
-    };
-    log.warn(
-      `Panel update apply appears to have failed (pending v${pending}, running v${this.currentVersion}, cause: ${likelyCause})`,
-    );
-    this.io?.emit("panel:updateApplyFailed", this.lastApplyResult);
-
-    // Don't clear pendingPanelUpdate — keep it so the user can retry apply
-    // when the staged file is still on disk. If it isn't, the next successful
-    // download will overwrite the pending marker at restart time.
-  }
-
-  classifyApplyFailure(helperLog: string | null, stagedStillPresent: boolean) {
-    if (!helperLog) return "no_helper_log";
-    const l = helperLog.toLowerCase();
-
-    const supervisorTags = [
-      ...helperLog.matchAll(
-        /\[(av_quarantine|version_mismatch|startup_handshake_failed|frontend_swap_failed|binary_swap_failed|bundle_apply_failed|rollback_failed)\]/gi,
-      ),
-    ].map((m) => m[1].toLowerCase());
-    const lastSupervisorTag = supervisorTags[supervisorTags.length - 1];
-    if (lastSupervisorTag === "av_quarantine") return "av_quarantine";
-    if (lastSupervisorTag === "binary_swap_failed") return "rename_locked";
-    if (lastSupervisorTag === "rollback_failed") return "rollback_failed";
-
-    if (l.includes("[pre-spawn]") && !l.includes("apply helper started")) {
-      return "helper_blocked";
-    }
-
-    if (
-      l.includes("quarantined by av") ||
-      l.includes("disappeared or is empty") ||
-      l.includes("controlled folder access") ||
-      l.includes("cannot find the file specified") ||
-      l.includes("cannot find path") ||
-      l.includes("staged path is already missing") ||
-      l.includes("backup .old is also missing") ||
-      l.includes("rollback did not stick") ||
-      l.includes("rollback copy failed")
-    ) {
-      return "av_quarantine";
-    }
-
-    if (
-      l.includes("access is denied") ||
-      l.includes("access denied") ||
-      l.includes("unauthorized")
-    ) {
-      return "permission";
-    }
-
-    if (
-      l.includes("could not rename running exe") ||
-      l.includes("rename attempt") ||
-      l.includes("place attempt") ||
-      l.includes("being used by another process") ||
-      l.includes("it is being used by")
-    ) {
-      if (
-        !stagedStillPresent &&
-        (l.includes("rename attempt") ||
-          l.includes("could not rename running exe"))
-      ) {
-        return "av_quarantine";
-      }
-      return "rename_locked";
-    }
-
-    return "unknown";
-  }
-
-  isRollbackRetryLikely(helperLog: string | null) {
-    if (!helperLog) return false;
-    const rollbackLines = helperLog
-      .split(/\r?\n/)
-      .filter((line) => /\[rollback_failed\]/i.test(line));
-    if (rollbackLines.length === 0) return false;
-    const last = rollbackLines[rollbackLines.length - 1].toLowerCase();
-    return !last.includes("could not remove journal");
-  }
-
   readMostRecentApplyLog() {
-    try {
-      const logsDir = getDataPaths().logsDir;
-      const supervisor = path.join(logsDir, "supervisor.log");
-      if (fs.existsSync(supervisor)) {
-        const stat = fs.statSync(supervisor);
-        const MAX_BYTES = 8 * 1024;
-        if (stat.size <= MAX_BYTES) {
-          const content = fs.readFileSync(supervisor, "utf8");
-          if (content.trim()) return content;
-        } else {
-          const fd = fs.openSync(supervisor, "r");
-          try {
-            const buf = Buffer.alloc(MAX_BYTES);
-            fs.readSync(fd, buf, 0, MAX_BYTES, stat.size - MAX_BYTES);
-            return `... (truncated, tail only)\n${buf.toString("utf8")}`;
-          } finally {
-            fs.closeSync(fd);
-          }
-        }
-      }
-      const stable = path.join(logsDir, "panel-update-last.log");
-      if (fs.existsSync(stable)) {
-        const stat = fs.statSync(stable);
-        const MAX_BYTES = 8 * 1024;
-        if (stat.size <= MAX_BYTES) {
-          const content = fs.readFileSync(stable, "utf8");
-          if (content.trim()) return content;
-        } else {
-          const fd = fs.openSync(stable, "r");
-          try {
-            const buf = Buffer.alloc(MAX_BYTES);
-            fs.readSync(fd, buf, 0, MAX_BYTES, stat.size - MAX_BYTES);
-            return `... (truncated, tail only)\n${buf.toString("utf8")}`;
-          } finally {
-            fs.closeSync(fd);
-          }
-        }
-      }
-    } catch (err: any) {
-      log.debug(`readMostRecentApplyLog (stable) failed: ${err.message}`);
-    }
-    try {
-      const dir = getDataPaths().logsDir;
-      const names = fs
-        .readdirSync(dir)
-        .filter((n) => /^panel-update-\d+\.log$/.test(n))
-        .map((n) => {
-          const fp = path.join(dir, n);
-          try {
-            const stat = fs.statSync(fp);
-            return { fp, mtime: stat.mtimeMs, size: stat.size };
-          } catch {
-            return null;
-          }
-        })
-        .filter((entry): entry is { fp: string; mtime: number; size: number } => Boolean(entry))
-        .sort((a, b) => b.mtime - a.mtime);
-      if (names.length) {
-        const { fp, size } = names[0];
-        const MAX_BYTES = 8 * 1024;
-        if (size <= MAX_BYTES) return fs.readFileSync(fp, "utf8");
-        const fd = fs.openSync(fp, "r");
-        try {
-          const buf = Buffer.alloc(MAX_BYTES);
-          fs.readSync(fd, buf, 0, MAX_BYTES, size - MAX_BYTES);
-          return `... (truncated, tail only)\n${buf.toString("utf8")}`;
-        } finally {
-          fs.closeSync(fd);
-        }
-      }
-    } catch (err: any) {
-      log.debug(`readMostRecentApplyLog (logs dir) failed: ${err.message}`);
-    }
-    return null;
-  }
-
-  cleanupOldHelperArtifacts(keep: number = 5) {
-    const tmpDir = os.tmpdir();
-    const tmpPatterns = [
-      /^zomboid-panel-update-\d+\.log$/,
-      /^zomboid-panel-apply-\d+-\d+\.ps1$/,
-    ];
-    let tmpEntries: string[];
-    try {
-      tmpEntries = fs.readdirSync(tmpDir);
-    } catch (err: any) {
-      log.debug(`Could not read TEMP dir: ${err.message}`);
-      tmpEntries = [];
-    }
-    for (const pattern of tmpPatterns) {
-      const matching = tmpEntries
-        .filter((n) => pattern.test(n))
-        .map((n) => {
-          const fp = path.join(tmpDir, n);
-          try {
-            return { fp, mtime: fs.statSync(fp).mtimeMs };
-          } catch {
-            return null;
-          }
-        })
-        .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
-        .sort((a, b) => b.mtime - a.mtime);
-      const toDelete = matching.slice(keep);
-      for (const { fp } of toDelete) {
-        try {
-          fs.unlinkSync(fp);
-        } catch (err: any) {
-          log.debug(
-            `Could not remove old helper artifact ${fp}: ${err.message}`,
-          );
-        }
-      }
-    }
-
-    try {
-      const helperDir = path.join(
-        path.dirname(process.execPath),
-        ".panel-helpers",
-      );
-      if (fs.existsSync(helperDir)) {
-        const cmdPattern = /^apply-update-\d+\.cmd$/;
-        const cmdEntries = fs
-          .readdirSync(helperDir)
-          .filter((n) => cmdPattern.test(n))
-          .map((n) => {
-            const fp = path.join(helperDir, n);
-            try {
-              return { fp, mtime: fs.statSync(fp).mtimeMs };
-            } catch {
-              return null;
-            }
-          })
-          .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
-          .sort((a, b) => b.mtime - a.mtime);
-        const toDelete = cmdEntries.slice(keep);
-        for (const { fp } of toDelete) {
-          try {
-            fs.unlinkSync(fp);
-          } catch (err: any) {
-            log.debug(`Could not remove old helper cmd ${fp}: ${err.message}`);
-          }
-        }
-      }
-    } catch (err: any) {
-      log.debug(`Could not prune helper dir: ${err.message}`);
-    }
-
-    try {
-      const logsDir = getDataPaths().logsDir;
-      const logPattern = /^panel-update-\d+\.log$/;
-      const logEntries = fs
-        .readdirSync(logsDir)
-        .filter((n) => logPattern.test(n))
-        .map((n) => {
-          const fp = path.join(logsDir, n);
-          try {
-            return { fp, mtime: fs.statSync(fp).mtimeMs };
-          } catch {
-            return null;
-          }
-        })
-        .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
-        .sort((a, b) => b.mtime - a.mtime);
-      const toDelete = logEntries.slice(keep);
-      for (const { fp } of toDelete) {
-        try {
-          fs.unlinkSync(fp);
-        } catch (err: any) {
-          log.debug(`Could not remove old log ${fp}: ${err.message}`);
-        }
-      }
-    } catch (err: any) {
-      log.debug(`Could not prune logs dir: ${err.message}`);
-    }
-  }
-
-  cleanupOrphanPartials() {
-    if (typeof process.pkg === "undefined") return;
-    const exeDir = path.dirname(this.getExeBasePath());
-    let entries;
-    try {
-      entries = fs.readdirSync(exeDir);
-    } catch {
-      return;
-    }
-    const exeBaseName = path.basename(this.getExeBasePath());
-    const escapedBaseName = exeBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const partialPatterns = [
-      new RegExp(`^${escapedBaseName}\\.new2?\\.partial\\.\\d+(?:-\\d+)?$`),
-      /^\.client-dist-.+\.partial\.\d+(?:-\d+)?\.(?:zip|tar\.gz)$/,
-    ];
-    for (const name of entries) {
-      if (!partialPatterns.some((pattern) => pattern.test(name))) continue;
-      const fp = path.join(exeDir, name);
-      try {
-        fs.unlinkSync(fp);
-        log.info(`Removed orphan download partial: ${name}`);
-      } catch (err: any) {
-        log.debug(`Could not remove orphan partial ${fp}: ${err.message}`);
-      }
-    }
-  }
-
-  isSameOrNewer(a: string, b: string) {
-    if (a === b) return true;
-    return this.isNewer(a, b);
+    const file = path.join(path.dirname(this.getExeBasePath()), "panel-update-result.json");
+    try { return readRegularFile(file, 65536); }
+    catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return null; throw e; }
   }
 }
