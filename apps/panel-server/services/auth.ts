@@ -9,10 +9,9 @@ import type {
   Response,
 } from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
-import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
+import { getSetting, setSetting, getAdmin, createAdmin as insertAdmin, saveAdmin } from "../database/init.ts";
 import {
   loadOrCreateJwtSecret,
-  getJwtSecretPath,
   regenerateJwtSecretFile,
 } from "../utils/jwtSecret.ts";
 import { readSecret } from "../utils/secrets.ts";
@@ -107,10 +106,6 @@ const MAX_FAILED_LOGINS = 10;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const DUMMY_BCRYPT_HASH =
   "$2a$12$CwTycUXWue0Thq9StjUM0uJ8u2H8ekjqOGWjF/9JMlSlL5C.tZgqe";
-
-function getAdminUser(users: AuthUser[]): AuthUser | null {
-  return users.find((user) => user.role === "admin") || users[0] || null;
-}
 
 const sessionRevocationCallbacks = new Set<SessionRevocationCallback>();
 
@@ -233,9 +228,7 @@ class AuthService {
         return null;
       }
 
-      const db = await getDb();
-      const users = (db.data.users || []) as AuthUser[];
-      const user = getAdminUser(users);
+      const user = await getAdmin() as AuthUser | null;
       if (!user || user.id !== payload.userId) {
         return null;
       }
@@ -306,33 +299,10 @@ class AuthService {
 
   async init(): Promise<void> {
     try {
-      const legacySecret = await getSetting("jwtSecret");
-      const { secret, source } = await loadOrCreateJwtSecret({
-        legacyValue: legacySecret || null,
-      });
+      const { secret, source } = await loadOrCreateJwtSecret();
       this.jwtSecret = secret;
       this.initialized = true;
-
-      if (legacySecret) {
-        await setSetting("jwtSecret", null);
-        await commitNow();
-        if (source === "env") {
-          log.warn(
-            "Removed a leftover JWT secret from db.json — a JWT_SECRET " +
-              "environment override is in effect, so the db.json copy was " +
-              "already unused.",
-          );
-        } else {
-          log.warn(
-            `Moved the JWT signing key out of db.json into ${getJwtSecretPath()}. ` +
-              "Existing sessions are unaffected — same key, safer location. " +
-              "Backups taken before this upgrade still contain the old copy " +
-              "in db.json; this change does not retroactively clean those up.",
-          );
-        }
-      } else if (source === "generated") {
-        log.info("Generated new JWT secret");
-      }
+      if (source === "generated") log.info("Generated new JWT secret");
 
       log.info("Auth service initialized");
     } catch (error: unknown) {
@@ -361,9 +331,7 @@ class AuthService {
   }
 
   async needsSetup(): Promise<boolean> {
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    return users.length === 0;
+    return (await getAdmin()) === null;
   }
 
   async isAuthEnabled(): Promise<boolean> {
@@ -399,22 +367,7 @@ class AuthService {
         throw new Error("Password must be 128 characters or fewer");
       }
 
-      const db = await getDb();
-      if (!db.data.users) {
-        db.data.users = [];
-      }
-
-      const users = db.data.users as AuthUser[];
-      if (users.length > 0) {
-        throw new Error("Setup already completed");
-      }
-
-      const existing = users.find(
-        (u) => u.username.toLowerCase() === username.toLowerCase(),
-      );
-      if (existing) {
-        throw new Error("Username already exists");
-      }
+      if (await getAdmin()) throw new Error("Setup already completed");
 
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const user = {
@@ -422,13 +375,11 @@ class AuthService {
         username,
         password: hashedPassword,
         role: "admin",
-        roleId: "role-admin",
         createdAt: new Date().toISOString(),
         lastLogin: null,
       };
 
-      users.push(user);
-      await commitNow();
+      await insertAdmin(user);
 
       log.info(`Admin account created: ${username}`);
       return {
@@ -443,13 +394,12 @@ class AuthService {
     password: string,
     rememberMe = true,
   ): Promise<AuthSessionResult> {
+    return this._withMutex(async () => {
     if (!username || !password) {
       throw new Error("Username and password are required");
     }
 
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const admin = getAdminUser(users);
+    const admin = await getAdmin() as AuthUser | null;
     const user =
       admin?.username.toLowerCase() === username.toLowerCase() ? admin : null;
 
@@ -483,7 +433,7 @@ class AuthService {
         );
       }
       try {
-        await commitNow();
+        await saveAdmin(user);
       } catch (error: unknown) {
         log.error(
           `Failed to persist failed-login state for ${user.username}: ${errorMessage(error)}`,
@@ -499,7 +449,7 @@ class AuthService {
 
     user.lastLogin = new Date().toISOString();
     const refreshSession = rememberMe ? this.createRefreshSession(user) : null;
-    await commitNow();
+    await saveAdmin(user);
 
     const accessToken = this.generateAccessToken(user);
     const refreshToken = refreshSession
@@ -512,6 +462,7 @@ class AuthService {
       accessToken,
       refreshToken,
     };
+    });
   }
 
   generateAccessToken(user: AuthUser): string {
@@ -554,6 +505,7 @@ class AuthService {
   async refreshAccessToken(
     refreshToken: string,
   ): Promise<AuthSessionResult | null> {
+    return this._withMutex(async () => {
     try {
       const payload = jwt.verify(refreshToken, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
@@ -562,9 +514,7 @@ class AuthService {
         throw new Error("Invalid token type");
       }
 
-      const db = await getDb();
-      const users = (db.data.users || []) as AuthUser[];
-      const user = getAdminUser(users);
+      const user = await getAdmin() as AuthUser | null;
 
       if (!user || user.id !== payload.userId) {
         throw new Error("User not found");
@@ -588,7 +538,7 @@ class AuthService {
 
       this.revokeRefreshSession(user, payload.sessionId);
       const newSession = this.createRefreshSession(user);
-      await commitNow();
+      await saveAdmin(user);
 
       const accessToken = this.generateAccessToken(user);
       const newRefreshToken = this.generateRefreshToken(user, newSession.id);
@@ -600,6 +550,7 @@ class AuthService {
     } catch (error) {
       return null;
     }
+    });
   }
 
   async changePassword(
@@ -607,13 +558,12 @@ class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<boolean> {
-    if (!newPassword || newPassword.length < 6) {
-      throw new Error("New password must be at least 6 characters");
+    return this._withMutex(async () => {
+    if (!newPassword || newPassword.length < 6 || newPassword.length > 128) {
+      throw new Error("New password must be 6-128 characters");
     }
 
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const user = getAdminUser(users);
+    const user = await getAdmin() as AuthUser | null;
 
     if (!user || user.id !== userId) {
       throw new Error("User not found");
@@ -633,17 +583,16 @@ class AuthService {
     user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     user.tokenGen = (user.tokenGen || 0) + 1;
     user.refreshSessions = [];
-    await commitNow();
+    await saveAdmin(user);
 
     log.info(`Password changed for user: ${user.username}`);
     emitSessionRevoked({ scope: "user", userId: user.id });
     return true;
+    });
   }
 
   async getUsers(): Promise<PublicUser[]> {
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const user = getAdminUser(users);
+    const user = await getAdmin() as AuthUser | null;
     return user
       ? [
           {
@@ -657,6 +606,7 @@ class AuthService {
   }
 
   async logout(refreshToken: string | null | undefined): Promise<boolean> {
+    return this._withMutex(async () => {
     if (!refreshToken) {
       return false;
     }
@@ -675,9 +625,7 @@ class AuthService {
         return false;
       }
 
-      const db = await getDb();
-      const users = (db.data.users || []) as AuthUser[];
-      const user = getAdminUser(users);
+      const user = await getAdmin() as AuthUser | null;
       if (!user || user.id !== payload.userId) {
         return false;
       }
@@ -694,7 +642,7 @@ class AuthService {
 
       const revoked = this.revokeRefreshSession(user, payload.sessionId);
       if (revoked) {
-        await commitNow();
+        await saveAdmin(user);
         emitSessionRevoked({ scope: "user", userId: user.id });
       }
 
@@ -702,9 +650,11 @@ class AuthService {
     } catch (error) {
       return false;
     }
+    });
   }
 
   async resetPassword(newPassword: string): Promise<{ username: string }> {
+    return this._withMutex(async () => {
     if (
       !newPassword ||
       typeof newPassword !== "string" ||
@@ -716,21 +666,17 @@ class AuthService {
       throw new Error("Password must be 128 characters or fewer");
     }
 
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    if (users.length === 0) {
-      throw new Error("No user accounts exist. Use setup instead.");
-    }
-
-    const user = getAdminUser(users)!;
+    const user = await getAdmin() as AuthUser | null;
+    if (!user) throw new Error("No admin account exists. Use setup instead.");
     user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     user.tokenGen = (user.tokenGen || 0) + 1;
     user.refreshSessions = [];
-    await commitNow();
+    await saveAdmin(user);
 
     log.info(`Password reset for user: ${user.username}`);
     emitSessionRevoked({ scope: "user", userId: user.id });
     return { username: user.username };
+    });
   }
 
     middleware(): RequestHandler {

@@ -967,7 +967,7 @@ export default function Debug() {
 
   useEffect(() => {
     if (!socket) return
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       fetchSystemInfo()
       fetchHealthStatus()
       fetchLogFiles()
@@ -975,9 +975,9 @@ export default function Debug() {
       fetchCrashLogs()
       fetchDiagnostics()
     }
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket]) // eslint-disable-line react-hooks/exhaustive-deps -- fetch functions are intentionally kept mount-stable here
 
@@ -1087,10 +1087,12 @@ export default function Debug() {
     }
 
     socket.on('log:entry', handleLog)
+    socket.on('panel:log', handleLog)
     socket.emit('subscribe:logs')
 
     return () => {
       socket.off('log:entry', handleLog)
+      socket.off('panel:log', handleLog)
       socket.emit('unsubscribe:logs')
     }
   }, [socket, paused])

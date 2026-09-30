@@ -32,7 +32,7 @@ import {
 } from "../services/configMutationGuard.ts";
 import {
   escapeLuaString,
-  getActiveServerContext,
+  getCurrentServerContext,
   getServerConfigPath,
   getServerName,
   modifySandboxValue,
@@ -94,7 +94,7 @@ async function getRequestServerContext(
   req: ServerFilesRequest,
 ): Promise<ActiveServerContext> {
   if (!req.activeServerContext) {
-    req.activeServerContext = await getActiveServerContext();
+    req.activeServerContext = await getCurrentServerContext();
   }
   return req.activeServerContext;
 }
@@ -118,7 +118,7 @@ async function getRequestServerValues(req: ServerFilesRequest) {
 router.use(
   async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
     try {
-      const context = await getActiveServerContext();
+      const context = await getCurrentServerContext();
       if (context.configurationError) throw context.configurationError;
       req.activeServerContext = context;
     } catch (err: unknown) {

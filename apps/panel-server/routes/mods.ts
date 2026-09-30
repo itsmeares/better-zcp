@@ -12,7 +12,7 @@ import {
   removeTrackedMod,
   clearModUpdates,
   getSetting,
-  getActiveServer,
+  getCurrentServer,
   addIgnoredMod,
   getIgnoredMods,
   removeIgnoredMod,
@@ -117,7 +117,7 @@ function getSanitizedIniPath(
 }
 
 async function getServerPaths() {
-  const activeServer = await getActiveServer();
+  const activeServer = await getCurrentServer();
   if (activeServer) {
     return {
       serverConfigPath: activeServer.serverConfigPath ||

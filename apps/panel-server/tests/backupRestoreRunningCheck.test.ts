@@ -3,12 +3,12 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({})),
+  getCurrentServer: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
 
 const { default: router } = await import("../routes/backup.ts");
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -52,7 +52,7 @@ let restoreBackup;
 let services;
 
 beforeEach(() => {
-  getActiveServer.mockReset().mockResolvedValue({ id: "server-a", serverName: "A" });
+  getCurrentServer.mockReset().mockResolvedValue({ id: "server-a", serverName: "A" });
   restoreBackup = vi.fn(async () => ({ success: true }));
   services = {
     backupService: { restoreBackup },

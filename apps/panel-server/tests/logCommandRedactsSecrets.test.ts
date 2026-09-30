@@ -1,22 +1,24 @@
-import { describe, expect, it } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+import { createServer } from "../database/init.ts";
+const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
+import { describe, expect } from "vite-plus/test";
 import fs from "fs";
 
 
-const { logCommand, getCommandHistory, flushWrites } = await import("../database/init.ts");
+const { logCommand, getCommandHistory } = await import("../database/init.ts");
 const { getDataPaths } = await import("../utils/paths.ts");
 
 describe("logCommand redacts RCON secrets before persisting", () => {
-  it("never writes an adduser password to db.json on disk", async () => {
+  it("never writes an adduser password to panel.sqlite on disk", async () => {
     const secret = "hunter2-super-secret";
     await logCommand(`adduser "Bob" "${secret}"`, "User added", true);
-    await flushWrites();
 
     const { dataDir } = getDataPaths();
-    const dbPath = `${dataDir}/db.json`;
-    const raw = fs.readFileSync(dbPath, "utf8");
+    const dbPath = `${dataDir}/panel.sqlite`;
+    const raw = fs.readFileSync(dbPath);
 
-    expect(raw).not.toContain(secret);
-    expect(raw).toContain("[REDACTED]");
+    expect(raw.includes(Buffer.from(secret))).toBe(false);
+    expect(raw.includes(Buffer.from("[REDACTED]"))).toBe(true);
   });
 
   it("getCommandHistory (the data GET /history returns) also never surfaces the password", async () => {

@@ -1,3 +1,5 @@
+import { requireServerId } from "../utils/serverScope.ts";
+import { listNonInternalIPv4Interfaces } from "../utils/networkInterfaces.ts";
 import { Router } from "../http/apiRouter.ts";
 import { spawn, exec } from "child_process";
 import { promisify } from "util";
@@ -12,7 +14,7 @@ import {
   logServerEvent,
   setSetting,
   getSetting,
-  getActiveServer,
+  getCurrentServer,
   getServers,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.ts";
@@ -64,7 +66,7 @@ import {
   forceStopServerAction,
   restartServerAction,
 } from "../services/serverLifecycleActions.ts";
-import { scoreServerProcessOwnership } from "../services/serverManager.ts";
+import { scanDedicatedServerProcesses, scoreServerProcessOwnership } from "../services/serverManager.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 import { resolveEnvRconHost } from "../services/rcon.ts";
 import { updateServerProfile } from "../services/serverProfiles.ts";
@@ -482,7 +484,7 @@ async function ensureSteamCmdInstalled(installPath: string, io: any) {
 }
 
 async function getServerConfigTarget() {
-  const activeServer = await getActiveServer();
+  const activeServer = await getCurrentServer();
   if (activeServer) {
     return {
       activeServer,
@@ -633,8 +635,7 @@ router.get("/status", async (req, res) => {
 
 router.get("/network-interfaces", async (req, res) => {
   try {
-    const serverManager = req.app.get("serverManager");
-    res.json({ interfaces: serverManager.listNetworkInterfaces() });
+    res.json({ interfaces: listNonInternalIPv4Interfaces() });
   } catch (error: any) {
     log.error(`Failed to list network interfaces: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1260,38 +1261,6 @@ router.post("/install", async (req, res) => {
         const warnings = [];
 
         try {
-          await setSetting("serverPath", installPath);
-          await setSetting("serverName", serverName);
-          await setSetting("minMemory", minMemory);
-          await setSetting("maxMemory", maxMemory);
-          await setSetting("serverPort", serverPort);
-          await setSetting("useUpnp", useUpnp);
-
-          if (zomboidDataPath) {
-            await setSetting("zomboidDataPath", zomboidDataPath);
-          } else {
-            await setSetting("zomboidDataPath", zomboidPath);
-            io.emit("install:log", {
-              type: "stdout",
-              text: `Using ${usesEnvironmentDataPath ? "configured" : "isolated"} data folder: ${zomboidPath}`,
-              progressCode: usesEnvironmentDataPath
-                ? ProgressCode.DATA_FOLDER_USING_CONFIGURED
-                : ProgressCode.DATA_FOLDER_USING_ISOLATED,
-              params: { path: zomboidPath },
-            });
-          }
-
-          await setSetting("serverConfigPath", serverConfigPath);
-        } catch (settingsError: any) {
-          log.error(`Failed to save install settings: ${settingsError.message}`);
-          warnings.push({
-            progressCode: ProgressCode.INSTALL_SETTINGS_SAVE_FAILED,
-            message: `Server files installed, but some install settings could not be saved (${sanitizeError(settingsError.message)}). Re-check them under Settings once the panel is back up.`,
-            params: { fields: "serverPath, serverName, memory, port, UPnP, data paths", reason: sanitizeError(settingsError.message) },
-          });
-        }
-
-        try {
           ensureWritableDirectory(serverConfigPath);
         } catch (dirError: any) {
           log.error(
@@ -1318,27 +1287,6 @@ router.post("/install", async (req, res) => {
           });
           activeSteamOperations.delete(normalizedPath);
           return;
-        }
-
-        if (rconPassword) {
-          try {
-            await setSetting("rconPassword", rconPassword);
-            await setSetting("rconPort", rconPort);
-            await setSetting("rconHost", resolveEnvRconHost());
-            io.emit("install:log", {
-              type: "stdout",
-              text: `RCON settings saved (port: ${rconPort})`,
-              progressCode: ProgressCode.RCON_SETTINGS_SAVED,
-              params: { port: rconPort },
-            });
-          } catch (rconSettingsError: any) {
-            log.error(`Failed to save RCON settings: ${rconSettingsError.message}`);
-            warnings.push({
-              progressCode: ProgressCode.INSTALL_SETTINGS_SAVE_FAILED,
-              message: `Server files installed, but the RCON password/port could not be saved (${sanitizeError(rconSettingsError.message)}). Re-check them under Settings once the panel is back up.`,
-              params: { fields: "RCON password, port, host", reason: sanitizeError(rconSettingsError.message) },
-            });
-          }
         }
 
         try {
@@ -1439,10 +1387,7 @@ router.post("/install", async (req, res) => {
           });
         }
 
-        logServerEvent(
-          "server_install",
-          `Installed PZ server to ${installPath} (${selectedBranch} branch)`,
-        );
+        log.info(`Installed PZ server to ${installPath} (${selectedBranch} branch)`);
 
         if (!hasPzInstallMarker(installPath)) {
           log.warn(
@@ -1696,24 +1641,6 @@ router.post("/quick-setup", async (req, res) => {
 
     const warnings = [];
 
-    await setSetting("serverPath", installPath);
-    await setSetting("serverName", serverName);
-    await setSetting("minMemory", safeMinMemory);
-    await setSetting("maxMemory", safeMaxMemory);
-    await setSetting("serverPort", safeServerPort);
-    await setSetting("useUpnp", useUpnp);
-
-    if (zomboidDataPath) {
-      await setSetting("zomboidDataPath", zomboidDataPath);
-    } else {
-      await setSetting("zomboidDataPath", zomboidPath);
-      log.info(
-        `Using ${usesEnvironmentDataPath ? "configured" : "isolated"} data folder: ${zomboidPath}`,
-      );
-    }
-
-    await setSetting("serverConfigPath", serverConfigPath);
-
     try {
       ensureWritableDirectory(serverConfigPath);
     } catch (dirError: any) {
@@ -1733,9 +1660,6 @@ router.post("/quick-setup", async (req, res) => {
     }
 
     if (rconPassword) {
-      await setSetting("rconPassword", rconPassword);
-      await setSetting("rconPort", safeRconPort);
-      await setSetting("rconHost", resolveEnvRconHost());
 
       try {
         const iniPath = path.join(serverConfigPath, `${serverName}.ini`);
@@ -2785,7 +2709,7 @@ async function checkOneServerStopped(
   try {
     processDetails = usesRawProcessScan
       ? await serverManager._scanDedicatedServerProcesses()
-      : await serverManager.getServerProcessDetails();
+      : typeof serverManager?.getServerProcessDetails === "function" ? await serverManager.getServerProcessDetails() : await scanDedicatedServerProcesses();
   } catch (error: unknown) {
     return {
       status: 503,
@@ -2918,15 +2842,20 @@ router.post("/delete-files", async (req, res) => {
 
     const resolvedDeletePath = path.resolve(deletePath);
     const configuredServers = (await getServers()) as AnyRecord[];
-    const targetServer = configuredServers.find(
+    const matchingServers = configuredServers.filter(
       (s) => s.installPath && path.resolve(s.installPath) === resolvedDeletePath,
     );
+    const targetServer = matchingServers.find((s) => String(s.id) === requireServerId()) ?? matchingServers[0];
     if (!targetServer) {
       return res.status(400).json({
         error:
           "This path doesn't match a server the panel has on record. Refusing to delete for safety.",
         code: ErrorCode.DELETE_FILES_NOT_CONFIGURED_SERVER,
       });
+    }
+
+    if (String(targetServer.id) !== requireServerId()) {
+      return res.status(409).json({ error: "File target does not match the server in the URL" });
     }
 
     const normalizedDeleteTargetPath = path
@@ -3165,7 +3094,7 @@ function filterConsoleLogLines(lines: string[], filterLevel = "filtered") {
 }
 
 async function getConsoleDataPath() {
-  const activeServer = await getActiveServer();
+  const activeServer = await getCurrentServer();
   if (activeServer) {
     return activeServer.zomboidDataPath || activeServer.installPath || null;
   }
@@ -3556,7 +3485,7 @@ export async function countDir(dir: string, budget: any) {
 router.post("/wipe/preview", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer) {
       return res.status(400).json({
         error: "No active server configured",
@@ -3787,7 +3716,7 @@ router.post("/wipe", async (req, res) => {
   }
   wipeInProgress = true;
 
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "wipe",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -3804,7 +3733,7 @@ router.post("/wipe", async (req, res) => {
 
   try {
     const serverManager = req.app.get("serverManager");
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer) {
       return res.status(400).json({
         error: "No active server configured",

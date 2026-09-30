@@ -34,18 +34,9 @@ function writeSecretFile(secretPath: string, value: string): void {
   }
 }
 
-interface LoadJwtSecretOptions {
-  legacyValue?: string | null;
-}
+type JwtSecretSource = "env" | "file" | "generated";
 
-type JwtSecretSource = "env" | "file" | "migrated" | "generated";
-
-export async function loadOrCreateJwtSecret({
-  legacyValue,
-}: LoadJwtSecretOptions = {}): Promise<{
-  secret: string;
-  source: JwtSecretSource;
-}> {
+export async function loadOrCreateJwtSecret(): Promise<{ secret: string; source: JwtSecretSource }> {
   const envSecret = readSecret("JWT_SECRET");
   if (envSecret) {
     if (envSecret.length < MIN_JWT_SECRET_LENGTH) {
@@ -85,11 +76,6 @@ export async function loadOrCreateJwtSecret({
       );
     }
     return { secret, source: "file" };
-  }
-
-  if (legacyValue) {
-    writeSecretFile(secretPath, legacyValue);
-    return { secret: legacyValue, source: "migrated" };
   }
 
   const generated = crypto.randomBytes(64).toString("hex");

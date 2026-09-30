@@ -6,7 +6,11 @@ vi.mock("../database/init.ts", async (importOriginal) => {
   return { ...actual, logServerEvent: logServerEventMock };
 });
 
-const { checkServerStatusNow, io } = await import("../index.ts");
+import { observeServerStatus } from "../services/serverDetection.ts";
+vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({panelBridge: {isModConnected: () => false}})}));
+const io = {emit: vi.fn()};
+let previous = null;
+const checkServerStatusNow = async reason => {previous = await observeServerStatus({serverManager: new ServerManager(),rconService: {connected: false},io},previous,reason)};
 const { ServerManager } = await import("../services/serverManager.ts");
 const { onLog } = await import("../utils/logger.ts");
 

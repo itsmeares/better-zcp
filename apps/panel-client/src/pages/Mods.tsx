@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/serverSelection"
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -2121,7 +2122,7 @@ export default function Mods() {
 
   useEffect(() => {
     if (!socket) return
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       if (hasModOrderChanged) {
         setServerChangedSinceLoad(true)
         toast({
@@ -2134,9 +2135,9 @@ export default function Mods() {
       }
       void fetchData()
     }
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket, fetchData, hasModOrderChanged, toast])
 
@@ -7879,7 +7880,7 @@ export default function Mods() {
                                         src={
                                           demoMode
                                             ? `${import.meta.env.BASE_URL}spiffo.png`
-                                            : `/api/mods/thumbnail/${mod.workshop_id}`
+                                            : apiUrl(`/mods/thumbnail/${mod.workshop_id}`)
                                         }
                                         alt=""
                                         loading="lazy"

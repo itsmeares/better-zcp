@@ -4,11 +4,11 @@ import os from "os";
 import path from "path";
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const getAllSettings = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings,
 }));
 
@@ -42,10 +42,10 @@ describe("createBackup() itself: distinguishes no-source from a real failure", (
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-fail-unit-"));
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     getAllSettings.mockReset();
     getAllSettings.mockResolvedValue({});
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       serverConfigPath: tmpDir,
       serverName: "TestServer",
     });
@@ -98,10 +98,10 @@ describe("PUT /ini (an 'ordinary edit' site): backup failure never blocks the ed
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-fail-ini-"));
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     getAllSettings.mockReset();
     getAllSettings.mockResolvedValue({});
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       serverConfigPath: tmpDir,
       serverName: "TestServer",
     });
@@ -159,10 +159,10 @@ describe("POST /sandbox/repair (the ONE unrecoverable-operation site): refuses t
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-fail-repair-"));
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     getAllSettings.mockReset();
     getAllSettings.mockResolvedValue({});
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       serverConfigPath: tmpDir,
       serverName: "TestServer",
     });

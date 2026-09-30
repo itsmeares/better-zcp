@@ -23,14 +23,14 @@ interface Banner {
 
 function deriveBanner(health: StorageHealth | null): Banner | null {
   if (!health) return null
-  const { diskSpace, circuitBreaker } = health
+  const { diskSpace, database } = health
   const save = diskSpace?.saveVolume
 
-  if (circuitBreaker?.open) {
+  if (database?.ok === false) {
     return {
       level: 'critical',
-      title: 'Panel writes blocked',
-      message: 'Storage write failure',
+      title: 'Panel database needs attention',
+      message: database.error || 'Panel database unavailable',
       dismissible: false,
     }
   }

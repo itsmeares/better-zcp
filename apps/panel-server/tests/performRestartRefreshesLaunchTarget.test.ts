@@ -4,13 +4,13 @@ import os from "os";
 import path from "path";
 
 const getServer = vi.fn();
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn().mockResolvedValue([]),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: vi.fn().mockResolvedValue(),
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServer: (...args) => getServer(...args),
 }));
 
@@ -22,7 +22,7 @@ describe("performRestart() refreshes the launch target before starting", () => {
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
     getServer.mockReset();
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
   });
 
   it("a scheduled restart of an already-stopped server regenerates the launch script against CURRENT settings before starting", async () => {
@@ -41,7 +41,7 @@ describe("performRestart() refreshes the launch target before starting", () => {
       adminPassword: "admin123",
     };
     getServer.mockResolvedValue(server);
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     const scheduler = new Scheduler({}, {});
     scheduler.sleep = async () => {};

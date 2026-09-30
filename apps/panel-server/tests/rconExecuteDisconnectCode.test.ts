@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: async () => null,
+  getCurrentServer: async () => null,
   getSetting: async () => null,
   setSetting: async () => {},
   logCommand: () => {},

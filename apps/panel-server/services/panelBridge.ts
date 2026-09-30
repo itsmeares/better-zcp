@@ -1344,7 +1344,4 @@ class PanelBridge extends EventEmitter {
   }
 }
 
-const bridge = new PanelBridge();
-
-export { PanelBridge, bridge };
-export default bridge;
+export { PanelBridge };

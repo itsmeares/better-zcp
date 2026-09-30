@@ -31,7 +31,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: (...args: any[]) => getSettingMock(...args),
   setSetting: (...args: any[]) => setSettingMock(...args),
   logServerEvent: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),
 }));
 

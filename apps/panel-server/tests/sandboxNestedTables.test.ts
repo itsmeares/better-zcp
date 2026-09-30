@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-const { getActiveServer } = vi.hoisted(() => ({
-  getActiveServer: vi.fn(),
+const { getCurrentServer } = vi.hoisted(() => ({
+  getCurrentServer: vi.fn(),
 }));
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
 }));
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const listWhitelistAccounts = vi.fn();
 const logPlayerAction = vi.fn();
 const addToWhitelist = vi.fn();
@@ -9,7 +9,7 @@ const addAllowedSteamId = vi.fn();
 const removeAllowedSteamId = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   logPlayerAction,
   getPlayerLogs: vi.fn(),
   getPlayerNotes: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts }));
-vi.mock("../services/panelBridge.ts", () => ({ isRunning: false }));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: { isRunning: false } }) }));
 
 const { default: router } = await import("../routes/players.ts");
 
@@ -50,7 +50,7 @@ function createRequest(body = {}, rconService = {}) {
 
 describe("whitelist management routes", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     listWhitelistAccounts.mockReset();
     logPlayerAction.mockReset();
     addToWhitelist.mockReset();
@@ -60,7 +60,7 @@ describe("whitelist management routes", () => {
   });
 
   it("lists non-secret account fields for the active local server", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",

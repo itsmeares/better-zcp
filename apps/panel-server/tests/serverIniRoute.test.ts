@@ -3,14 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const { getActiveServerContext } = vi.hoisted(
+const { getCurrentServerContext } = vi.hoisted(
   () => ({
-    getActiveServerContext: vi.fn(),
+    getCurrentServerContext: vi.fn(),
   }),
 );
 
 vi.mock("../services/sandboxPersistence.ts", () => ({
-  getActiveServerContext,
+  getCurrentServerContext,
   getServerName: vi.fn(),
   modifySandboxValue: vi.fn(),
   resolveRemoteConfigTransport: vi.fn(),
@@ -47,7 +47,7 @@ describe("structured INI API route", () => {
       iniPath,
       "PVP=true\nRCONPassword=live-rcon-secret\nPassword=live-join-secret\n",
     );
-    getActiveServerContext.mockResolvedValue({
+    getCurrentServerContext.mockResolvedValue({
       serverConfigPath: configDir,
       serverName: "TestServer",
       activeServer: {},

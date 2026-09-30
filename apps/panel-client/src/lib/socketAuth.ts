@@ -1,7 +1,7 @@
 import { tryRefreshToken } from './api'
 import { isTokenExpiredOrNearExpiry } from './jwt'
 
-export function createSocketAuthProvider(getToken: () => string | null) {
+export function createSocketAuthProvider(getToken: () => string | null, serverId: string | null = null) {
   return (callback: (data: Record<string, string>) => void) => {
     void (async () => {
       let token = getToken()
@@ -9,7 +9,7 @@ export function createSocketAuthProvider(getToken: () => string | null) {
         await tryRefreshToken()
         token = getToken()
       }
-      callback(token ? { token } : {})
+      callback({ ...(token ? { token } : {}), ...(serverId ? { serverId } : {}) })
     })()
   }
 }

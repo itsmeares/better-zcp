@@ -1,3 +1,4 @@
+import { selectServer } from "@/lib/serverSelection"
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect, useRef, useState, useContext } from 'react'
@@ -635,7 +636,7 @@ export default function Layout({ children }: LayoutProps) {
   useEffect(() => {
     if (!socket) return
 
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       void queryClient.invalidateQueries({ queryKey: panelQueryKeys.servers })
       void queryClient.invalidateQueries({
         queryKey: panelQueryKeys.activeServer,
@@ -651,9 +652,9 @@ export default function Layout({ children }: LayoutProps) {
       })
     }
 
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket, queryClient])
 
@@ -700,8 +701,8 @@ export default function Layout({ children }: LayoutProps) {
   const handleSwitchServer = async (server: ServerInstance) => {
     if (server.isActive) return
     try {
-      await serversApi.activate(server.id)
-      // Socket event will refresh the list
+      await selectServer(server.id)
+      // Selection is local to this tab and remounts its profile view.
     } catch {
       toast({
         title: 'Switch failed',

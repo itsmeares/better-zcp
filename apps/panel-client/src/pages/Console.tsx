@@ -414,11 +414,11 @@ export default function Console() {
 
     loadConsoleTarget()
 
-    if (socket) socket.on('activeServerChanged', loadConsoleTarget)
+    if (socket) socket.on('servers:changed', loadConsoleTarget)
 
     return () => {
       cancelled = true
-      if (socket) socket.off('activeServerChanged', loadConsoleTarget)
+      if (socket) socket.off('servers:changed', loadConsoleTarget)
     }
   }, [socket])
 

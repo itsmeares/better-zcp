@@ -32,7 +32,7 @@ function normalizeApiPath(input: RequestInfo | URL): string {
 
     const apiIndex = parsed.pathname.indexOf('/api/')
     if (apiIndex >= 0) {
-      return parsed.pathname.slice(apiIndex)
+      return parsed.pathname.slice(apiIndex).replace(/^\/api\/servers\/[^/]+\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|panel-bridge)(\/.*)?$/, "/api/$1$2")
     }
 
     return parsed.pathname
@@ -394,12 +394,7 @@ function demoStorageHealth() {
         critical: false,
       },
     },
-    circuitBreaker: {
-      open: false,
-      lastError: null,
-      failCount: 0,
-      cooldownEndsAt: null,
-    },
+    database: { ok: true, error: null },
   }
 }
 
@@ -471,7 +466,7 @@ export function installDemoFetchShim(): void {
     if (path === '/api/server/status') {
       return jsonResponse(demoServerStatus())
     }
-    if (path === '/api/servers/active/status') {
+    if (/^\/api\/servers\/[^/]+\/status$/.test(path)) {
       return jsonResponse(demoComposedStatus())
     }
     if (path === '/api/players') {
@@ -486,12 +481,10 @@ export function installDemoFetchShim(): void {
     if (path === '/api/servers') {
       return jsonResponse({ servers: [demoServer()] })
     }
-    if (path === '/api/servers/active') {
+    if (/^\/api\/servers\/[^/]+$/.test(path)) {
       return jsonResponse({ server: demoServer() })
     }
-    if (path.startsWith('/api/servers/') && path.endsWith('/activate') && method === 'POST') {
-      return jsonResponse({ success: true, message: 'Demo mode: active server updated locally only.', server: demoServer() })
-    }
+
     if (path === '/api/server/update/status') {
       return jsonResponse({
         updateAvailable: {

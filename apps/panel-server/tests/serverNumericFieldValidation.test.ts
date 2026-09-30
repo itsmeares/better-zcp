@@ -8,7 +8,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(async () => {}),
   getSetting: vi.fn(async () => null),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),
 }));
 

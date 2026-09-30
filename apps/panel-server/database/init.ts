@@ -1,995 +1,373 @@
-import path from "path";
-import fs from "fs";
-import { randomUUID } from "crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { getDataPaths } from "../utils/paths.ts";
-import { checkAndExitIfOwnershipBlocked } from "../utils/firstRunOwnershipCheck.ts";
 import { createLogger } from "../utils/logger.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import {
-  rehydrateRconSecrets,
-  redactRconSecretsForWrite,
+  withRconSecret,
+  withoutRconSecret,
   deleteServerSecret,
 } from "../utils/serverRconSecrets.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
-import { isPidAlive } from "../utils/pidLiveness.ts";
-import { getPanelDatabase, setPanelDatabase } from "../utils/panelRuntime.ts";
-const log = createLogger("DB");
+import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
+import { currentServerId, requireServerId } from "../utils/serverScope.ts";
 
 type AnyRecord = Record<string, any>;
-type Collection = AnyRecord[];
-type ServerRecord = AnyRecord & {
-  id: string | number;
-  provider?: string | null;
-  dockerContainerId?: unknown;
-  dockerContainerName?: unknown;
+export type ServerRecord = AnyRecord & {
+  id: string;
   serverName?: string;
-  serverConfigPath?: string | null;
+  installPath?: string;
   zomboidDataPath?: string | null;
-  installPath?: string | null;
+  lifecycleProvider?: string;
+  dockerContainerName?: string | null;
 };
-
-type DatabaseData = {
-  command_history: Collection;
-  scheduled_tasks: Collection;
-  schedule_history: Collection;
-  player_logs: Collection;
-  server_events: Collection;
-  tracked_mods: Collection;
-  ignored_mods: Collection;
-  ignored_mod_pairs: Collection;
-  servers: Collection;
-  player_notes: Collection;
-  player_stats: Collection;
-  steamid_bans: Collection;
-  performance_history: Collection;
-  bridge_logs: Collection;
-  users: Collection;
-  roles: Collection;
-  settings: AnyRecord;
-  _schemaVersion: number;
-  [key: string]: any;
+export type ScheduledTaskRecord = {
+  id: number;
+  server_id: string;
+  name: string;
+  cron_expression: string;
+  command: string;
+  enabled: number;
+  last_run: string | null;
+  created_at: string;
 };
-
-type DatabaseAdapter = {
-  read: () => Promise<DatabaseData | null>;
-  write: (data: DatabaseData) => Promise<void>;
-  close?: () => void;
-};
-
-type RawSqliteSnapshotStore = {
-  read: () => Promise<unknown>;
-  write: (data: unknown) => Promise<void>;
-  close: () => void;
-};
-
-type Database = {
-  data: DatabaseData;
-  adapter: DatabaseAdapter;
-  read: () => Promise<void>;
-  write: () => Promise<void>;
-};
-
-function createJsonAdapter(filePath: string): DatabaseAdapter {
-  return {
-    read: async () => {
-      if (!fs.existsSync(filePath)) return null;
-      return JSON.parse(fs.readFileSync(filePath, "utf8")) as DatabaseData;
-    },
-    write: async (data) => {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), {
-        encoding: "utf8",
-        mode: 0o600,
-      });
-    },
-  };
-}
-
-function createDatabase(adapter: DatabaseAdapter): Database {
-  const database: Database = {
-    data: structuredClone(defaultData),
-    adapter,
-    async read() {
-      const data = await database.adapter.read();
-      if (data !== null) database.data = data;
-    },
-    async write() {
-      await database.adapter.write(database.data);
-    },
-  };
-  return database;
-}
-
-const RETENTION = {
+const log = createLogger("DB");
+let database: DatabaseSync | undefined;
+let openedPath: string | undefined;
+let backupTimer: ReturnType<typeof setInterval> | undefined;
+const RETENTION: Record<string, number> = {
   command_history: 500,
   player_logs: 1000,
   server_events: 500,
   schedule_history: 500,
   performance_history: 1440,
-  player_sessions: 50, // per player
   bridge_logs: 500,
+  backup_records: 500,
+};
+const PANEL_SETTINGS =
+  /^(auth|jwt|cors|setupToken$|panelPort$|panelUpdate|preUpdate|steamApiKey$|darkMode$|enablePublicIpLookup$|lanIpAddress$|steamcmdPath$|steamUpdateAccount$)/;
+const PROFILE_FIELDS: Record<string, string> = {
+  serverPath: "installPath",
+  serverName: "serverName",
+  serverConfigPath: "serverConfigPath",
+  zomboidDataPath: "zomboidDataPath",
+  rconHost: "rconHost",
+  rconPort: "rconPort",
+  rconPassword: "rconPassword",
+  minMemory: "minMemory",
+  maxMemory: "maxMemory",
+  serverPort: "serverPort",
 };
 
-const PERFORMANCE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-export function recentPerformanceHistory(entries: any[], now = Date.now()): any[] {
-  return entries
-    .filter((entry) => {
-      const timestamp = Date.parse(entry?.timestamp);
-      return Number.isFinite(timestamp) && timestamp >= now - PERFORMANCE_WINDOW_MS && timestamp <= now;
-    })
-    .slice(-RETENTION.performance_history);
+export function getDatabaseFilePath(): string {
+  return path.join(getDataPaths().dataDir, "panel.sqlite");
 }
 
-const WRITE_DEBOUNCE_MS = 500;
-const BACKUP_INTERVAL_MS = 6 * 3600000;
-const MAX_BACKUPS = 5;
-
-
-const paths = getDataPaths();
-const dataDir = paths.dataDir;
-const databaseDriver = process.env.PANEL_DATABASE_DRIVER ?? "sqlite";
-if (databaseDriver !== "sqlite" && databaseDriver !== "json") {
-  throw new Error(
-    `Unsupported PANEL_DATABASE_DRIVER "${databaseDriver}". Use "sqlite" (default) or "json" only for legacy compatibility.`,
-  );
-}
-const useSqliteDatabase = databaseDriver === "sqlite";
-const legacyDbPath = paths.dbPath;
-const dbPath = useSqliteDatabase
-  ? path.join(dataDir, "db.sqlite")
-  : legacyDbPath;
-const dbFileExtension = useSqliteDatabase ? ".sqlite" : ".json";
-const backupDir = path.join(dataDir, "backups");
-
-export function getDatabaseFilePath() {
-  return dbPath;
-}
-
-for (const dir of [dataDir, backupDir]) {
-  if (!fs.existsSync(dir)) {
-    try {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    } catch (err: any) {
-      if (
-        (err.code === "EACCES" || err.code === "EPERM") &&
-        checkAndExitIfOwnershipBlocked([dataDir, backupDir])
-      ) {
-        throw err;
-      }
-      throw err;
-    }
-  }
+function db(): DatabaseSync {
+  const filePath = getDatabaseFilePath();
+  if (database && openedPath === filePath) return database;
+  database?.close();
+  database = undefined;
+  const opened = new DatabaseSync(filePath);
   try {
-    fs.chmodSync(dir, 0o700);
-  } catch (_) {
-    /* best-effort: Windows / network shares */
+    opened.exec(`
+      PRAGMA foreign_keys = ON;
+      PRAGMA synchronous = FULL;
+      CREATE TABLE IF NOT EXISTS servers (
+        id TEXT PRIMARY KEY NOT NULL,
+        data TEXT NOT NULL CHECK(json_valid(data))
+      );
+      CREATE TABLE IF NOT EXISTS admin (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        data TEXT NOT NULL CHECK(json_valid(data))
+      );
+      CREATE TABLE IF NOT EXISTS settings (
+        server_id TEXT NOT NULL DEFAULT '',
+        key TEXT NOT NULL,
+        value TEXT NOT NULL CHECK(json_valid(value)),
+        PRIMARY KEY(server_id, key)
+      );
+      CREATE TABLE IF NOT EXISTS scheduled_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        cron_expression TEXT NOT NULL,
+        command TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+        last_run TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS scheduled_tasks_server ON scheduled_tasks(server_id);
+      CREATE TABLE IF NOT EXISTS records (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection TEXT NOT NULL,
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        data TEXT NOT NULL CHECK(json_valid(data)),
+        UNIQUE(collection, server_id, id)
+      );
+      CREATE INDEX IF NOT EXISTS records_server ON records(collection, server_id, sequence);
+    `);
+    const integrity = opened.prepare("PRAGMA quick_check").get();
+    if (!integrity || Object.values(integrity)[0] !== "ok")
+      throw new Error("Panel database integrity check failed");
+    if (process.platform !== "win32") fs.chmodSync(filePath, 0o600);
+    database = opened;
+    openedPath = filePath;
+    return opened;
+  } catch (error) {
+    opened.close();
+    if (recoverDatabase(filePath, error)) return db();
+    throw error;
   }
 }
 
-
-const defaultData: DatabaseData = {
-  command_history: [],
-  scheduled_tasks: [],
-  schedule_history: [],
-  player_logs: [],
-  server_events: [],
-  tracked_mods: [],
-  ignored_mods: [],
-  ignored_mod_pairs: [],
-  servers: [],
-  player_notes: [],
-  player_stats: [],
-  steamid_bans: [],
-  performance_history: [],
-  bridge_logs: [],
-  users: [],
-  roles: [],
-  settings: {},
-  _schemaVersion: 1,
-};
-
-const CURRENT_SCHEMA_VERSION = 5;
-
-const MIGRATION_V2_TECHNICIAN_CAPABILITIES = [
-  "backups.manage",
-  "backups.download",
-  "server.control",
-  "server.install",
-  "server.configure",
-  "server.world_events",
-  "rcon.execute",
-  "servers.manage",
-  "bridge.setup",
-  "bridge.diagnostics",
-  "players.moderate",
-  "players.gm_tools",
-  "players.view",
-  "mods.manage",
-  "automation.manage",
-  "integrations.manage",
-  "docker.manage",
-  "chunks.manage",
-  "serverfiles.manage",
-];
-const MIGRATION_V2_MODERATOR_CAPABILITIES = [
-  "players.moderate",
-  "players.gm_tools",
-  "players.view",
-  "server.world_events",
-];
-const MIGRATION_V2_ADMIN_CAPABILITIES = [
-  "users.manage",
-  "roles.manage",
-  "backups.manage",
-  "backups.download",
-  "backups.restore",
-  "server.control",
-  "server.install",
-  "server.configure",
-  "server.wipe",
-  "server.world_events",
-  "rcon.execute",
-  "servers.manage",
-  "servers.discover",
-  "bridge.setup",
-  "bridge.diagnostics",
-  "bridge.command",
-  "players.moderate",
-  "players.gm_tools",
-  "players.view",
-  "players.endanger_or_impersonate",
-  "mods.manage",
-  "automation.manage",
-  "integrations.manage",
-  "docker.manage",
-  "chunks.manage",
-  "serverfiles.manage",
-  "diagnostics.manage",
-  "panel.settings",
-];
-
-export function runMigrations(data: DatabaseData): DatabaseData {
-  const version = data._schemaVersion || 0;
-  if (version >= CURRENT_SCHEMA_VERSION) return data;
-
-  log.info(`Running DB migrations: v${version} → v${CURRENT_SCHEMA_VERSION}`);
-
-
-  if (version < 2) {
-    if (!data.roles) data.roles = [];
-
-    const seedRole = (id: string, name: string, capabilities: string[]) => {
-      if (data.roles.some((r) => r.id === id)) return;
-      data.roles.push({
-        id,
-        name,
-        capabilities: [...capabilities],
-        isSeeded: true,
-        createdAt: new Date().toISOString(),
-      });
-    };
-    seedRole("role-admin", "admin", MIGRATION_V2_ADMIN_CAPABILITIES);
-    seedRole("role-technician", "technician", MIGRATION_V2_TECHNICIAN_CAPABILITIES);
-    seedRole("role-moderator", "moderator", MIGRATION_V2_MODERATOR_CAPABILITIES);
-
-    const roleIdByName = Object.fromEntries(data.roles.map((r) => [r.name, r.id]));
-    for (const user of data.users || []) {
-      if (!user.roleId && roleIdByName[user.role]) {
-        user.roleId = roleIdByName[user.role];
-      }
-    }
-  }
-
-  if (version < 3) {
-    for (const role of data.roles || []) {
-      if (
-        Array.isArray(role.capabilities) &&
-        role.capabilities.includes("backups.manage") &&
-        !role.capabilities.includes("backups.download")
-      ) {
-        role.capabilities.push("backups.download");
-      }
-    }
-  }
-
-  if (version < 4) {
-    for (const server of data.servers || []) {
-      delete server.isRemote;
-      delete server.remoteConfigConfigured;
-    }
-    for (const key of Object.keys(data.settings || {})) {
-      if (key.startsWith("panelBridgeSftp")) delete data.settings[key];
-    }
-  }
-
-  if (version < 5) {
-    const users = data.users || [];
-    const legacyAdmin = users[0];
-    if (legacyAdmin && !users.some((user) => user.role === "admin") &&
-      !legacyAdmin.role && (!legacyAdmin.roleId || legacyAdmin.roleId === "role-admin")) {
-      legacyAdmin.role = "admin";
-    }
-    for (const user of users) {
-      if (user.role === "admin" && !user.roleId) user.roleId = "role-admin";
-      if (user.roleId === "role-admin" && !user.role) user.role = "admin";
-    }
-  }
-
-  data._schemaVersion = CURRENT_SCHEMA_VERSION;
-  log.info(`DB migrated to schema v${CURRENT_SCHEMA_VERSION}`);
-  return data;
-}
-
-
-let db: Database = null as unknown as Database;
-let _writeTimer: ReturnType<typeof setTimeout> | null = null;
-let _writePromise: Promise<void> | null = null;
-let _dirty = false;
-let _writeRetries = 0;
-const MAX_WRITE_RETRIES = 5;
-const WRITE_BACKOFF_BASE_MS = 1000;
-const WRITE_BACKOFF_MAX_MS = 16_000;
-let _writeCircuitOpenUntil = 0;
-const CIRCUIT_OPEN_MS = 60_000;
-let _lastWriteError: string | null = null;
-let _circuitFailCount = 0;
-let _backupTimer: ReturnType<typeof setInterval> | null = null;
-let _shutdownRegistered = false;
-let _shutdownPromise: Promise<void> | null = null;
-let createSqliteSnapshotStore:
-  | ((filePath: string) => RawSqliteSnapshotStore)
-  | null = null;
-
-function closeDatabaseAdapter(database: Database): void {
-  (database.adapter as DatabaseAdapter).close?.();
-}
-
-async function createSqliteAdapter(): Promise<DatabaseAdapter> {
-  const factory =
-    createSqliteSnapshotStore ??
-    (createSqliteSnapshotStore = (
-      await import("./sqlite/snapshotStore.ts")
-    ).createSqliteSnapshotStore);
-  const store = factory(dbPath);
-  return {
-    read: async () => (await store.read()) as DatabaseData | null,
-    write: (data: DatabaseData) =>
-      store.write(redactRconSecretsForWrite(data as any) as DatabaseData),
-    close: () => store.close(),
-  };
-}
-
-function scheduleWrite(): void {
-  _dirty = true;
-
-  if (Date.now() < _writeCircuitOpenUntil) return;
-
-  if (_writeTimer) return;
-
-  const delay =
-    _writeRetries > 0
-      ? Math.min(
-          WRITE_BACKOFF_BASE_MS * Math.pow(2, _writeRetries - 1),
-          WRITE_BACKOFF_MAX_MS,
-        )
-      : WRITE_DEBOUNCE_MS;
-
-  _writeTimer = setTimeout(async () => {
-    _writeTimer = null;
-    await flushWrites();
-  }, delay);
-}
-
-export async function flushWrites(): Promise<void> {
-  if (!_dirty || !db) return;
-  _dirty = false;
-
-  if (_writePromise) {
+function recoverDatabase(file: string, error: unknown): boolean {
+  const code = (error as { errcode?: number })?.errcode;
+  if (
+    code !== 11 &&
+    code !== 26 &&
+    !(
+      error instanceof Error &&
+      error.message === "Panel database integrity check failed"
+    )
+  )
+    return false;
+  const directory = path.join(path.dirname(file), "backups");
+  if (!fs.existsSync(directory)) return false;
+  for (const name of fs
+    .readdirSync(directory)
+    .filter((name) => /^panel-.*\.sqlite$/.test(name))
+    .sort()
+    .reverse()) {
+    const candidate = path.join(directory, name);
+    let snapshot: DatabaseSync | undefined;
     try {
-      await _writePromise;
+      snapshot = new DatabaseSync(candidate, { readOnly: true });
+      const result = snapshot.prepare("PRAGMA integrity_check").get();
+      if (result?.integrity_check !== "ok") continue;
+      // A valid SQLite file from another application is not a panel backup.
+      for (const table of [
+        "servers",
+        "admin",
+        "settings",
+        "scheduled_tasks",
+        "records",
+      ])
+        snapshot.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
     } catch {
-      /* swallow */
+      continue;
+    } finally {
+      snapshot?.close();
     }
-  }
-
-  let tmpPath = "";
-  let tmpWriteSucceeded = false;
-  _writePromise = (async () => {
+    const preserved = `${file}.corrupt-${randomUUID()}`;
+    fs.renameSync(file, preserved);
     try {
-      if (useSqliteDatabase) {
-        await db.write();
-        _writeRetries = 0;
-        _lastWriteError = null;
-        _circuitFailCount = 0;
-        log.debug(
-          `DB flushed (SQLite, ${Math.round(JSON.stringify(db.data).length / 1024)}KB)`,
-        );
-        return;
-      }
-
-      tmpPath = `${dbPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-      const data = JSON.stringify(
-        redactRconSecretsForWrite(db.data as any) as DatabaseData,
-        null,
-        2,
-      );
-      fs.writeFileSync(tmpPath, data, { encoding: "utf-8", mode: 0o600 });
-      tmpWriteSucceeded = true;
-      try {
-        fs.chmodSync(tmpPath, 0o600);
-      } catch (_) {
-        /* best-effort: Windows */
-      }
-      fs.renameSync(tmpPath, dbPath);
-      _writeRetries = 0;
-      _lastWriteError = null;
-      _circuitFailCount = 0;
-      log.debug(`DB flushed (${Math.round(data.length / 1024)}KB)`);
-    } catch (err: any) {
-      if (tmpWriteSucceeded) {
-        try {
-          fs.unlinkSync(tmpPath);
-        } catch {
-          /* best-effort -- may not exist, may be locked by the same contention that failed the rename */
-        }
-      }
-      _writeRetries++;
-      _lastWriteError = err.message;
-      if (_writeRetries >= MAX_WRITE_RETRIES) {
-        log.error(
-          `DB write failed ${_writeRetries} times, opening circuit breaker for ${CIRCUIT_OPEN_MS / 1000}s: ${err.message}`,
-        );
-        _circuitFailCount = _writeRetries;
-        _writeCircuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
-        _writeRetries = 0;
-        _dirty = true;
-      } else {
-        log.error(
-          `Write error (attempt ${_writeRetries}/${MAX_WRITE_RETRIES}): ${err.message}`,
-        );
-        _dirty = true;
-        if (!_writeTimer) {
-          const delay = Math.min(
-            WRITE_BACKOFF_BASE_MS * Math.pow(2, _writeRetries - 1),
-            WRITE_BACKOFF_MAX_MS,
-          );
-          _writeTimer = setTimeout(async () => {
-            _writeTimer = null;
-            await flushWrites();
-          }, delay);
-        }
-      }
+      fs.copyFileSync(candidate, file);
+    } catch (copyError) {
+      fs.renameSync(preserved, file);
+      throw copyError;
     }
-  })();
-
-  await _writePromise;
-  _writePromise = null;
-}
-
-export function getCircuitBreakerStatus() {
-  const open = Date.now() < _writeCircuitOpenUntil;
-  return {
-    open,
-    lastError: _lastWriteError,
-    failCount: open ? _circuitFailCount : _writeRetries,
-    cooldownEndsAt: open
-      ? new Date(_writeCircuitOpenUntil).toISOString()
-      : null,
-  };
-}
-
-export async function commitNow() {
-  _dirty = true;
-  await flushWrites();
-}
-
-export function closeDatabase() {
-  if (useSqliteDatabase && db) closeDatabaseAdapter(db);
-}
-
-
-const TMP_FILE_RE = /^db\.json\.(\d+)\.[0-9a-z]+\.tmp$/i;
-
-const MIN_ORPHAN_AGE_MS = 60_000;
-
-export function sweepOrphanedTmpFiles() {
-  let entries;
-  try {
-    entries = fs.readdirSync(dataDir);
-  } catch (err: any) {
-    log.debug(`Tmp sweep: could not read ${dataDir}: ${err.message}`);
-    return;
-  }
-
-  for (const name of entries) {
-    const match = TMP_FILE_RE.exec(name);
-    if (!match) continue;
-
-    const pid = parseInt(match[1], 10);
-    if (isPidAlive(pid)) continue;
-
-    const filePath = path.join(dataDir, name);
-    try {
-      const stat = fs.statSync(filePath);
-      if (Date.now() - stat.mtimeMs < MIN_ORPHAN_AGE_MS) continue;
-      fs.unlinkSync(filePath);
-      log.warn(`Removed orphaned tmp file from dead pid ${pid}: ${name}`);
-    } catch (err: any) {
-      log.debug(`Tmp sweep: could not inspect/remove ${name}: ${err.message}`);
-    }
-  }
-}
-
-
-function createBackup(label: string = ""): string | null {
-  try {
-    if (!fs.existsSync(dbPath)) return null;
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const suffix = label ? `-${label}` : "";
-    let backupFile = path.join(
-      backupDir,
-      `db-${timestamp}${suffix}${dbFileExtension}`,
+    log.warn(
+      `Restored panel database from ${name}; damaged database preserved at ${preserved}`,
     );
-    for (let collision = 2; fs.existsSync(backupFile); collision++) {
-      backupFile = path.join(
-        backupDir,
-        `db-${timestamp}${suffix}-${collision}${dbFileExtension}`,
-      );
-    }
-
-    fs.copyFileSync(dbPath, backupFile);
-    try {
-      fs.chmodSync(backupFile, 0o600);
-    } catch (_) {
-      /* best-effort: Windows */
-    }
-    pruneBackups();
-    return backupFile;
-  } catch (err: any) {
-    log.error(`Backup failed: ${err.message}`);
-    return null;
+    return true;
   }
+  return false;
 }
 
-const BACKUP_COLLISION_SUFFIX_RE = /^(.*)-(\d+)$/;
-
-function sortBackupFilenamesNewestFirst(filenames: string[]): string[] {
-  return filenames
-    .map((name: string) => {
-      const withoutExt = name.slice(0, -dbFileExtension.length);
-      const match = withoutExt.match(BACKUP_COLLISION_SUFFIX_RE);
-      return match
-        ? { name, key: match[1], suffix: parseInt(match[2], 10) }
-        : { name, key: withoutExt, suffix: 1 };
-    })
-    .sort((a, b) => {
-      if (a.key !== b.key) return a.key < b.key ? 1 : -1;
-      return b.suffix - a.suffix;
-    })
-    .map((c) => c.name);
-}
-
-function pruneBackups() {
+function transaction<T>(operation: () => T): T {
+  const connection = db();
+  connection.exec("BEGIN IMMEDIATE");
   try {
-    const files = sortBackupFilenamesNewestFirst(
-      fs
-        .readdirSync(backupDir)
-        .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension)),
-    );
-
-    for (const file of files.slice(MAX_BACKUPS)) {
-      fs.unlinkSync(path.join(backupDir, file));
-    }
-  } catch (err: any) {
-    log.debug(`Backup pruning error: ${err.message}`);
+    const result = operation();
+    connection.exec("COMMIT");
+    return result;
+  } catch (error) {
+    connection.exec("ROLLBACK");
+    throw error;
   }
 }
 
-function listBackupsNewestFirst(): string[] {
-  try {
-    const files = fs
-      .readdirSync(backupDir)
-      .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension));
-    return sortBackupFilenamesNewestFirst(files).map((f) =>
-      path.join(backupDir, f),
-    );
-  } catch {
-    log.debug(`No backups found to list`);
-    return [];
-  }
+function records(
+  collection: string,
+  limit = Number.MAX_SAFE_INTEGER,
+  serverId = requireServerId(),
+): AnyRecord[] {
+  return db()
+    .prepare(
+      "SELECT data FROM records WHERE collection = ? AND server_id = ? ORDER BY sequence DESC LIMIT ?",
+    )
+    .all(collection, serverId, limit)
+    .map((row) => JSON.parse(String(row.data)));
 }
 
-function startBackupSchedule() {
-  if (_backupTimer) clearInterval(_backupTimer);
-  _backupTimer = setInterval(async () => {
-    await flushWrites();
-    createBackup("auto");
-  }, BACKUP_INTERVAL_MS);
-  if (_backupTimer.unref) _backupTimer.unref();
+function readRecord(collection: string, id: string): AnyRecord | null {
+  const row = db()
+    .prepare(
+      "SELECT data FROM records WHERE collection=? AND server_id=? AND id=?",
+    )
+    .get(collection, requireServerId(), id);
+  return row ? JSON.parse(String(row.data)) : null;
 }
 
-
-const SHUTDOWN_FLUSH_MAX_ATTEMPTS = 3;
-const SHUTDOWN_FLUSH_RETRY_DELAY_MS = 200;
-
-export async function flushForShutdown() {
-  if (_writeTimer) {
-    clearTimeout(_writeTimer);
-    _writeTimer = null;
-  }
-  for (let attempt = 1; attempt <= SHUTDOWN_FLUSH_MAX_ATTEMPTS; attempt++) {
-    await flushWrites();
-    if (!_dirty) return true;
-    if (attempt < SHUTDOWN_FLUSH_MAX_ATTEMPTS) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, SHUTDOWN_FLUSH_RETRY_DELAY_MS),
-      );
-    }
-  }
-  return !_dirty;
+function putRecord(
+  collection: string,
+  value: AnyRecord,
+  id = String(value.id ?? randomUUID()),
+): AnyRecord {
+  const serverId = requireServerId();
+  db()
+    .prepare(
+      "INSERT INTO records(collection, server_id, id, data) VALUES(?,?,?,?) ON CONFLICT(collection,server_id,id) DO UPDATE SET data=excluded.data",
+    )
+    .run(collection, serverId, id, JSON.stringify(value));
+  return value;
 }
 
-function registerShutdownHandlers() {
-  if (_shutdownRegistered) return;
-  _shutdownRegistered = true;
-
-  const shutdown = (signal: "SIGINT" | "SIGTERM" | "beforeExit"): Promise<void> => {
-    if (_shutdownPromise) {
-      if (signal === "beforeExit" && useSqliteDatabase && db) {
-        return _shutdownPromise.then(() => closeDatabaseAdapter(db));
-      }
-      return _shutdownPromise;
-    }
-
-    _shutdownPromise = (async () => {
-      log.info(`${signal} received — flushing writes...`);
-      if (_backupTimer) {
-        clearInterval(_backupTimer);
-        _backupTimer = null;
-      }
-      await flushForShutdown();
-      createBackup("shutdown");
-      // The main application's shutdown path closes SQLite after all of its
-      // own async cleanup has finished. Closing here would race that flush.
-      if (signal === "beforeExit" && useSqliteDatabase && db) {
-        closeDatabaseAdapter(db);
-      }
-    })();
-    return _shutdownPromise;
-  };
-
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("beforeExit", () => shutdown("beforeExit"));
-}
-
-
-function validateData(data: AnyRecord): DatabaseData {
-  const repaired: DatabaseData = { ...defaultData };
-  const replacedKeys: string[] = [];
-
-  for (const [key, defaultValue] of Object.entries(defaultData)) {
-    if (Array.isArray(defaultValue)) {
-      if (Array.isArray(data?.[key])) {
-        repaired[key] = data[key];
-      } else {
-        repaired[key] = defaultValue;
-        if (data?.[key] !== undefined) replacedKeys.push(key);
-      }
-    } else if (typeof defaultValue === "object" && defaultValue !== null) {
-      if (
-        typeof data?.[key] === "object" &&
-        !Array.isArray(data?.[key]) &&
-        data?.[key] !== null
-      ) {
-        repaired[key] = data[key];
-      } else {
-        repaired[key] = defaultValue;
-        if (data?.[key] !== undefined) replacedKeys.push(key);
-      }
-    } else {
-      repaired[key] = data?.[key] ?? defaultValue;
-    }
-  }
-
-  if (replacedKeys.length > 0) {
-    log.error(
-      `DB validation found wrong-typed collection(s) and replaced them with empty defaults, discarding their contents: ${replacedKeys.join(", ")}`,
-    );
-    try {
-      const snapshotPath = path.join(
-        backupDir,
-        `pre-repair-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
-      );
-      fs.writeFileSync(snapshotPath, JSON.stringify(data, null, 2), {
-        encoding: "utf-8",
-        mode: 0o600,
-      });
-      log.warn(
-        `Saved a snapshot of the pre-repair file for recovery: ${snapshotPath}`,
-      );
-    } catch (snapErr: any) {
-      log.error(`Could not snapshot pre-repair data: ${snapErr.message}`);
-    }
-  }
-
-  return repaired;
-}
-
-function appendCapped(
-  arr: any[],
-  item: any,
-  max: number,
-  { newest = true }: { newest?: boolean } = {},
-) {
-  if (newest) {
-    arr.unshift(item);
-    if (arr.length > max) arr.length = max;
-  } else {
-    arr.push(item);
-    if (arr.length > max) arr.splice(0, arr.length - max);
-  }
-  return arr;
-}
-
-function compactData(data: DatabaseData): DatabaseData {
-  const trimArray = (arr: any[], max: number) => {
-    if (Array.isArray(arr) && arr.length > max) return arr.slice(0, max);
-    return arr;
-  };
-  data.command_history = trimArray(
-    data.command_history,
-    RETENTION.command_history,
+function deleteRecord(collection: string, id: string): boolean {
+  return (
+    db()
+      .prepare(
+        "DELETE FROM records WHERE collection=? AND server_id=? AND id=?",
+      )
+      .run(collection, requireServerId(), id).changes > 0
   );
-  data.player_logs = trimArray(data.player_logs, RETENTION.player_logs);
-  data.server_events = trimArray(data.server_events, RETENTION.server_events);
-  data.schedule_history = trimArray(
-    data.schedule_history,
-    RETENTION.schedule_history,
+}
+
+function clearRecords(collection: string): number {
+  return Number(
+    db()
+      .prepare("DELETE FROM records WHERE collection=? AND server_id=?")
+      .run(collection, requireServerId()).changes,
   );
-  data.bridge_logs = trimArray(data.bridge_logs || [], RETENTION.bridge_logs);
-  data.performance_history = recentPerformanceHistory(data.performance_history || []);
-
-  if (Array.isArray(data.player_stats)) {
-    for (const stat of data.player_stats) {
-      if (
-        Array.isArray(stat.sessions) &&
-        stat.sessions.length > RETENTION.player_sessions
-      ) {
-        stat.sessions = stat.sessions.slice(0, RETENTION.player_sessions);
-      }
-    }
-  }
-
-  return data;
 }
 
-export async function getDb(): Promise<Database> {
-  if (!db) {
-    const sharedDatabase = getPanelDatabase<Database>();
-    if (sharedDatabase) {
-      db = sharedDatabase;
-      return db;
-    }
-  }
-
-  if (!db) {
-    if (
-      useSqliteDatabase &&
-      !fs.existsSync(dbPath) &&
-      fs.existsSync(legacyDbPath)
-    ) {
-      throw new Error(
-        `SQLite driver is enabled but ${path.basename(dbPath)} is missing while ${path.basename(legacyDbPath)} exists. Run the explicit legacy importer before starting with PANEL_DATABASE_DRIVER=sqlite.`,
+function appendHistory(
+  collection: string,
+  entry: AnyRecord,
+  id?: string,
+): AnyRecord {
+  return transaction(() => {
+    putRecord(collection, entry, id);
+    db()
+      .prepare(
+        "DELETE FROM records WHERE collection=? AND server_id=? AND sequence NOT IN (SELECT sequence FROM records WHERE collection=? AND server_id=? ORDER BY sequence DESC LIMIT ?)",
+      )
+      .run(
+        collection,
+        requireServerId(),
+        collection,
+        requireServerId(),
+        RETENTION[collection],
       );
-    }
+    return entry;
+  });
+}
 
-    sweepOrphanedTmpFiles();
+function historyLimit(
+  value: unknown,
+  collection: string,
+  fallback = 100,
+): number {
+  return parseClampedInteger(value, fallback, 1, RETENTION[collection]);
+}
 
-    if (fs.existsSync(dbPath)) {
-      try {
-        fs.chmodSync(dbPath, 0o600);
-      } catch (_) {
-        /* best-effort: Windows */
-      }
-    }
+function backup(label: string): string {
+  const dir = path.join(getDataPaths().dataDir, "backups");
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const file = path.join(
+    dir,
+    `panel-${timestamp}-${label}-${randomUUID().slice(0, 8)}.sqlite`,
+  );
+  db().prepare("VACUUM INTO ?").run(file);
+  if (process.platform !== "win32") fs.chmodSync(file, 0o600);
+  const files = fs
+    .readdirSync(dir)
+    .filter((name) => /^panel-.*\.sqlite$/.test(name))
+    .sort()
+    .reverse();
+  for (const name of files.slice(5)) fs.unlinkSync(path.join(dir, name));
+  return file;
+}
+
+export async function initDatabase(): Promise<void> {
+  if (backupTimer) clearInterval(backupTimer);
+  db();
+  backup("startup");
+  backupTimer = setInterval(() => {
     try {
-      for (const f of fs.readdirSync(backupDir)) {
-        if (f.startsWith("db-") && f.endsWith(dbFileExtension)) {
-          try {
-            fs.chmodSync(path.join(backupDir, f), 0o600);
-          } catch (_) {
-            /* ignore */
-          }
-        }
-      }
-    } catch (_) {
-      /* backupDir may not be readable yet on first run */
+      backup("auto");
+    } catch (error) {
+      log.error("Panel database backup failed", error);
     }
-
-    const adapter: DatabaseAdapter = useSqliteDatabase
-      ? await createSqliteAdapter()
-      : createJsonAdapter(dbPath);
-    db = createDatabase(adapter);
-    setPanelDatabase(db);
-
-    let loadedCleanly = false;
-    try {
-      await db.read();
-      loadedCleanly = true;
-    } catch (err: any) {
-      log.error(`Failed to read database: ${err.message}`);
-
-      if (useSqliteDatabase) {
-        closeDatabaseAdapter(db);
-      }
-
-      if (err.code === "EACCES" || err.code === "EPERM") {
-        checkAndExitIfOwnershipBlocked([dataDir, dbPath, backupDir]);
-        // Falls through only if checkAndExitIfOwnershipBlocked() found
-        // every one of those paths genuinely readable/writable by THIS
-        // process (fs.accessSync agrees) -- so db.read()'s EACCES/EPERM
-        // came from something access() itself can't see (a permissions
-        // change mid-flight between the check and the read, an exotic
-        // mandatory-access-control layer, an immutable file attribute).
-        // The existing corruption-recovery path below is still the right
-        // fallback for that case.
-      }
-
-      const backups = listBackupsNewestFirst();
-      if (backups.length > 0) {
-        try {
-          const corruptPath = path.join(
-            backupDir,
-            `corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}${dbFileExtension}`,
-          );
-          fs.copyFileSync(dbPath, corruptPath);
-          try {
-            fs.chmodSync(corruptPath, 0o600);
-          } catch (_) {
-            /* best-effort */
-          }
-        } catch (_) {
-          /* best-effort */
-        }
-
-        let recovered = false;
-        for (const backup of backups) {
-          log.warn(`Attempting recovery from ${path.basename(backup)}...`);
-          try {
-            fs.copyFileSync(backup, dbPath);
-            if (useSqliteDatabase) {
-              db.adapter = await createSqliteAdapter();
-            }
-            await db.read();
-            log.info(
-              `Database recovery successful from ${path.basename(backup)}!`,
-            );
-            recovered = true;
-            break;
-          } catch (recoverErr: any) {
-            if (useSqliteDatabase) {
-              closeDatabaseAdapter(db);
-            }
-            log.error(
-              `Recovery from ${path.basename(backup)} failed: ${recoverErr.message}`,
-            );
-          }
-        }
-        if (!recovered) {
-          if (useSqliteDatabase) {
-            throw new Error(
-              "SQLite database recovery failed; refusing to replace it with a fresh database.",
-            );
-          }
-          log.error("All backups failed to recover — starting fresh");
-          db.data = { ...defaultData };
-        }
-      } else {
-        if (useSqliteDatabase) {
-          throw new Error(
-            "SQLite database could not be read and has no backup; refusing to start with an empty database.",
-          );
-        }
-        log.warn("No backup found, starting with fresh database.");
-        db.data = { ...defaultData };
-      }
-    }
-
-    db.data = validateData(db.data);
-    db.data = runMigrations(db.data);
-    db.data = compactData(db.data);
-    db.data = rehydrateRconSecrets(db.data, log) as DatabaseData;
-
-    _dirty = true;
-    await flushWrites();
-
-    if (loadedCleanly && fs.existsSync(dbPath)) {
-      createBackup("startup");
-    }
-
-    startBackupSchedule();
-    registerShutdownHandlers();
-
-    const stats = getDatabaseStatsSync();
-    log.info(
-      `Loaded — ${stats.totalRecords} records, ${stats.fileSizeKB}KB, ${stats.backupCount} backups`,
-    );
-  }
-  return db;
+  }, 6 * 3600000);
+  backupTimer.unref();
 }
 
-export async function initDatabase(): Promise<Database> {
-  await getDb();
-  return db;
-}
-
-
-function getDatabaseStatsSync() {
-  const data = db?.data || defaultData;
-  let fileSize = 0;
-  try {
-    fileSize = fs.statSync(dbPath).size;
-  } catch (e: any) {
-    log.debug(`DB file stat failed (may not exist yet): ${e.message}`);
-  }
-
-  let backupCount = 0;
-  try {
-    backupCount = fs
-      .readdirSync(backupDir)
-      .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension)).length;
-  } catch (e: any) {
-    log.debug(`Backup dir read failed: ${e.message}`);
-  }
-
-  return {
-    fileSizeBytes: fileSize,
-    fileSizeKB: Math.round((fileSize / 1024) * 10) / 10,
-    backupCount,
-    collections: {
-      command_history: data.command_history?.length ?? 0,
-      scheduled_tasks: data.scheduled_tasks?.length ?? 0,
-      schedule_history: data.schedule_history?.length ?? 0,
-      player_logs: data.player_logs?.length ?? 0,
-      server_events: data.server_events?.length ?? 0,
-      tracked_mods: data.tracked_mods?.length ?? 0,
-      servers: data.servers?.length ?? 0,
-      player_notes: data.player_notes?.length ?? 0,
-      player_stats: data.player_stats?.length ?? 0,
-      performance_history: data.performance_history?.length ?? 0,
-      bridge_logs: data.bridge_logs?.length ?? 0,
-    },
-    totalRecords: Object.values(data).reduce(
-      (sum, v) => sum + (Array.isArray(v) ? v.length : 0),
-      0,
-    ),
-    settingsCount: Object.keys(data.settings || {}).length,
-  };
-}
-
-export async function getDatabaseStats() {
-  await getDb();
-  return getDatabaseStatsSync();
+export function closeDatabase(): void {
+  if (backupTimer) clearInterval(backupTimer);
+  backupTimer = undefined;
+  database?.close();
+  database = undefined;
+  openedPath = undefined;
 }
 
 export async function createDatabaseBackup() {
-  await flushWrites();
-  const file = createBackup("manual");
-  return file
-    ? { success: true, file: path.basename(file) }
-    : { success: false };
+  return { success: true, file: path.basename(backup("manual")) };
+}
+
+export async function getDatabaseStats() {
+  db();
+  const fileSize = fs.statSync(getDatabaseFilePath()).size;
+  const collections = Object.fromEntries(
+    db()
+      .prepare(
+        "SELECT collection, count(*) AS count FROM records GROUP BY collection",
+      )
+      .all()
+      .map((row) => [String(row.collection), Number(row.count)]),
+  );
+  collections.servers = Number(
+    db().prepare("SELECT count(*) AS count FROM servers").get()!.count,
+  );
+  collections.scheduled_tasks = Number(
+    db().prepare("SELECT count(*) AS count FROM scheduled_tasks").get()!.count,
+  );
+  const dir = path.join(getDataPaths().dataDir, "backups");
+  return {
+    fileSizeBytes: fileSize,
+    fileSizeKB: Math.round(fileSize / 102.4) / 10,
+    backupCount: fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter((name) => /^panel-.*\.sqlite$/.test(name))
+          .length
+      : 0,
+    collections,
+    totalRecords: Object.values(collections).reduce(
+      (sum, value) => sum + value,
+      0,
+    ),
+    settingsCount: Number(
+      db().prepare("SELECT count(*) AS count FROM settings").get()!.count,
+    ),
+  };
 }
 
 export async function compactDatabase() {
-  const db = await getDb();
-  const before = getDatabaseStatsSync();
-  db.data = compactData(db.data);
-  scheduleWrite();
-  await flushWrites();
-  const after = getDatabaseStatsSync();
+  const before = await getDatabaseStats();
+  transaction(() => {
+    db()
+      .prepare(
+        "DELETE FROM records WHERE collection='performance_history' AND json_extract(data,'$.timestamp') < ?",
+      )
+      .run(new Date(Date.now() - 24 * 3600000).toISOString());
+  });
+  db().exec("VACUUM");
+  const after = await getDatabaseStats();
   return {
     before: before.totalRecords,
     after: after.totalRecords,
@@ -997,567 +375,120 @@ export async function compactDatabase() {
   };
 }
 
-
-function generateId() {
-  return randomUUID();
+export async function getAdmin(): Promise<AnyRecord | null> {
+  const row = db().prepare("SELECT data FROM admin WHERE singleton=1").get();
+  return row ? JSON.parse(String(row.data)) : null;
 }
 
-function generateNumericId(collection: any[]) {
-  const maxExisting = Array.isArray(collection)
-    ? collection.reduce(
-        (max, item) => Math.max(max, typeof item.id === "number" ? item.id : 0),
-        0,
-      )
-    : 0;
-  return Math.max(maxExisting + 1, Date.now());
+export async function createAdmin(user: AnyRecord): Promise<void> {
+  db()
+    .prepare("INSERT INTO admin(singleton,data) VALUES(1,?)")
+    .run(JSON.stringify(user));
 }
 
-
-export async function logCommand(command: any, response: any, success: boolean = true) {
-  const db = await getDb();
-  const redactedCommand = redactRconCommandSecrets(command);
-  const redactedResponse = redactRconCommandSecrets(response);
-  const truncatedResponse =
-    typeof redactedResponse === "string" && redactedResponse.length > 4096
-      ? redactedResponse.substring(0, 4096) + "... [truncated]"
-      : redactedResponse;
-
-  const entry = {
-    id: generateId(),
-    command: redactedCommand,
-    response: truncatedResponse,
-    success: success ? 1 : 0,
-    executed_at: new Date().toISOString(),
-  };
-
-  appendCapped(db.data.command_history, entry, RETENTION.command_history);
-  scheduleWrite();
-  return entry;
+export async function saveAdmin(user: AnyRecord): Promise<void> {
+  const result = db()
+    .prepare(
+      "UPDATE admin SET data=? WHERE singleton=1 AND json_extract(data,'$.id')=?",
+    )
+    .run(JSON.stringify(user), user.id);
+  if (result.changes !== 1) throw new Error("Admin account no longer exists");
 }
-
-export async function getCommandHistory(limit: unknown = 100) {
-  const db = await getDb();
-  const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.command_history);
-  return db.data.command_history.slice(0, safeLimit);
-}
-
-
-export async function logBridgeCommand(
-  action: string,
-  args: AnyRecord,
-  result: any,
-  success: boolean = true,
-  durationMs: number = 0,
-) {
-  const db = await getDb();
-  if (!db.data.bridge_logs) db.data.bridge_logs = [];
-
-  const truncatedResult = (() => {
-    try {
-      const s = JSON.stringify(result);
-      return s && s.length > 4096
-        ? JSON.parse(s.substring(0, 4096) + '..."}}')
-        : result;
-    } catch {
-      return { truncated: true };
-    }
-  })();
-
-  const entry = {
-    id: generateId(),
-    action,
-    args: args || {},
-    result: truncatedResult,
-    success: success ? 1 : 0,
-    duration_ms: durationMs,
-    executed_at: new Date().toISOString(),
-  };
-
-  appendCapped(db.data.bridge_logs, entry, RETENTION.bridge_logs);
-  scheduleWrite();
-  return entry;
-}
-
-export async function getBridgeLogs(limit: unknown = 100) {
-  const db = await getDb();
-  if (!db.data.bridge_logs) return [];
-  const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.bridge_logs);
-  return db.data.bridge_logs.slice(0, safeLimit);
-}
-
-
-export async function getScheduledTasks() {
-  const db = await getDb();
-  const tasks = db.data.scheduled_tasks || [];
-
-  const activeServerId = await getActiveServerId();
-  if (activeServerId) {
-    let migrated = false;
-    for (const task of tasks) {
-      if (!task.server_id) {
-        task.server_id = activeServerId;
-        migrated = true;
-      }
-    }
-    if (migrated) scheduleWrite();
-  }
-
-  return tasks;
-}
-
-export async function createScheduledTask(
-  name: string,
-  cronExpression: string,
-  command: string,
-  serverId: any = null,
-) {
-  const db = await getDb();
-  if (!Array.isArray(db.data.scheduled_tasks)) db.data.scheduled_tasks = [];
-
-  const resolvedServerId = serverId || (await getActiveServerId());
-
-  const task = {
-    id: generateNumericId(db.data.scheduled_tasks),
-    name,
-    cron_expression: cronExpression,
-    command,
-    server_id: resolvedServerId,
-    enabled: 1,
-    last_run: null,
-    created_at: new Date().toISOString(),
-  };
-
-  db.data.scheduled_tasks.push(task);
-  scheduleWrite();
-  return task;
-}
-
-export async function updateScheduledTask(
-  id: any,
-  name: string | undefined,
-  cronExpression: string | undefined,
-  command: string | undefined,
-  enabled: boolean | number | undefined,
-  serverId: any,
-) {
-  const db = await getDb();
-  const index = db.data.scheduled_tasks.findIndex((t) => t.id === id);
-  if (index === -1) return null;
-
-  const task = db.data.scheduled_tasks[index];
-  if (name !== undefined) task.name = name;
-  if (cronExpression !== undefined) task.cron_expression = cronExpression;
-  if (command !== undefined) task.command = command;
-  if (enabled !== undefined) task.enabled = enabled ? 1 : 0;
-  if (serverId !== undefined) task.server_id = serverId;
-  scheduleWrite();
-  return task;
-}
-
-export async function deleteScheduledTask(id: any) {
-  const db = await getDb();
-  const index = db.data.scheduled_tasks.findIndex((t) => t.id === id);
-  if (index === -1) return false;
-
-  db.data.scheduled_tasks.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
-export async function updateTaskLastRun(id: any) {
-  const db = await getDb();
-  const task = db.data.scheduled_tasks.find((t) => t.id === id);
-  if (task) {
-    task.last_run = new Date().toISOString();
-    scheduleWrite();
-  }
-}
-
-
-export async function logScheduleExecution(
-  taskId: any,
-  taskName: string,
-  command: string,
-  success: boolean,
-  message: any = null,
-  duration: number | null = null,
-) {
-  const db = await getDb();
-  if (!db.data.schedule_history) db.data.schedule_history = [];
-
-  const entry = {
-    id: generateId(),
-    task_id: taskId,
-    task_name: taskName,
-    command,
-    success: success ? 1 : 0,
-    message,
-    duration,
-    executed_at: new Date().toISOString(),
-  };
-
-  appendCapped(db.data.schedule_history, entry, RETENTION.schedule_history);
-  scheduleWrite();
-  return entry;
-}
-
-export async function getScheduleHistory(limit: unknown = 100, taskId: any = null) {
-  const db = await getDb();
-  if (!db.data.schedule_history) return [];
-
-  let history = db.data.schedule_history;
-  if (taskId !== null) {
-    history = history.filter((h) => h.task_id === taskId);
-  }
-  const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.schedule_history);
-  return history.slice(0, safeLimit);
-}
-
-export async function clearScheduleHistory() {
-  const db = await getDb();
-  db.data.schedule_history = [];
-  scheduleWrite();
-}
-
-export async function getLatestScheduleExecutionByCommand(command: string) {
-  const db = await getDb();
-  const history = db.data.schedule_history || [];
-  return history.find((h) => h.command === command) || null;
-}
-
-
-export async function logPlayerAction(playerName: string, action: string, details: any = null) {
-  const db = await getDb();
-  const entry = {
-    id: generateId(),
-    player_name: playerName,
-    action,
-    details,
-    logged_at: new Date().toISOString(),
-  };
-
-  appendCapped(db.data.player_logs, entry, RETENTION.player_logs);
-  scheduleWrite();
-  return entry;
-}
-
-export async function getPlayerLogs(playerName: string | null = null, limit: unknown = 100) {
-  const db = await getDb();
-  let logs = db.data.player_logs;
-  if (playerName) {
-    logs = logs.filter((l) => l.player_name === playerName);
-  }
-  const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.player_logs);
-  return logs.slice(0, safeLimit);
-}
-
-
-export async function logServerEvent(eventType: string, message: any = null) {
-  try {
-    const db = await getDb();
-    const entry = {
-      id: generateId(),
-      event_type: eventType,
-      message,
-      created_at: new Date().toISOString(),
-    };
-
-    appendCapped(db.data.server_events, entry, RETENTION.server_events);
-    scheduleWrite();
-    return entry;
-  } catch (error: any) {
-    log.warn(`Could not record server event ${eventType}: ${error.message}`);
-    return null;
-  }
-}
-
-
-async function getActiveServerId() {
-  const db = await getDb();
-  const active = db.data.servers.find((s) => s.isActive) || db.data.servers[0];
-  return active ? String(active.id) : null;
-}
-
-export async function getTrackedMods() {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  if (!serverId) return db.data.tracked_mods;
-  return db.data.tracked_mods.filter((m) => m.server_id === serverId);
-}
-
-export async function addTrackedMod(workshopId: string, name: string | null = null) {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const existing = db.data.tracked_mods.find(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (existing) {
-    existing.name = name || existing.name;
-    if (!existing.server_id && serverId) existing.server_id = serverId;
-    scheduleWrite();
-    return existing;
-  }
-
-  const mod = {
-    id: generateId(),
-    workshop_id: workshopId,
-    name,
-    server_id: serverId,
-    last_updated: null,
-    last_checked: null,
-    update_available: 0,
-    preview_url: null,
-    created_at: new Date().toISOString(),
-  };
-  db.data.tracked_mods.push(mod);
-  scheduleWrite();
-  return mod;
-}
-
-export async function setModPreviewUrl(workshopId: string, previewUrl: string | null) {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const mod = db.data.tracked_mods.find(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (mod && mod.preview_url !== previewUrl) {
-    mod.preview_url = previewUrl || null;
-    scheduleWrite();
-  }
-}
-
-export async function updateModTimestamp(workshopId: string, lastUpdated: any) {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const mod = db.data.tracked_mods.find(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (mod) {
-    mod.last_updated = lastUpdated;
-    mod.last_checked = new Date().toISOString();
-    if (!mod.server_id && serverId) mod.server_id = serverId;
-    scheduleWrite();
-  }
-}
-
-export async function setModUpdateAvailable(workshopId: string, available: boolean) {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const mod = db.data.tracked_mods.find(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (mod) {
-    mod.update_available = available ? 1 : 0;
-    if (!mod.server_id && serverId) mod.server_id = serverId;
-    scheduleWrite();
-  }
-}
-
-export async function markModsChecked(
-  checkedIds: Set<any>,
-  updatesById: Map<any, any> = new Map(),
-) {
-  if (!checkedIds || checkedIds.size === 0) return;
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const now = new Date().toISOString();
-  let touched = 0;
-  for (const mod of db.data.tracked_mods) {
-    if (mod.server_id !== serverId && mod.server_id) continue;
-    if (!checkedIds.has(mod.workshop_id)) continue;
-    mod.last_checked = now;
-    mod.update_available = updatesById.get(mod.workshop_id) ? 1 : 0;
-    if (!mod.server_id && serverId) mod.server_id = serverId;
-    touched++;
-  }
-  if (touched > 0) scheduleWrite();
-}
-
-export async function removeTrackedMod(workshopId: string) {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  const index = db.data.tracked_mods.findIndex(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (index === -1) return false;
-
-  db.data.tracked_mods.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
-export async function clearModUpdates() {
-  const db = await getDb();
-  const serverId = await getActiveServerId();
-  db.data.tracked_mods.forEach((m) => {
-    if (m.server_id === serverId || !m.server_id) {
-      m.update_available = 0;
-    }
-  });
-  scheduleWrite();
-}
-
-
-export async function getIgnoredMods() {
-  const db = await getDb();
-  if (!db.data.ignored_mods) db.data.ignored_mods = [];
-  const serverId = await getActiveServerId();
-  if (!serverId) return db.data.ignored_mods;
-  return db.data.ignored_mods.filter(
-    (m) => m.server_id === serverId || !m.server_id,
-  );
-}
-
-export async function addIgnoredMod(workshopId: string, name: string | null = null) {
-  const db = await getDb();
-  if (!db.data.ignored_mods) db.data.ignored_mods = [];
-  const serverId = await getActiveServerId();
-  const existing = db.data.ignored_mods.find(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (existing) return existing;
-  const entry = {
-    workshop_id: workshopId,
-    name,
-    server_id: serverId,
-    ignored_at: new Date().toISOString(),
-  };
-  db.data.ignored_mods.push(entry);
-  scheduleWrite();
-  return entry;
-}
-
-export async function removeIgnoredMod(workshopId: string) {
-  const db = await getDb();
-  if (!db.data.ignored_mods) db.data.ignored_mods = [];
-  const serverId = await getActiveServerId();
-  const index = db.data.ignored_mods.findIndex(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-  if (index === -1) return false;
-  db.data.ignored_mods.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
-export async function clearAllIgnoredMods() {
-  const db = await getDb();
-  if (!db.data.ignored_mods) db.data.ignored_mods = [];
-  const serverId = await getActiveServerId();
-  const before = db.data.ignored_mods.length;
-  db.data.ignored_mods = db.data.ignored_mods.filter(
-    (m) => m.server_id && m.server_id !== serverId,
-  );
-  const removed = before - db.data.ignored_mods.length;
-  if (removed > 0) scheduleWrite();
-  return removed;
-}
-
-export async function isModIgnored(workshopId: string) {
-  const db = await getDb();
-  if (!db.data.ignored_mods) return false;
-  const serverId = await getActiveServerId();
-  return db.data.ignored_mods.some(
-    (m) =>
-      m.workshop_id === workshopId &&
-      (m.server_id === serverId || !m.server_id),
-  );
-}
-
-
-function _normalizePair(modIdA: any, modIdB: any): [string, string] | null {
-  const a = String(modIdA || "").trim();
-  const b = String(modIdB || "").trim();
-  if (!a || !b || a === b) return null;
-  return a < b ? [a, b] : [b, a];
-}
-
-export async function getIgnoredModPairs() {
-  const db = await getDb();
-  if (!db.data.ignored_mod_pairs) db.data.ignored_mod_pairs = [];
-  const serverId = await getActiveServerId();
-  if (!serverId) return db.data.ignored_mod_pairs;
-  return db.data.ignored_mod_pairs.filter(
-    (p) => p.server_id === serverId || !p.server_id,
-  );
-}
-
-export async function addIgnoredModPair(modIdA: any, modIdB: any, reason: string | null = null) {
-  const pair = _normalizePair(modIdA, modIdB);
-  if (!pair) return null;
-  const db = await getDb();
-  if (!db.data.ignored_mod_pairs) db.data.ignored_mod_pairs = [];
-  const serverId = await getActiveServerId();
-  const existing = db.data.ignored_mod_pairs.find(
-    (p) =>
-      p.mod_a === pair[0] &&
-      p.mod_b === pair[1] &&
-      (p.server_id === serverId || !p.server_id),
-  );
-  if (existing) return existing;
-  const entry = {
-    mod_a: pair[0],
-    mod_b: pair[1],
-    reason: reason || null,
-    server_id: serverId,
-    ignored_at: new Date().toISOString(),
-  };
-  db.data.ignored_mod_pairs.push(entry);
-  scheduleWrite();
-  return entry;
-}
-
-export async function removeIgnoredModPair(modIdA: any, modIdB: any) {
-  const pair = _normalizePair(modIdA, modIdB);
-  if (!pair) return false;
-  const db = await getDb();
-  if (!db.data.ignored_mod_pairs) db.data.ignored_mod_pairs = [];
-  const serverId = await getActiveServerId();
-  const before = db.data.ignored_mod_pairs.length;
-  db.data.ignored_mod_pairs = db.data.ignored_mod_pairs.filter(
-    (p) =>
-      !(
-        p.mod_a === pair[0] &&
-        p.mod_b === pair[1] &&
-        (p.server_id === serverId || !p.server_id)
-      ),
-  );
-  const removed = before - db.data.ignored_mod_pairs.length;
-  if (removed > 0) scheduleWrite();
-  return removed > 0;
-}
-
 
 export async function getSetting(key: string): Promise<any> {
-  const db = await getDb();
-  return db.data.settings[key] ?? null;
+  if (key === "steamApiKey") return readUiSecretFile(key);
+  const serverId = currentServerId();
+  if (PROFILE_FIELDS[key])
+    return (await getServer(requireServerId()))?.[PROFILE_FIELDS[key]] ?? null;
+  const scope = PANEL_SETTINGS.test(key) ? "" : (serverId ?? "");
+  const row = db()
+    .prepare("SELECT value FROM settings WHERE server_id=? AND key=?")
+    .get(scope, key);
+  return row ? JSON.parse(String(row.value)) : null;
 }
 
-export async function setSetting(key: string, value: any) {
-  const db = await getDb();
-  db.data.settings[key] = value;
-  scheduleWrite();
+export async function setSetting(key: string, value: any): Promise<void> {
+  await setSettings([[key, value]]);
+}
+
+export async function setSettings(
+  entries: Array<[string, any]>,
+): Promise<void> {
+  const scope = currentServerId();
+  const profileUpdates = Object.fromEntries(
+    entries
+      .filter(([key]) => PROFILE_FIELDS[key])
+      .map(([key, value]) => [PROFILE_FIELDS[key], value]),
+  );
+  const profile = Object.keys(profileUpdates).length
+    ? readServer(requireServerId())
+    : null;
+  if (
+    (scope || Object.keys(profileUpdates).length) &&
+    !readServer(scope ?? requireServerId())
+  )
+    throw new Error("Server no longer exists");
+  const values = entries
+    .filter(([key]) => !PROFILE_FIELDS[key] && key !== "steamApiKey")
+    .map(([key, value]) => [
+      PANEL_SETTINGS.test(key) ? "" : (scope ?? ""),
+      key,
+      JSON.stringify(value ?? null),
+    ]);
+  if (profile) JSON.stringify({ ...profile, ...profileUpdates });
+  const oldSteamKey = entries.some(([key]) => key === "steamApiKey")
+    ? readUiSecretFile("steamApiKey")
+    : undefined;
+  try {
+    transaction(() => {
+      if (profile)
+        persistServer({
+          ...profile,
+          ...profileUpdates,
+          updatedAt: new Date().toISOString(),
+        });
+      const statement = db().prepare(
+        "INSERT INTO settings(server_id,key,value) VALUES(?,?,?) ON CONFLICT(server_id,key) DO UPDATE SET value=excluded.value",
+      );
+      for (const [serverId, key, value] of values)
+        statement.run(serverId, key, value);
+      for (const [key, value] of entries)
+        if (key === "steamApiKey") writeUiSecretFile(key, value);
+    });
+  } catch (error) {
+    try {
+      if (profile && Object.hasOwn(profileUpdates, "rconPassword"))
+        withoutRconSecret(profile);
+      if (oldSteamKey !== undefined)
+        writeUiSecretFile("steamApiKey", oldSteamKey);
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "Settings save failed and credentials could not be restored",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function getAllSettings(): Promise<AnyRecord> {
-  const db = await getDb();
-  return db.data.settings;
+  const serverId = currentServerId();
+  const settings = Object.fromEntries(
+    db()
+      .prepare(
+        "SELECT key,value FROM settings WHERE server_id='' OR server_id=? ORDER BY server_id",
+      )
+      .all(serverId ?? "")
+      .map((row) => [String(row.key), JSON.parse(String(row.value))]),
+  );
+  settings.steamApiKey = readUiSecretFile("steamApiKey");
+  if (serverId) {
+    const server = await getServer(serverId);
+    for (const [key, field] of Object.entries(PROFILE_FIELDS))
+      settings[key] = server?.[field] ?? null;
+  }
+  return settings;
 }
-
 
 export function normalizeServerMemory(server: null): null;
 export function normalizeServerMemory(server: ServerRecord): ServerRecord;
@@ -1589,7 +520,10 @@ export function normalizeServerMemory(
     /^[A-Za-z0-9_-]+$/.test(String(server.id))
   ) {
     normalized.dockerContainerName = `zomboid-game-${server.id}`;
-    if (!server.rconHost || ["127.0.0.1", "localhost"].includes(server.rconHost)) {
+    if (
+      !server.rconHost ||
+      ["127.0.0.1", "localhost"].includes(server.rconHost)
+    ) {
       normalized.rconHost = normalized.dockerContainerName;
     }
   }
@@ -1598,423 +532,559 @@ export function normalizeServerMemory(
   return normalized;
 }
 
-export async function getServers() {
-  const db = await getDb();
-  return (db.data.servers || []).map(normalizeServerMemory);
+export async function getServers(): Promise<ServerRecord[]> {
+  return db()
+    .prepare("SELECT data FROM servers ORDER BY rowid")
+    .all()
+    .map((row) =>
+      normalizeServerMemory(
+        withRconSecret(JSON.parse(String(row.data))) as ServerRecord,
+      ),
+    );
 }
 
-export async function getServer(id: any): Promise<ServerRecord | null> {
-  const db = await getDb();
-  const server = db.data.servers.find(
-    (s) => String(s.id) === String(id),
-  ) as ServerRecord | undefined;
-  return server ? normalizeServerMemory(server) : null;
+function readServer(id: string | number): ServerRecord | null {
+  const row = db()
+    .prepare("SELECT data FROM servers WHERE id=?")
+    .get(String(id));
+  if (!row) return null;
+  const server = withRconSecret(JSON.parse(String(row.data))) as ServerRecord;
+  return normalizeServerMemory(server);
 }
 
-export async function getActiveServer(): Promise<ServerRecord | null> {
-  const db = await getDb();
-  const server = (db.data.servers.find((s) => s.isActive) ||
-    db.data.servers[0] ||
-    null) as ServerRecord | null;
-  return server ? normalizeServerMemory(server) : null;
+export async function getServer(
+  id: string | number,
+): Promise<ServerRecord | null> {
+  return readServer(id);
 }
 
-export async function createServer(
-  serverConfig: AnyRecord,
-): Promise<ServerRecord> {
-  const db = await getDb();
-  if (!db.data.servers) db.data.servers = [];
+export async function getCurrentServer(): Promise<ServerRecord | null> {
+  const id = currentServerId();
+  return id ? getServer(id) : null;
+}
 
-  const isFirst = db.data.servers.length === 0;
+function persistServer(server: ServerRecord): ServerRecord {
+  server = normalizeServerMemory(server);
+  JSON.stringify(server);
+  const data = withoutRconSecret(server);
+  db()
+    .prepare(
+      "INSERT INTO servers(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
+    )
+    .run(String(server.id), JSON.stringify(data));
+  return normalizeServerMemory(server);
+}
 
+export async function createServer(config: AnyRecord): Promise<ServerRecord> {
   const server = {
-    id: generateId(),
-    name: serverConfig.name || serverConfig.serverName,
-    serverName: serverConfig.serverName,
-    installPath: serverConfig.installPath || "",
-    zomboidDataPath: serverConfig.zomboidDataPath || null,
-    serverConfigPath: serverConfig.serverConfigPath || null,
-    dockerContainerName: serverConfig.dockerContainerName || null,
-    branch: serverConfig.branch || "stable",
-    rconHost: serverConfig.rconHost || "127.0.0.1",
-    rconPort: serverConfig.rconPort || 27015,
-    rconPassword: serverConfig.rconPassword || "",
-    serverPort: serverConfig.serverPort || 16261,
-    minMemory: normalizeMemoryGb(serverConfig.minMemory, 4),
-    maxMemory: normalizeMemoryGb(serverConfig.maxMemory, 8),
-    useNoSteam: serverConfig.useNoSteam || false,
-    useDebug: serverConfig.useDebug || false,
-    useUpnp: serverConfig.useUpnp !== false,
+    id: randomUUID(),
+    name: config.name || config.serverName,
+    serverName: config.serverName,
+    installPath: config.installPath || "",
+    zomboidDataPath: config.zomboidDataPath || null,
+    serverConfigPath: config.serverConfigPath || null,
+    dockerContainerName: config.dockerContainerName || null,
+    branch: config.branch || "stable",
+    rconHost: config.rconHost || "127.0.0.1",
+    rconPort: config.rconPort || 27015,
+    rconPassword: config.rconPassword || "",
+    serverPort: config.serverPort || 16261,
+    minMemory: normalizeMemoryGb(config.minMemory, 4),
+    maxMemory: normalizeMemoryGb(config.maxMemory, 8),
+    useNoSteam: config.useNoSteam || false,
+    useDebug: config.useDebug || false,
+    useUpnp: config.useUpnp !== false,
     lifecycleProvider: "direct",
-    startCommand: serverConfig.startCommand || "",
-    adminPassword: serverConfig.adminPassword || "",
-    isActive: isFirst,
+    startCommand: config.startCommand || "",
+    adminPassword: config.adminPassword || "",
     createdAt: new Date().toISOString(),
   };
-
-  db.data.servers.push(server);
-
-  if (isFirst) {
-    syncServerToSettings(db, server);
-  }
-
-  scheduleWrite();
-  return normalizeServerMemory(server as ServerRecord);
+  return persistServer(server);
 }
 
-export async function updateServer(id: any, updates: AnyRecord) {
-  const db = await getDb();
-  const index = db.data.servers.findIndex((s) => String(s.id) === String(id));
-  if (index === -1) return null;
-
-  db.data.servers[index] = {
-    ...db.data.servers[index],
+export async function updateServer(
+  id: string | number,
+  updates: AnyRecord,
+): Promise<ServerRecord | null> {
+  const current = readServer(id);
+  if (!current) return null;
+  return persistServer({
+    ...current,
     ...updates,
-    id,
+    id: current.id,
     updatedAt: new Date().toISOString(),
-  };
-  db.data.servers[index].minMemory = normalizeMemoryGb(
-    db.data.servers[index].minMemory,
-    4,
-  );
-  db.data.servers[index].maxMemory = normalizeMemoryGb(
-    db.data.servers[index].maxMemory,
-    8,
-  );
-  scheduleWrite();
-  return normalizeServerMemory(db.data.servers[index]);
-}
-
-export async function deleteServer(id: any) {
-  const db = await getDb();
-  const index = db.data.servers.findIndex((s) => String(s.id) === String(id));
-  if (index === -1) return false;
-
-  const wasActive = db.data.servers[index].isActive;
-  const serverId = String(db.data.servers[index].id);
-  db.data.servers.splice(index, 1);
-
-  db.data.tracked_mods = db.data.tracked_mods.filter(
-    (m) => m.server_id !== serverId,
-  );
-
-  if (wasActive && db.data.servers.length > 0) {
-    db.data.servers[0].isActive = true;
-  }
-
-  deleteServerSecret(serverId);
-
-  scheduleWrite();
-  return true;
-}
-
-export async function setActiveServer(id: any) {
-  const db = await getDb();
-  const server = db.data.servers.find((s) => String(s.id) === String(id));
-  if (!server) return null;
-
-  db.data.servers.forEach((s) => {
-    s.isActive = String(s.id) === String(id);
   });
-
-  syncServerToSettings(db, server);
-  scheduleWrite();
-  return server;
 }
 
-function syncServerToSettings(db: Database, server: AnyRecord) {
-  const normalizedServer = normalizeServerMemory(server);
-  db.data.settings.serverPath = server.installPath;
-  db.data.settings.serverName = server.serverName;
-  db.data.settings.rconHost = server.rconHost;
-  db.data.settings.rconPort = server.rconPort;
-  db.data.settings.rconPassword = server.rconPassword;
-  db.data.settings.serverPort = server.serverPort;
-  db.data.settings.minMemory = normalizedServer.minMemory;
-  db.data.settings.maxMemory = normalizedServer.maxMemory;
-  db.data.settings.zomboidDataPath = server.zomboidDataPath;
-  db.data.settings.serverConfigPath = server.serverConfigPath;
+export async function deleteServer(id: string | number): Promise<boolean> {
+  const deleted = transaction(() => {
+    const result = db()
+      .prepare("DELETE FROM servers WHERE id=?")
+      .run(String(id));
+    if (!result.changes) return false;
+    db().prepare("DELETE FROM settings WHERE server_id=?").run(String(id));
+    db().prepare("DELETE FROM records WHERE server_id=?").run(String(id));
+    return true;
+  });
+  if (deleted) deleteServerSecret(id);
+  return deleted;
 }
 
-
-export async function getRoles() {
-  const db = await getDb();
-  return db.data.roles || [];
+export async function logCommand(command: any, response: any, success = true) {
+  const text = redactRconCommandSecrets(response);
+  return appendHistory("command_history", {
+    id: randomUUID(),
+    command: redactRconCommandSecrets(command),
+    response: typeof text === "string" ? text.slice(0, 4096) : text,
+    success: success ? 1 : 0,
+    executed_at: new Date().toISOString(),
+  });
+}
+export async function getCommandHistory(limit: unknown = 100) {
+  return records("command_history", historyLimit(limit, "command_history"));
+}
+export async function logBridgeCommand(
+  action: string,
+  args: AnyRecord,
+  result: any,
+  success = true,
+  durationMs = 0,
+) {
+  const text = JSON.stringify(result);
+  return appendHistory("bridge_logs", {
+    id: randomUUID(),
+    action,
+    args: args || {},
+    result: text?.length > 4096 ? { truncated: true } : result,
+    success: success ? 1 : 0,
+    duration_ms: durationMs,
+    executed_at: new Date().toISOString(),
+  });
+}
+export async function getBridgeLogs(limit: unknown = 100) {
+  return records("bridge_logs", historyLimit(limit, "bridge_logs"));
+}
+export async function logPlayerAction(
+  playerName: string,
+  action: string,
+  details: any = null,
+) {
+  return appendHistory("player_logs", {
+    id: randomUUID(),
+    player_name: playerName,
+    action,
+    details,
+    logged_at: new Date().toISOString(),
+  });
+}
+export async function getPlayerLogs(
+  playerName: string | null = null,
+  limit: unknown = 100,
+) {
+  return records("player_logs", RETENTION.player_logs)
+    .filter((row) => !playerName || row.player_name === playerName)
+    .slice(0, historyLimit(limit, "player_logs"));
+}
+export async function logServerEvent(eventType: string, message: any = null) {
+  return appendHistory("server_events", {
+    id: randomUUID(),
+    event_type: eventType,
+    message,
+    created_at: new Date().toISOString(),
+  });
+}
+export async function getServerEvents(limit: unknown = 100) {
+  return records("server_events", historyLimit(limit, "server_events"));
 }
 
-export async function getRoleById(id: any): Promise<AnyRecord | null> {
-  const db = await getDb();
-  return (db.data.roles || []).find((r) => String(r.id) === String(id)) || null;
+export async function getScheduledTasks(): Promise<ScheduledTaskRecord[]> {
+  const id = currentServerId();
+  return id
+    ? (db()
+        .prepare("SELECT * FROM scheduled_tasks WHERE server_id=? ORDER BY id")
+        .all(id) as unknown as ScheduledTaskRecord[])
+    : (db()
+        .prepare("SELECT * FROM scheduled_tasks ORDER BY id")
+        .all() as unknown as ScheduledTaskRecord[]);
 }
-
-export async function getRoleByName(name: unknown): Promise<AnyRecord | null> {
-  if (!name) return null;
-  const db = await getDb();
-  return (db.data.roles || []).find((r) => r.name === name) || null;
+export async function createScheduledTask(
+  name: string,
+  cronExpression: string,
+  command: string,
+  serverId = requireServerId(),
+) {
+  if (String(serverId) !== requireServerId())
+    throw new Error("Scheduled task belongs to another server");
+  const now = new Date().toISOString();
+  const result = db()
+    .prepare(
+      "INSERT INTO scheduled_tasks(server_id,name,cron_expression,command,created_at) VALUES(?,?,?,?,?)",
+    )
+    .run(requireServerId(), name, cronExpression, command, now);
+  return db()
+    .prepare("SELECT * FROM scheduled_tasks WHERE id=?")
+    .get(result.lastInsertRowid)! as unknown as ScheduledTaskRecord;
 }
-
-export async function insertRole(role: AnyRecord) {
-  const db = await getDb();
-  if (!db.data.roles) db.data.roles = [];
-  db.data.roles.push(role);
-  scheduleWrite();
-  return role;
+export async function updateScheduledTask(
+  id: any,
+  name: string | undefined,
+  cronExpression: string | undefined,
+  command: string | undefined,
+  enabled: boolean | number | undefined,
+  serverId: any,
+) {
+  const task = db()
+    .prepare("SELECT * FROM scheduled_tasks WHERE id=? AND server_id=?")
+    .get(id, requireServerId());
+  if (!task) return null;
+  db()
+    .prepare(
+      "UPDATE scheduled_tasks SET name=?,cron_expression=?,command=?,enabled=?,server_id=? WHERE id=? AND server_id=?",
+    )
+    .run(
+      name ?? task.name,
+      cronExpression ?? task.cron_expression,
+      command ?? task.command,
+      enabled === undefined ? task.enabled : enabled ? 1 : 0,
+      String(serverId ?? task.server_id),
+      id,
+      requireServerId(),
+    );
+  return db()
+    .prepare("SELECT * FROM scheduled_tasks WHERE id=?")
+    .get(id)! as unknown as ScheduledTaskRecord;
 }
-
-export async function replaceRoleById(id: any, updatedRole: AnyRecord) {
-  const db = await getDb();
-  const roles = db.data.roles || [];
-  const index = roles.findIndex((r) => String(r.id) === String(id));
-  if (index === -1) return null;
-  roles[index] = updatedRole;
-  scheduleWrite();
-  return updatedRole;
+export async function deleteScheduledTask(id: any) {
+  return (
+    db()
+      .prepare("DELETE FROM scheduled_tasks WHERE id=? AND server_id=?")
+      .run(id, requireServerId()).changes > 0
+  );
 }
-
-export async function removeRoleById(id: any) {
-  const db = await getDb();
-  const roles = db.data.roles || [];
-  const index = roles.findIndex((r) => String(r.id) === String(id));
-  if (index === -1) return false;
-  roles.splice(index, 1);
-  scheduleWrite();
-  return true;
+export async function updateTaskLastRun(id: any) {
+  db()
+    .prepare("UPDATE scheduled_tasks SET last_run=? WHERE id=? AND server_id=?")
+    .run(new Date().toISOString(), id, requireServerId());
 }
-
-export async function getUsersForRole(role: AnyRecord) {
-  const db = await getDb();
-  const users = db.data.users || [];
-  return users.filter(
-    (u) => u.roleId === role.id || (role.isSeeded && u.role === role.name),
+export async function logScheduleExecution(
+  taskId: any,
+  taskName: string,
+  command: string,
+  success: boolean,
+  message: any = null,
+  duration: number | null = null,
+) {
+  return appendHistory("schedule_history", {
+    id: randomUUID(),
+    task_id: taskId,
+    task_name: taskName,
+    command,
+    success: success ? 1 : 0,
+    message,
+    duration,
+    executed_at: new Date().toISOString(),
+  });
+}
+export async function getScheduleHistory(
+  limit: unknown = 100,
+  taskId: any = null,
+) {
+  return records("schedule_history", RETENTION.schedule_history)
+    .filter((row) => taskId === null || row.task_id === taskId)
+    .slice(0, historyLimit(limit, "schedule_history"));
+}
+export async function clearScheduleHistory() {
+  clearRecords("schedule_history");
+}
+export async function getLatestScheduleExecutionByCommand(command: string) {
+  return (
+    records("schedule_history", RETENTION.schedule_history).find(
+      (row) => row.command === command,
+    ) ?? null
   );
 }
 
-export async function getUsersForRoleAccounting() {
-  const db = await getDb();
-  return (db.data.users || []).map((u) => ({
-    id: u.id,
-    username: u.username,
-    role: u.role,
-    roleId: u.roleId,
-  }));
+function findMod(collection: string, workshopId: string) {
+  return readRecord(collection, workshopId);
 }
-
-export async function reassignRoleMembers(fromRole: AnyRecord, toRole: AnyRecord) {
-  const db = await getDb();
-  let count = 0;
-  for (const user of db.data.users || []) {
-    const matches =
-      user.roleId === fromRole.id || (fromRole.isSeeded && user.role === fromRole.name);
-    if (!matches) continue;
-    user.roleId = toRole.id;
-    user.role = toRole.name;
-    count++;
-  }
-  if (count > 0) scheduleWrite();
-  return count;
+function saveMod(collection: string, row: AnyRecord) {
+  return putRecord(collection, row, String(row.workshop_id));
 }
-
+export async function getTrackedMods() {
+  return records("tracked_mods");
+}
+export async function addTrackedMod(
+  workshopId: string,
+  name: string | null = null,
+) {
+  const current = findMod("tracked_mods", workshopId);
+  return saveMod(
+    "tracked_mods",
+    current
+      ? { ...current, name: name || current.name }
+      : {
+          id: randomUUID(),
+          workshop_id: workshopId,
+          name,
+          server_id: requireServerId(),
+          last_updated: null,
+          last_checked: null,
+          update_available: 0,
+          preview_url: null,
+          created_at: new Date().toISOString(),
+        },
+  );
+}
+export async function setModPreviewUrl(
+  workshopId: string,
+  previewUrl: string | null,
+) {
+  const row = findMod("tracked_mods", workshopId);
+  if (row) saveMod("tracked_mods", { ...row, preview_url: previewUrl });
+}
+export async function updateModTimestamp(workshopId: string, lastUpdated: any) {
+  const row = findMod("tracked_mods", workshopId);
+  if (row)
+    saveMod("tracked_mods", {
+      ...row,
+      last_updated: lastUpdated,
+      last_checked: new Date().toISOString(),
+    });
+}
+export async function setModUpdateAvailable(
+  workshopId: string,
+  available: boolean,
+) {
+  const row = findMod("tracked_mods", workshopId);
+  if (row)
+    saveMod("tracked_mods", { ...row, update_available: available ? 1 : 0 });
+}
+export async function markModsChecked(
+  checkedIds: Set<any>,
+  updatesById: Map<any, any> = new Map(),
+) {
+  transaction(() => {
+    for (const row of records("tracked_mods"))
+      if (checkedIds.has(row.workshop_id))
+        saveMod("tracked_mods", {
+          ...row,
+          last_checked: new Date().toISOString(),
+          update_available: updatesById.get(row.workshop_id) ? 1 : 0,
+        });
+  });
+}
+export async function removeTrackedMod(workshopId: string) {
+  return deleteRecord("tracked_mods", workshopId);
+}
+export async function clearModUpdates() {
+  transaction(() => {
+    for (const row of records("tracked_mods"))
+      saveMod("tracked_mods", { ...row, update_available: 0 });
+  });
+}
+export async function getIgnoredMods() {
+  return records("ignored_mods");
+}
+export async function addIgnoredMod(
+  workshopId: string,
+  name: string | null = null,
+) {
+  return (
+    findMod("ignored_mods", workshopId) ??
+    saveMod("ignored_mods", {
+      workshop_id: workshopId,
+      name,
+      server_id: requireServerId(),
+      ignored_at: new Date().toISOString(),
+    })
+  );
+}
+export async function removeIgnoredMod(workshopId: string) {
+  return deleteRecord("ignored_mods", workshopId);
+}
+export async function clearAllIgnoredMods() {
+  return clearRecords("ignored_mods");
+}
+export async function isModIgnored(workshopId: string) {
+  return Boolean(findMod("ignored_mods", workshopId));
+}
+function pairKey(a: any, b: any): string | null {
+  const pair = [String(a ?? "").trim(), String(b ?? "").trim()].sort();
+  return pair[0] && pair[1] && pair[0] !== pair[1]
+    ? JSON.stringify(pair)
+    : null;
+}
+export async function getIgnoredModPairs() {
+  return records("ignored_mod_pairs");
+}
+export async function addIgnoredModPair(
+  a: any,
+  b: any,
+  reason: string | null = null,
+) {
+  const id = pairKey(a, b);
+  if (!id) return null;
+  const pair = JSON.parse(id);
+  return (
+    readRecord("ignored_mod_pairs", id) ??
+    putRecord(
+      "ignored_mod_pairs",
+      {
+        mod_a: pair[0],
+        mod_b: pair[1],
+        reason,
+        server_id: requireServerId(),
+        ignored_at: new Date().toISOString(),
+      },
+      id,
+    )
+  );
+}
+export async function removeIgnoredModPair(a: any, b: any) {
+  const id = pairKey(a, b);
+  return id ? deleteRecord("ignored_mod_pairs", id) : false;
+}
 
 export async function getPlayerNotes() {
-  const db = await getDb();
-  if (!db.data.player_notes) db.data.player_notes = [];
-  return db.data.player_notes;
+  return records("player_notes");
 }
-
-export async function getPlayerNote(playerName: string) {
-  const db = await getDb();
-  if (!db.data.player_notes) db.data.player_notes = [];
-  return (
-    db.data.player_notes.find(
-      (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
-    ) || null
+export async function getPlayerNote(name: string) {
+  return readRecord("player_notes", name.toLowerCase()) ?? null;
+}
+export async function upsertPlayerNote(
+  name: string,
+  note: string,
+  tags: any[] = [],
+) {
+  return putRecord(
+    "player_notes",
+    {
+      id: randomUUID(),
+      player_name: name,
+      note: note || "",
+      tags,
+      updated_at: new Date().toISOString(),
+    },
+    name.toLowerCase(),
   );
 }
-
-export async function upsertPlayerNote(playerName: string, note: string, tags: any[] = []) {
-  const db = await getDb();
-  if (!db.data.player_notes) db.data.player_notes = [];
-
-  const existingIndex = db.data.player_notes.findIndex(
-    (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
-  );
-
-  const entry: AnyRecord = {
-    player_name: playerName,
-    note: note || "",
-    tags: tags || [],
-    updated_at: new Date().toISOString(),
-  };
-
-  if (existingIndex !== -1) {
-    db.data.player_notes[existingIndex] = {
-      ...db.data.player_notes[existingIndex],
-      ...entry,
-    };
-  } else {
-    entry.id = generateId();
-    entry.created_at = new Date().toISOString();
-    db.data.player_notes.push(entry);
-  }
-
-  scheduleWrite();
-  return entry;
+export async function deletePlayerNote(name: string) {
+  return deleteRecord("player_notes", name.toLowerCase());
 }
-
-export async function deletePlayerNote(playerName: string) {
-  const db = await getDb();
-  if (!db.data.player_notes) return false;
-
-  const index = db.data.player_notes.findIndex(
-    (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
-  );
-  if (index === -1) return false;
-
-  db.data.player_notes.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
-
 export async function getPlayerStats() {
-  const db = await getDb();
-  if (!db.data.player_stats) db.data.player_stats = [];
-  return db.data.player_stats;
+  return records("player_stats");
 }
-
-export async function getPlayerStat(playerName: string) {
-  const db = await getDb();
-  if (!db.data.player_stats) db.data.player_stats = [];
-  return (
-    db.data.player_stats.find(
-      (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
-    ) || null
-  );
+export async function getPlayerStat(name: string) {
+  return readRecord("player_stats", name.toLowerCase()) ?? null;
 }
-
-export async function recordPlayerSession(playerName: string, action: string) {
-  const db = await getDb();
-  if (!db.data.player_stats) db.data.player_stats = [];
-
-  let playerStat = db.data.player_stats.find(
-    (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
-  );
-
+export async function recordPlayerSession(name: string, action: string) {
   const now = new Date().toISOString();
-
-  if (!playerStat) {
-    playerStat = {
-      id: generateId(),
-      player_name: playerName,
-      total_playtime_seconds: 0,
-      session_count: 0,
-      first_seen: now,
-      last_seen: now,
-      last_session_start: null,
-      sessions: [],
-    };
-    db.data.player_stats.push(playerStat);
-  }
-
+  const player = readRecord("player_stats", name.toLowerCase()) ?? {
+    id: randomUUID(),
+    player_name: name,
+    total_playtime_seconds: 0,
+    session_count: 0,
+    first_seen: now,
+    sessions: [],
+  };
+  player.last_seen = now;
   if (action === "connect") {
-    playerStat.last_session_start = now;
-    playerStat.last_seen = now;
-    playerStat.session_count++;
-  } else if (action === "disconnect" && playerStat.last_session_start) {
-    const sessionStart = new Date(playerStat.last_session_start);
-    const sessionEnd = new Date(now);
-    const sessionDuration = Math.floor(
-      (sessionEnd.getTime() - sessionStart.getTime()) / 1000,
+    player.last_session_start = now;
+    player.session_count++;
+  } else if (action === "disconnect" && player.last_session_start) {
+    const duration = Math.max(
+      0,
+      Math.floor((Date.now() - Date.parse(player.last_session_start)) / 1000),
     );
-
-    playerStat.total_playtime_seconds += sessionDuration;
-    playerStat.last_seen = now;
-
-    if (!playerStat.sessions) playerStat.sessions = [];
-    playerStat.sessions.unshift({
-      start: playerStat.last_session_start,
+    player.total_playtime_seconds += duration;
+    player.sessions.unshift({
+      start: player.last_session_start,
       end: now,
-      duration_seconds: sessionDuration,
+      duration_seconds: duration,
     });
-    if (playerStat.sessions.length > RETENTION.player_sessions) {
-      playerStat.sessions = playerStat.sessions.slice(
-        0,
-        RETENTION.player_sessions,
-      );
-    }
-
-    playerStat.last_session_start = null;
+    player.last_session_start = null;
   }
-
-  scheduleWrite();
-  return playerStat;
+  player.sessions = player.sessions.filter(
+    (session: AnyRecord) =>
+      Date.parse(session.end) >= Date.now() - 30 * 24 * 3600000,
+  );
+  return putRecord("player_stats", player, name.toLowerCase());
 }
-
-
+export function recentPerformanceHistory(
+  entries: AnyRecord[],
+  now = Date.now(),
+) {
+  return entries
+    .filter((row) => {
+      const time = Date.parse(row.timestamp);
+      return time >= now - 24 * 3600000 && time <= now;
+    })
+    .slice(-1440);
+}
 export async function recordPerformanceSnapshot(snapshot: AnyRecord) {
-  const db = await getDb();
-  if (!db.data.performance_history) db.data.performance_history = [];
-
   const entry = {
+    id: randomUUID(),
     timestamp: new Date().toISOString(),
     ...snapshot,
   };
-
-  db.data.performance_history = recentPerformanceHistory([
-    ...db.data.performance_history,
-    entry,
-  ]);
-
-  scheduleWrite();
+  appendHistory("performance_history", entry);
+  db()
+    .prepare(
+      "DELETE FROM records WHERE collection='performance_history' AND server_id=? AND json_extract(data,'$.timestamp') < ?",
+    )
+    .run(requireServerId(), new Date(Date.now() - 24 * 3600000).toISOString());
   return entry;
 }
-
 export async function getPerformanceHistory(limit: unknown = 60) {
-  const db = await getDb();
-  if (!db.data.performance_history) return [];
-  const safeLimit = parseClampedInteger(
-    limit,
-    60,
-    1,
-    RETENTION.performance_history,
-  );
-  return recentPerformanceHistory(db.data.performance_history).slice(-safeLimit);
+  return recentPerformanceHistory(
+    records("performance_history", 1440).reverse(),
+  ).slice(-historyLimit(limit, "performance_history", 60));
 }
-
 export async function clearPerformanceHistory() {
-  const db = await getDb();
-  db.data.performance_history = [];
-  scheduleWrite();
+  clearRecords("performance_history");
 }
-
 export async function getSteamIdBans() {
-  const db = await getDb();
-  if (!db.data.steamid_bans) db.data.steamid_bans = [];
-  return db.data.steamid_bans;
+  return records("steamid_bans");
 }
-
-export async function addSteamIdBan(steamId: string, reason: string | null = null) {
-  const db = await getDb();
-  if (!db.data.steamid_bans) db.data.steamid_bans = [];
-
-  if (db.data.steamid_bans.some((b) => b.steamId === steamId)) return;
-
-  db.data.steamid_bans.push({
+export async function addSteamIdBan(
+  steamId: string,
+  reason: string | null = null,
+) {
+  putRecord(
+    "steamid_bans",
+    { steamId, reason, banned_at: new Date().toISOString() },
     steamId,
-    reason: reason || null,
-    banned_at: new Date().toISOString(),
-  });
-  scheduleWrite();
+  );
+}
+export async function removeSteamIdBan(steamId: string) {
+  return deleteRecord("steamid_bans", steamId);
 }
 
-export async function removeSteamIdBan(steamId: string) {
-  const db = await getDb();
-  if (!db.data.steamid_bans) return false;
+export function getDatabaseHealth(): { ok: boolean; error: string | null } {
+  try {
+    const result = db().prepare("PRAGMA quick_check").get();
+    if (!result || Object.values(result)[0] !== "ok")
+      throw new Error("Panel database integrity check failed");
+    return { ok: true, error: null };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
-  const index = db.data.steamid_bans.findIndex((b) => b.steamId === steamId);
-  if (index === -1) return false;
+export function exportDatabase(file: string): void {
+  db().prepare("VACUUM INTO ?").run(file);
+  if (process.platform !== "win32") fs.chmodSync(file, 0o600);
+}
 
-  db.data.steamid_bans.splice(index, 1);
-  scheduleWrite();
-  return true;
+export async function saveBackupRecord(record: AnyRecord): Promise<void> {
+  appendHistory("backup_records", record, record.fileName);
+}
+export async function readBackupRecords(limit = 500): Promise<AnyRecord[]> {
+  return records("backup_records", limit);
+}
+export async function deleteBackupRecord(fileName: string): Promise<void> {
+  deleteRecord("backup_records", fileName);
 }

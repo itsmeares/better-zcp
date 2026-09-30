@@ -8,7 +8,7 @@ vi.mock("../database/init.ts", () => ({
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: (...args) => logScheduleExecution(...args),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getServer: vi.fn(),
 }));
 

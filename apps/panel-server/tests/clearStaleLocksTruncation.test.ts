@@ -4,10 +4,10 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", async () => {
   const actual = await vi.importActual("../database/init.ts");
-  return { ...actual, getRoleByName: mockGetRoleByName, getActiveServer };
+  return { ...actual, getRoleByName: mockGetRoleByName, getCurrentServer };
 });
 
 const { default: router } = await import("../routes/debug.ts");
@@ -68,7 +68,7 @@ const SAVE_DIR = path.join(ZOMBOID_DATA_PATH, "Saves", "Multiplayer", "MyServer"
 const STALE_MTIME = () => Date.now() - 2 * 60 * 60 * 1000;
 
 beforeEach(() => {
-  getActiveServer.mockReset().mockResolvedValue({
+  getCurrentServer.mockReset().mockResolvedValue({
     zomboidDataPath: ZOMBOID_DATA_PATH,
     serverName: "MyServer",
   });

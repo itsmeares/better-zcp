@@ -4,7 +4,7 @@
   "version": "2.0.0-rc5",
   "license": "AGPL-3.0-only",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "type": "module",
   "scripts": {

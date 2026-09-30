@@ -5,11 +5,11 @@ import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -81,7 +81,7 @@ describe("toggle/batch-toggle: disk-verified numeric mod IDs", () => {
       `name=Tear All Clothes\nid=${REAL_MOD_ID}\n`,
     );
 
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",

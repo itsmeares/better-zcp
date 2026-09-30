@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({
+  getCurrentServer: vi.fn(async () => ({
     id: "docker-server",
     dockerContainerName: "pz-container",
     // Deliberately no serverName/zomboidDataPath/rconPassword: keeps

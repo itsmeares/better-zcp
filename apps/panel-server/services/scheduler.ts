@@ -1,11 +1,10 @@
+import { requireServerId } from "../utils/serverScope.ts";
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import fs from "fs";
 import path from "path";
 import cron from "node-cron";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
-import panelBridge from "./panelBridge.ts";
-import { RconService } from "./rcon.ts";
-import { ServerManager } from "./serverManager.ts";
 import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
 import {
   acquireLifecycleLock,
@@ -22,7 +21,7 @@ import {
   updateTaskLastRun,
   logServerEvent,
   logScheduleExecution,
-  getActiveServer,
+  getCurrentServer,
   getServer,
   getSetting,
   setSetting,
@@ -421,7 +420,7 @@ export class Scheduler {
   async executeTask(task: ScheduledTask, retryWhenEmpty = false): Promise<void> {
     const commandKind = classifyScheduledCommand(task.command);
 
-    const { rconService, serverManager, cleanup } =
+    const { rconService, serverManager } =
       await this._resolveServicesForTask(task);
 
     try {
@@ -456,13 +455,6 @@ export class Scheduler {
           );
         }
       } else if (commandKind === "bridge") {
-        if (cleanup) {
-          throw new Error(
-            "bridge: actions only support the currently active server " +
-              "(PanelBridge has no per-server instancing yet) — reassign " +
-              "this task or switch the active server before it fires",
-          );
-        }
         await this.executeBridgeAction(task.command);
       } else {
         const result = await rconService.execute(task.command, {
@@ -473,7 +465,7 @@ export class Scheduler {
         }
       }
     } finally {
-      if (cleanup) await cleanup();
+      // The profile runtime owns its connections across scheduled tasks.
     }
   }
 
@@ -486,7 +478,7 @@ export class Scheduler {
     let current = serverManager._serverId ?? null;
     if (current == null) {
       try {
-        current = (await getActiveServer())?.id ?? null;
+        current = (await getCurrentServer())?.id ?? null;
       } catch (error: unknown) {
         log.debug(`Could not verify restart target: ${errorMessage(error)}`);
         return;
@@ -497,7 +489,7 @@ export class Scheduler {
     log.warn(
       `Auto-restart: active server changed mid-restart — re-targeting server ${pinnedServerId} so the restart finishes on the server it began on`,
     );
-    await serverManager.reloadConfig(pinnedServerId);
+    throw new Error("Restart target does not match the bound server runtime");
   }
 
   async _backupConfigBeforeRestart(
@@ -508,7 +500,7 @@ export class Scheduler {
       server =
         pinnedServerId != null
           ? await getServer(pinnedServerId)
-          : await getActiveServer();
+          : await getCurrentServer();
       if (!server?.serverName) return server;
 
       const serverConfigPath =
@@ -546,52 +538,9 @@ export class Scheduler {
     return server;
   }
 
-  async _resolveServicesForTask(task: ScheduledTask): Promise<{
-    rconService: any;
-    serverManager: any;
-    cleanup: (() => Promise<void>) | null;
-  }> {
-    const shared = {
-      rconService: this.rconService,
-      serverManager: this.serverManager,
-      cleanup: null,
-    };
-
-    if (!task.server_id) return shared;
-
-    let active;
-    try {
-      active = await getActiveServer();
-    } catch (error: unknown) {
-      log.warn(
-        `Could not resolve active server for task ${task.name}, using shared connection: ${errorMessage(error)}`,
-      );
-      return shared;
-    }
-
-    if (active && String(active.id) === String(task.server_id)) {
-      return shared;
-    }
-
-    log.info(
-      `Task "${task.name}" targets server ${task.server_id}, which isn't active — using a temporary connection`,
-    );
-    const tempRcon = new RconService();
-    const tempManager = new ServerManager();
-    await tempRcon.loadConfig(task.server_id);
-    await tempManager.loadConfig(task.server_id);
-
-    return {
-      rconService: tempRcon,
-      serverManager: tempManager,
-      cleanup: async () => {
-        try {
-          if (tempRcon.connected) await tempRcon.disconnect();
-        } catch (error: unknown) {
-          log.debug(`Cleanup: failed to disconnect temp RCON: ${errorMessage(error)}`);
-        }
-      },
-    };
+  async _resolveServicesForTask(task: ScheduledTask) {
+    if (String(task.server_id) !== requireServerId()) throw new Error("Scheduled task belongs to another server");
+    return { rconService: this.rconService, serverManager: this.serverManager, cleanup: null };
   }
 
   async executeBridgeAction(rawCommand: string): Promise<any> {
@@ -620,7 +569,7 @@ export class Scheduler {
       }
     }
 
-    return panelBridge.sendCommand(action, args);
+    return getPanelRuntime().panelBridge.sendCommand(action, args);
   }
 
   cancelTask(taskId: string | number): boolean {
@@ -721,7 +670,7 @@ export class Scheduler {
         if (running || generation !== this.backupScheduleGeneration) return;
         running = true;
         try {
-          const activeServer = await getActiveServer();
+          const activeServer = await getCurrentServer();
           if (expectedServerId != null && String(activeServer?.id ?? "") !== String(expectedServerId)) {
             log.info("Deferred backup cancelled because the active server changed");
             pendingSince = null;
@@ -855,7 +804,7 @@ export class Scheduler {
         !this.restartInProgress &&
         !this.backupService?.backupInProgress &&
         !this.backupService?.restoreInProgress &&
-        String((await getActiveServer())?.id ?? "") === String(serverId ?? "");
+        String((await getCurrentServer())?.id ?? "") === String(serverId ?? "");
       const minutes = [...new Set([warningMinutes, 10, 5, 3, 2, 1])]
         .filter((minute) => minute <= warningMinutes).sort((a, b) => b - a);
       let previous = warningMinutes;
@@ -955,11 +904,11 @@ export class Scheduler {
     if (rconService !== this.rconService) return delivered;
     try {
       if (
-        panelBridge &&
-        typeof panelBridge.isModConnected === "function" &&
-        panelBridge.isModConnected()
+        getPanelRuntime().panelBridge &&
+        typeof getPanelRuntime().panelBridge.isModConnected === "function" &&
+        getPanelRuntime().panelBridge.isModConnected()
       ) {
-        panelBridge
+        getPanelRuntime().panelBridge
           .sendCommand("sendToServerChat", { message: text, isAlert: true })
           .catch((err: unknown) => {
             log.debug(`Restart broadcast (bridge) failed: ${errorMessage(err)}`);
@@ -1012,7 +961,7 @@ export class Scheduler {
     let pinnedServerId = serverManager._serverId ?? null;
     if (pinnedServerId == null) {
       try {
-        pinnedServerId = (await getActiveServer())?.id ?? null;
+        pinnedServerId = (await getCurrentServer())?.id ?? null;
       } catch (error: unknown) {
         log.debug(`Could not pin restart target: ${errorMessage(error)}`);
       }

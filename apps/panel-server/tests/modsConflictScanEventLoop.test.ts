@@ -7,7 +7,7 @@ import path from "path";
 vi.mock("../database/init.ts", () => ({
   getTrackedMods: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 vi.mock("../utils/paths.ts", () => ({

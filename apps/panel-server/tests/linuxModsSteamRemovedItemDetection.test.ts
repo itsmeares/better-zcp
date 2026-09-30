@@ -11,7 +11,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(),
   addTrackedMod: vi.fn(),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   isModIgnored: vi.fn(async () => false),
   markModsChecked: vi.fn(),
 }));

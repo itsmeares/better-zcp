@@ -4,7 +4,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
-  getActiveServer: vi.fn(async () => ({ serverName: "servertest", zomboidDataPath: "/tmp/servertest" })),
+  getCurrentServer: vi.fn(async () => ({ serverName: "servertest", zomboidDataPath: "/tmp/servertest" })),
   getServers: vi.fn(async () => []),
 }));
 

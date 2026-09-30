@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const getSetting = vi.fn();
-vi.mock("../database/init.ts", () => ({ getActiveServer, getSetting }));
+vi.mock("../database/init.ts", () => ({ getCurrentServer, getSetting }));
 
 const getDiskFree = vi.fn();
 vi.mock("../utils/diskSpace.ts", () => ({ getDiskFree }));
@@ -18,7 +18,7 @@ const {
 } = await import("../services/diskMonitor.ts");
 
 beforeEach(() => {
-  getActiveServer.mockReset();
+  getCurrentServer.mockReset();
   getSetting.mockReset();
   getDiskFree.mockReset();
 });
@@ -118,19 +118,19 @@ describe("getDiskStatusForPath", () => {
 
 describe("resolveSaveVolumePath", () => {
   it("prefers the active server's zomboidDataPath", async () => {
-    getActiveServer.mockResolvedValue({ zomboidDataPath: "/mnt/pz-data" });
+    getCurrentServer.mockResolvedValue({ zomboidDataPath: "/mnt/pz-data" });
     expect(await resolveSaveVolumePath()).toBe("/mnt/pz-data");
     expect(getSetting).not.toHaveBeenCalled();
   });
 
   it("falls back to the legacy flat setting when no active server path is set", async () => {
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     getSetting.mockResolvedValue("/legacy/zomboid");
     expect(await resolveSaveVolumePath()).toBe("/legacy/zomboid");
   });
 
   it("returns null when neither source has a path", async () => {
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     getSetting.mockResolvedValue(null);
     expect(await resolveSaveVolumePath()).toBeNull();
   });

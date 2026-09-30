@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll } from "vite-plus/test";
+import { afterAll, vi } from "vite-plus/test";
 
 process.chdir(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."));
 
@@ -21,10 +21,6 @@ fs.writeFileSync(
   "utf8",
 );
 process.env.PANEL_PATHS_CONFIG_PATH = configPath;
-// Most unit tests exercise the legacy JSON compatibility path so they can
-// inspect redaction and recovery behavior. Production defaults to SQLite.
-process.env.PANEL_DATABASE_DRIVER = "json";
-
 async function removeTempRoot() {
   const retryableCodes = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
   const attempts = 20;
@@ -48,7 +44,10 @@ async function removeTempRoot() {
 }
 
 afterAll(async () => {
+  try {
+    const { closeDatabase } = await vi.importActual<typeof import("../database/init.ts")>("../database/init.ts");
+    closeDatabase();
+  } catch { /* Tests with partial filesystem mocks never open a database. */ }
   delete process.env.PANEL_PATHS_CONFIG_PATH;
-  delete process.env.PANEL_DATABASE_DRIVER;
   await removeTempRoot();
 });

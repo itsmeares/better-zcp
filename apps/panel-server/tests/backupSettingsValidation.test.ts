@@ -4,7 +4,7 @@ const getSetting = vi.fn(async () => null);
 const setSetting = vi.fn(async () => {});
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getSetting,
   setSetting,
   logServerEvent: vi.fn(async () => {}),

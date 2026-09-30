@@ -14,12 +14,12 @@ vi.mock("../database/init.ts", () => ({
   getSteamIdBans: vi.fn(),
   addSteamIdBan: vi.fn(),
   removeSteamIdBan: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
 }));
 
-vi.mock("../services/panelBridge.ts", () => ({
-  default: { isRunning: false, sendCommand: vi.fn() },
-}));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({
+  panelBridge: { isRunning: false, sendCommand: vi.fn() },
+}) }));
 
 const { default: router } = await import("../routes/players.ts");
 

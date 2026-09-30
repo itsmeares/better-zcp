@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const { getServer, getActiveServer } = vi.hoisted(() => ({
+const { getServer, getCurrentServer } = vi.hoisted(() => ({
   getServer: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
 }));
 
-vi.mock("../database/init.ts", () => ({ getServer, getActiveServer }));
+vi.mock("../database/init.ts", () => ({ getServer, getCurrentServer }));
 
 const { runManagedLifecycle, resolveManagedContainer, resolveDockerHostSignal, setDockerClient } =
   await import("../services/managedContainer.ts");
@@ -22,13 +22,13 @@ function createClient(overrides = {}) {
 
 beforeEach(() => {
   getServer.mockReset();
-  getActiveServer.mockReset();
+  getCurrentServer.mockReset();
   setDockerClient(null);
 });
 
 describe("resolveManagedContainer", () => {
   it("declines when Docker control is disabled", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient({ enabled: false });
 
     expect(await resolveManagedContainer({ dockerClient: client })).toEqual({
@@ -38,7 +38,7 @@ describe("resolveManagedContainer", () => {
   });
 
   it("declines when the socket is not reachable", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
 
     expect(
       await resolveManagedContainer({ dockerClient: createClient({ available: false }) }),
@@ -46,7 +46,7 @@ describe("resolveManagedContainer", () => {
   });
 
   it("declines when the server maps no container", async () => {
-    getActiveServer.mockResolvedValue({ id: "s1", dockerContainerName: null });
+    getCurrentServer.mockResolvedValue({ id: "s1", dockerContainerName: null });
 
     expect(await resolveManagedContainer({ dockerClient: createClient() })).toEqual({
       handled: false,
@@ -54,7 +54,7 @@ describe("resolveManagedContainer", () => {
   });
 
   it("falls back to the container id when no name is mapped", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerId: "abc123" });
+    getCurrentServer.mockResolvedValue({ dockerContainerId: "abc123" });
     const client = createClient();
 
     const resolved = await resolveManagedContainer({ dockerClient: client });
@@ -70,11 +70,11 @@ describe("resolveManagedContainer", () => {
     await resolveManagedContainer({ serverId: "s9", dockerClient: client });
 
     expect(getServer).toHaveBeenCalledWith("s9");
-    expect(getActiveServer).not.toHaveBeenCalled();
+    expect(getCurrentServer).not.toHaveBeenCalled();
   });
 
   it("claims the action but fails when the mapped container is unmanageable", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient({ inspectManagedContainer: vi.fn(async () => null) });
 
     const resolved = await resolveManagedContainer({ dockerClient: client });
@@ -86,7 +86,7 @@ describe("resolveManagedContainer", () => {
 
 describe("runManagedLifecycle", () => {
   it("stops through Docker instead of the process path", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient();
 
     const result = await runManagedLifecycle("stop", { dockerClient: client });
@@ -96,7 +96,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("treats an already stopped container as a successful stop", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient({
       inspectManagedContainer: vi.fn(async () => ({ State: { Running: false } })),
     });
@@ -108,7 +108,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("treats an already running container as a successful start", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient();
 
     const result = await runManagedLifecycle("start", { dockerClient: client });
@@ -119,7 +119,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("restarts a running container through Docker", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient();
 
     await runManagedLifecycle("restart", { dockerClient: client });
@@ -128,7 +128,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("surfaces a Docker failure instead of silently declining", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient({
       runManagedAction: vi.fn(async () => ({ success: false, error: "Docker action failed" })),
     });
@@ -141,7 +141,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("uses the client wired through setDockerClient", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
     const client = createClient();
     setDockerClient(client);
 
@@ -151,7 +151,7 @@ describe("runManagedLifecycle", () => {
   });
 
   it("declines when no client has been wired at all", async () => {
-    getActiveServer.mockResolvedValue({ dockerContainerName: "pz" });
+    getCurrentServer.mockResolvedValue({ dockerContainerName: "pz" });
 
     expect(await runManagedLifecycle("stop")).toEqual({ handled: false });
   });

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
-import { getActiveServer } from "../database/init.ts";
+import { getCurrentServer } from "../database/init.ts";
 import { hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
 import { resolveLaunchMode } from "./serverManager.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";
@@ -57,7 +57,7 @@ export async function ensureRconConfigured() {
   let serverConfigPathKind: "install" | "data" = "install";
   let serverConfigPath: string | null = null;
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer) {
       log.debug("ensureRconConfigured: No active server");
       return false;

@@ -7,9 +7,9 @@ import { maskSecretValue } from "../utils/sanitize.ts";
 
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
@@ -79,7 +79,7 @@ beforeEach(() => {
   configDir = fs.mkdtempSync(path.join(os.tmpdir(), "ini-mask-secrets-"));
   iniPath = path.join(configDir, `${SERVER_NAME}.ini`);
   writeIni();
-  getActiveServer.mockReset().mockResolvedValue({
+  getCurrentServer.mockReset().mockResolvedValue({
     serverConfigPath: configDir,
     serverName: SERVER_NAME,
   });

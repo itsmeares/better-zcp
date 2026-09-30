@@ -1,3 +1,4 @@
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import { Router, type Request } from "../http/apiRouter.ts";
 import { createLogger } from '../utils/logger.ts';
@@ -14,11 +15,10 @@ import {
   getSteamIdBans,
   addSteamIdBan,
   removeSteamIdBan,
-  getActiveServer,
+  getCurrentServer,
 } from '../database/init.ts';
 import { PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
-import bridge from '../services/panelBridge.ts';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
 
@@ -112,8 +112,8 @@ async function setPlayerMode(
   username: string,
   enabled: boolean,
 ) {
-  if (bridge.isRunning) {
-    const result = await bridge.sendCommand(bridgeAction, { username, enabled: enabled === true });
+  if (getPanelRuntime().panelBridge.isRunning) {
+    const result = await getPanelRuntime().panelBridge.sendCommand(bridgeAction, { username, enabled: enabled === true });
     return { ...result, via: 'bridge' };
   }
   const result = await req.app.get('rconService')[rconMethod](username, enabled);
@@ -261,7 +261,7 @@ router.post('/access-level', async (req, res) => {
       return res.status(400).json({ error: 'Invalid username format', code: ErrorCode.PLAYERS_INVALID_USERNAME });
     }
 
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     let validLevels = ACCESS_LEVELS;
     if (activeServer) {
       const roleResult = await listServerRoleNames(activeServer.zomboidDataPath, activeServer.serverName);
@@ -368,10 +368,10 @@ router.post('/teleport', async (req, res) => {
         if (!isValidUsername(player1)) {
           return res.status(400).json({ error: 'Invalid player1 username format', code: ErrorCode.PLAYERS_TELEPORT_INVALID_PLAYER1 });
         }
-        if (!bridge.isRunning) {
+        if (!getPanelRuntime().panelBridge.isRunning) {
           return res.status(503).json({ error: 'PanelBridge is not running — cannot teleport a player to coordinates without it', code: ErrorCode.PLAYERS_TELEPORT_BRIDGE_OFFLINE });
         }
-        result = await bridge.teleportPlayer(player1, Number(x), Number(y), Number(z));
+        result = await getPanelRuntime().panelBridge.teleportPlayer(player1, Number(x), Number(y), Number(z));
       } else {
         result = await rconService.teleportTo(x, y, z);
       }
@@ -559,7 +559,7 @@ router.get('/perks', (req, res) => {
 
 router.get('/access-levels', async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer) {
       return res.json({ levels: ACCESS_LEVELS, available: false });
     }
@@ -749,7 +749,7 @@ router.post('/whitelist/steamid/remove', async (req, res) => {
 
 router.get('/whitelist', async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer) {
       return res.status(404).json({ error: 'No active server selected', code: ErrorCode.PLAYERS_NO_ACTIVE_SERVER });
     }

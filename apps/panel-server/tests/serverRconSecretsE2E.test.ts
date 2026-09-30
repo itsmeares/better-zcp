@@ -1,84 +1,17 @@
-import { afterAll, describe, expect, it } from "vite-plus/test";
-import fs from "fs";
-import path from "path";
-
-const { getDb, commitNow, deleteServer } = await import(
-  "../database/init.ts"
-);
-const { getDataPaths } = await import("../utils/paths.ts");
-
-const { dataDir, dbPath } = getDataPaths();
-
-function readRawDbJson() {
-  return fs.readFileSync(dbPath, "utf8");
-}
-
-function readServerSecretFile(serverId) {
-  return fs.readFileSync(
-    path.join(dataDir, "server-secrets", `${serverId}.secret`),
-    "utf8",
-  );
-}
-
-describe("rconPassword end-to-end through the real database/init.ts write/read pipeline", () => {
-  const serverId = `e2e-test-server-${Date.now()}`;
-
-  afterAll(async () => {
-    await deleteServer(serverId);
-  });
-
-  it("a real password survives create, an unrelated-field update, and never appears on disk", async () => {
-    const db = await getDb();
-
-    db.data.servers.push({
-      id: serverId,
-      name: "E2E RCON Test Server",
-      rconHost: "127.0.0.1",
-      rconPort: 27015,
-      rconPassword: "correct-horse-battery-staple",
-      isActive: false,
-    });
-    await commitNow();
-
-    expect(readRawDbJson()).not.toContain("correct-horse-battery-staple");
-    expect(readServerSecretFile(serverId)).toBe(
-      "correct-horse-battery-staple",
-    );
-    const server = db.data.servers.find((s) => s.id === serverId);
-    expect(server.rconPassword).toBe("correct-horse-battery-staple");
-
-    server.name = "E2E RCON Test Server (renamed)";
-    await commitNow();
-
-    expect(server.rconPassword).toBe("correct-horse-battery-staple");
-    expect(readServerSecretFile(serverId)).toBe(
-      "correct-horse-battery-staple",
-    );
-    expect(readRawDbJson()).not.toContain("correct-horse-battery-staple");
-    expect(readRawDbJson()).toContain("E2E RCON Test Server (renamed)");
-
-    server.rconPassword = "a-brand-new-real-password";
-    await commitNow();
-
-    expect(readServerSecretFile(serverId)).toBe("a-brand-new-real-password");
-    expect(readRawDbJson()).not.toContain("a-brand-new-real-password");
-    expect(readRawDbJson()).not.toContain("correct-horse-battery-staple");
-  });
-
-  it("deleting the server removes its password file — nothing orphaned behind it", async () => {
-    const db = await getDb();
-    const tempId = `e2e-delete-test-${Date.now()}`;
-    db.data.servers.push({
-      id: tempId,
-      name: "To be deleted",
-      rconPassword: "will-be-deleted",
-    });
-    await commitNow();
-    const filePath = path.join(dataDir, "server-secrets", `${tempId}.secret`);
-    expect(fs.existsSync(filePath)).toBe(true);
-
-    await deleteServer(tempId);
-
-    expect(fs.existsSync(filePath)).toBe(false);
-  });
+import { expect, it } from "vite-plus/test";
+import fs from "node:fs";
+import path from "node:path";
+import { createServer, updateServer, getServer, deleteServer, closeDatabase, getDatabaseFilePath } from "../database/init.ts";
+it("keeps credentials out of SQLite through updates and restart, and removes the secret when a profile is deleted", async () => {
+  const server=await createServer({serverName:'SecretTest',rconPassword:'first-password'});
+  await updateServer(server.id,{name:'Renamed'});
+  closeDatabase();
+  expect((await getServer(server.id)).rconPassword).toBe('first-password');
+  await updateServer(server.id,{rconPassword:'changed-password'});
+  const raw=fs.readFileSync(getDatabaseFilePath());
+  for (const password of ['first-password','changed-password']) expect(raw.includes(Buffer.from(password))).toBe(false);
+  const secret=path.join(path.dirname(getDatabaseFilePath()),'server-secrets',server.id+'.secret');
+  expect(fs.readFileSync(secret,'utf8')).toBe('changed-password');
+  await deleteServer(server.id);
+  expect(fs.existsSync(secret)).toBe(false);
 });

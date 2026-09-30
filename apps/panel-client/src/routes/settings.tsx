@@ -5,5 +5,6 @@ import { FeatureRoute } from '../route-components'
 const Settings = lazy(() => import('../pages/Settings'))
 
 export const Route = createFileRoute('/settings')({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({ tab: typeof search.tab === 'string' ? search.tab : undefined }),
   component: () => <FeatureRoute featureName="nav.items.panelSettings" Component={Settings} />,
 })

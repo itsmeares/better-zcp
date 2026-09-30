@@ -1,5 +1,5 @@
 import { Router, type Request } from "../http/apiRouter.ts";
-import { getCircuitBreakerStatus } from "../database/init.ts";
+import { getDatabaseHealth } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { buildRuntimeInfo } from "../utils/runtimeInfo.ts";
@@ -35,16 +35,8 @@ router.get("/runtime", (_req, res) => {
 router.get("/storage-health", async (req, res) => {
   try {
     const diskSpace = await buildDiskSpace(req);
-    const circuitBreaker = getCircuitBreakerStatus();
-    res.json({
-      diskSpace,
-      circuitBreaker: {
-        ...circuitBreaker,
-        lastError: circuitBreaker.lastError
-          ? sanitizeError(circuitBreaker.lastError)
-          : null,
-      },
-    });
+    const database = getDatabaseHealth();
+    res.json({ diskSpace, database: { ...database, error: database.error ? sanitizeError(database.error) : null } });
   } catch (error: unknown) {
     const message = errorMessage(error);
     log.error(`Failed to get storage health: ${message}`);

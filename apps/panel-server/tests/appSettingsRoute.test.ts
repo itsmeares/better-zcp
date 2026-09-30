@@ -7,6 +7,7 @@ const setSetting = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getAllSettings,
   setSetting,
+  setSettings: async entries => { for (const [key, value] of entries) await setSetting(key, value); },
   getRoleByName: mockGetRoleByName,
 }));
 

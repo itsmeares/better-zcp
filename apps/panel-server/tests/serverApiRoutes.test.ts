@@ -3,13 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const getSetting = vi.fn();
 const setSetting = vi.fn();
 const updateServerProfile = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args: unknown[]) => getActiveServer(...args),
+  getCurrentServer: (...args: unknown[]) => getCurrentServer(...args),
   getSetting: (...args: unknown[]) => getSetting(...args),
   setSetting: (...args: unknown[]) => setSetting(...args),
 }));
@@ -42,7 +42,7 @@ async function execute(routePath: string, method: string, data: Record<string, u
 let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "better-zcp-node-routes-"));
-  getActiveServer.mockReset().mockResolvedValue(null);
+  getCurrentServer.mockReset().mockResolvedValue(null);
   getSetting.mockReset().mockResolvedValue(null);
   setSetting.mockReset().mockResolvedValue(undefined);
   updateServerProfile.mockReset().mockResolvedValue({});
@@ -65,7 +65,7 @@ describe("server API routes", () => {
   });
 
   it("filters and clears console logs, streams additions, and counts errors", async () => {
-    getActiveServer.mockResolvedValue({ zomboidDataPath: root });
+    getCurrentServer.mockResolvedValue({ zomboidDataPath: root });
     const logPath = path.join(root, "server-console.txt");
     const initialLog = [
       "SERVER STARTED",
@@ -98,18 +98,18 @@ describe("server API routes", () => {
     fs.mkdirSync(secondPath);
     fs.writeFileSync(path.join(root, "server-console.txt"), "ERROR[server] first\n");
     fs.writeFileSync(path.join(secondPath, "server-console.txt"), "ordinary line\n");
-    getActiveServer.mockResolvedValue({ zomboidDataPath: root });
+    getCurrentServer.mockResolvedValue({ zomboidDataPath: root });
     getSetting.mockResolvedValue(root);
 
     expect((await execute("/console-log/error-count", "get")).body)
       .toMatchObject({ count: 1 });
-    getActiveServer.mockResolvedValue({ zomboidDataPath: secondPath });
+    getCurrentServer.mockResolvedValue({ zomboidDataPath: secondPath });
     expect((await execute("/console-log/error-count", "get")).body)
       .toMatchObject({ count: 0 });
     expect((await execute("/console-log", "get", { filter: "all" })).body.path)
       .toBe(path.join(secondPath, "server-console.txt"));
 
-    getActiveServer.mockResolvedValue({ name: "unconfigured" });
+    getCurrentServer.mockResolvedValue({ name: "unconfigured" });
     expect((await execute("/console-log", "get")).statusCode).toBe(400);
     expect((await execute("/console-log/clear", "post")).statusCode).toBe(400);
     expect(fs.readFileSync(path.join(root, "server-console.txt"), "utf8"))
@@ -121,7 +121,7 @@ describe("server API routes", () => {
     fs.mkdirSync(configPath);
     const iniPath = path.join(configPath, "TestServer.ini");
     fs.writeFileSync(iniPath, "DefaultPort=16261\nRCONPassword=old\n");
-    getActiveServer.mockResolvedValue({ id: "server-1", serverConfigPath: configPath, serverName: "TestServer" });
+    getCurrentServer.mockResolvedValue({ id: "server-1", serverConfigPath: configPath, serverName: "TestServer" });
     const result = await execute("/configure-rcon", "post", {
       rconPassword: "new",
       rconPort: "27016",
@@ -142,7 +142,7 @@ describe("server API routes", () => {
     fs.mkdirSync(configPath);
     const iniPath = path.join(configPath, "TestServer.ini");
     fs.writeFileSync(iniPath, "RCONPassword=old\n");
-    getActiveServer.mockResolvedValue({ name: "new", serverName: "NewServer" });
+    getCurrentServer.mockResolvedValue({ name: "new", serverName: "NewServer" });
     getSetting.mockImplementation(async (key: string) =>
       key === "serverConfigPath" ? configPath : "TestServer",
     );

@@ -6,9 +6,9 @@ import path from "path";
 
 const isPosix = process.platform !== "win32";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -25,7 +25,7 @@ vi.mock("../utils/logger.ts", () => ({
 const { ensureRconConfigured } = await import("../routes/server.ts");
 
 afterEach(() => {
-  getActiveServer.mockReset();
+  getCurrentServer.mockReset();
   logSpy.error.mockReset();
   logSpy.warn.mockReset();
   logSpy.info.mockReset();
@@ -51,7 +51,7 @@ afterEach(() => {
         reallyBlocked = true;
       }
 
-      getActiveServer.mockResolvedValue({
+      getCurrentServer.mockResolvedValue({
         serverName: "TestServer",
         serverConfigPath: unwritableDir,
         rconPassword: "hunter2",
@@ -83,7 +83,7 @@ afterEach(() => {
         path.join(os.tmpdir(), "pz-eacces-guidance-ok-"),
       );
 
-      getActiveServer.mockResolvedValue({
+      getCurrentServer.mockResolvedValue({
         serverName: "TestServer",
         serverConfigPath: writableDir,
         rconPassword: "hunter2",

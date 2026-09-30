@@ -9,7 +9,7 @@ const { streamUploadToFileMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getRoleByName: vi.fn(async () => null),
 }));
 vi.mock("../utils/uploadStream.ts", async (importOriginal) => ({
@@ -17,7 +17,7 @@ vi.mock("../utils/uploadStream.ts", async (importOriginal) => ({
   streamUploadToFile: streamUploadToFileMock,
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/backup.ts");
 const uploadStream = await vi.importActual<typeof import("../utils/uploadStream.ts")>(
   "../utils/uploadStream.ts",
@@ -71,7 +71,7 @@ describe("POST /upload streamed route", () => {
     root = mkdtempSync(join(tmpdir(), "better-zcp-upload-route-"));
     const backupsPath = join(root, "backups");
     const body = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]);
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockResolvedValue({});
     const req = request([body.subarray(0, 1), body.subarray(1)]);
     req.app = app(backupsPath);
     const res = response();
@@ -87,7 +87,7 @@ describe("POST /upload streamed route", () => {
   it("maps a bad streamed signature to the existing 400 API error", async () => {
     root = mkdtempSync(join(tmpdir(), "better-zcp-upload-route-"));
     const backupsPath = join(root, "backups");
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockResolvedValue({});
     const req = request([Buffer.from("not a zip")]);
     req.app = app(backupsPath);
     const res = response();
@@ -103,7 +103,7 @@ describe("POST /upload streamed route", () => {
     const backupsPath = join(root, "backups");
     const targetPath = join(backupsPath, "uploaded-world.zip");
     const body = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1]);
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockResolvedValue({});
     streamUploadToFileMock.mockImplementationOnce(
       async (_req, tmpPath: string) => {
         writeFileSync(targetPath, "concurrent winner");
@@ -125,7 +125,7 @@ describe("POST /upload streamed route", () => {
   it("maps the stream size error to 413", async () => {
     root = mkdtempSync(join(tmpdir(), "better-zcp-upload-route-"));
     const backupsPath = join(root, "backups");
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockResolvedValue({});
     streamUploadToFileMock.mockRejectedValueOnce(
       Object.assign(new Error("Upload exceeds the configured size limit."), {
         code: uploadStream.UPLOAD_TOO_LARGE_CODE,

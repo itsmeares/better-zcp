@@ -5,11 +5,11 @@ import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));
 
-const { getActiveServer, getSetting } = await import("../database/init.ts");
+const { getCurrentServer, getSetting } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -67,7 +67,7 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
       iniPath,
       'ServerWelcomeMessage=Check our Mods=folder for the full list!\nMods=OldMod\nWorkshopItems=\n',
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
@@ -95,7 +95,7 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
       iniPath,
       "ServerWelcomeMessage=Check our Mods=folder for the full list!\nWorkshopItems=\n",
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
@@ -118,7 +118,7 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
     fs.mkdirSync(oldConfigPath);
     iniPath = path.join(oldConfigPath, "OldServer.ini");
     fs.writeFileSync(iniPath, "Mods=OldMod\n");
-    getActiveServer.mockReset().mockResolvedValue({ id: "new", serverName: "NewServer" });
+    getCurrentServer.mockReset().mockResolvedValue({ id: "new", serverName: "NewServer" });
     getSetting.mockReset().mockImplementation(async (key) =>
       key === "serverConfigPath" ? oldConfigPath : "OldServer",
     );
@@ -140,7 +140,7 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
       fs.writeFileSync(path.join(serverConfigPath, `${name}.ini`), "Mods=Existing\n");
       return { id: name, serverConfigPath, serverName: name };
     });
-    getActiveServer.mockReset()
+    getCurrentServer.mockReset()
       .mockResolvedValueOnce(profiles[0])
       .mockResolvedValue(profiles[1]);
 
@@ -149,7 +149,7 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
     });
 
     expect(res.getStatusCode()).toBe(200);
-    expect(getActiveServer).toHaveBeenCalledOnce();
+    expect(getCurrentServer).toHaveBeenCalledOnce();
     expect(fs.readFileSync(path.join(profiles[0].serverConfigPath, "First.ini"), "utf8"))
       .toContain("Mods=Existing;NewMod");
     expect(fs.readFileSync(path.join(profiles[1].serverConfigPath, "Second.ini"), "utf8"))

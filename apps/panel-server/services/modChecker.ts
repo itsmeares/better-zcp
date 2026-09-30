@@ -7,7 +7,7 @@ import {
   getSetting,
   setSetting,
   addTrackedMod,
-  getActiveServer,
+  getCurrentServer,
   isModIgnored,
   markModsChecked,
 } from "../database/init.ts";
@@ -15,7 +15,7 @@ import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 import { sanitizeError } from "../utils/sanitize.ts";
-import panelBridge from "./panelBridge.ts";
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -316,7 +316,7 @@ export class ModChecker extends EventEmitter {
         return manualPath;
       }
 
-      const activeServer = await getActiveServer();
+      const activeServer = await getCurrentServer();
       let installPath = activeServer?.installPath;
 
       if (!installPath) {
@@ -721,7 +721,7 @@ export class ModChecker extends EventEmitter {
 
     let selectedServer;
     try {
-      selectedServer = await getActiveServer();
+      selectedServer = await getCurrentServer();
     } catch {
       return { success: false, retry: true, reason: "server_unknown" };
     }
@@ -816,7 +816,7 @@ export class ModChecker extends EventEmitter {
         if (this.pendingServerId != null) {
           let activeId;
           try {
-            activeId = (await getActiveServer())?.id;
+            activeId = (await getCurrentServer())?.id;
           } catch (error: unknown) {
             log.warn(`Could not verify Workshop restart target: ${errorMessage(error)}`);
             return;
@@ -894,7 +894,7 @@ export class ModChecker extends EventEmitter {
 
     if (this.pendingServerId != null) {
       let activeId;
-      try { activeId = (await getActiveServer())?.id; } catch { activeId = null; }
+      try { activeId = (await getCurrentServer())?.id; } catch { activeId = null; }
       if (String(activeId ?? "") !== String(this.pendingServerId)) {
         this.pendingRestart = false;
         for (const mod of updatedMods) this.processedUpdates.delete(mod.workshopId);
@@ -980,8 +980,8 @@ export class ModChecker extends EventEmitter {
       }
 
       try {
-        if (panelBridge?.isRunning && panelBridge?.isModConnected?.()) {
-          const sent = await panelBridge.sendCommand("sendToServerChat", {
+        if (getPanelRuntime().panelBridge?.isRunning && getPanelRuntime().panelBridge?.isModConnected?.()) {
+          const sent = await getPanelRuntime().panelBridge.sendCommand("sendToServerChat", {
             message: warningMessage,
             alert: true,
           });

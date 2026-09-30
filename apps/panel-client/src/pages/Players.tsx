@@ -837,7 +837,7 @@ export default function Players() {
 
   useEffect(() => {
     if (!socket) return
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       fetchPlayers()
       fetchNotesAndStats()
       fetchBannedSteamIds()
@@ -845,9 +845,9 @@ export default function Players() {
       fetchAccessLevels()
       fetchRosterVitals()
     }
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [
     socket,

@@ -5,8 +5,7 @@ import {
   createServer,
   deleteServer,
   getServer,
-  getActiveServer,
-  setActiveServer,
+  getCurrentServer,
   setSetting,
   updateServer,
 } from "../database/init.ts";
@@ -79,6 +78,7 @@ export type ServerProfileRuntime = {
   io?: JsonRecord | null;
   refreshWorkshopChecker?: (modChecker: JsonRecord) => Promise<unknown>;
   logTailer?: { reloadConfig?: () => Promise<unknown> } | null;
+  stop?: () => Promise<unknown>;
   autoInstallBridgeIfNeeded?: (server: JsonRecord) => void;
 };
 
@@ -208,48 +208,6 @@ async function refreshWorkshopCheckerIfAvailable(
   } catch (error: unknown) {
     log.warn(`Workshop checker refresh failed: ${errorMessage(error)}`);
   }
-}
-
-async function reloadServicesForActiveServer(
-  runtime: ServerProfileRuntime,
-  server: JsonRecord,
-): Promise<void> {
-  let rconReloaded = false;
-  if (runtime.rconService?.reloadConfig) {
-    try {
-      await runtime.rconService.reloadConfig();
-      rconReloaded = true;
-    } catch (error: unknown) {
-      log.warn(`Failed to reload RCON for new server: ${errorMessage(error)}`);
-    }
-  }
-
-  if (runtime.serverManager?.reloadConfig) {
-    await runtime.serverManager.reloadConfig();
-    log.info(`ServerManager reloaded config for server: ${server.name}`);
-  }
-
-  if (rconReloaded && server.rconPassword) {
-    try {
-      if (await runtime.rconService!.connect()) {
-        log.info(`RCON reconnected for server: ${server.name}`);
-      }
-    } catch (error: unknown) {
-      log.warn(`Failed to connect RCON for new server: ${errorMessage(error)}`);
-    }
-  }
-
-  await refreshWorkshopCheckerIfAvailable(runtime);
-
-  if (runtime.logTailer?.reloadConfig) {
-    try {
-      await runtime.logTailer.reloadConfig();
-    } catch (error: unknown) {
-      log.warn(`LogTailer refresh failed: ${errorMessage(error)}`);
-    }
-  }
-
-  runtime.autoInstallBridgeIfNeeded?.(server);
 }
 
 export async function createServerProfile(
@@ -588,7 +546,7 @@ export async function updateServerProfile(
     if (!server) fail("Server not found", 404);
 
     const reloadWarnings: string[] = [];
-    if (server.isActive) {
+    {
       const rconFieldsChanged = ["rconHost", "rconPort", "rconPassword"].some(
         (key) => Object.prototype.hasOwnProperty.call(updates, key),
       );
@@ -668,6 +626,7 @@ export async function updateServerProfile(
     }
 
     log.info(`Updated server: ${server.name} (ID: ${server.id})`);
+    runtime.io?.emit?.("servers:changed", {updated: server.id});
     return {
       server,
       message: "Server updated successfully",
@@ -692,66 +651,12 @@ export async function deleteServerProfile(
         fail(errorMessage(error), 409);
       }
     }
-    const deletingActiveServer = Boolean(targetServer?.isActive);
     if (!(await deleteServer(serverId))) fail("Server not found", 404);
-
-    if (deletingActiveServer) {
-      const newActiveServer = await getActiveServer();
-      if (newActiveServer) {
-        try {
-          await reloadServicesForActiveServer(runtime, newActiveServer);
-        } catch (error: unknown) {
-          log.warn(
-            `Failed to reload services after deleting the active server: ${errorMessage(error)}`,
-          );
-        }
-        runtime.io?.emit?.("activeServerChanged", {
-          server: sanitizeServerResponse(newActiveServer),
-        });
-      } else {
-        runtime.io?.emit?.("activeServerChanged", { deleted: serverId });
-      }
-    } else {
-      runtime.io?.emit?.("activeServerChanged", { deleted: serverId });
-    }
+    await runtime.stop?.();
+    runtime.io?.emit?.("servers:changed", { deleted: serverId });
 
     log.info(`Deleted server ID: ${serverId}`);
     return { success: true, message: "Server deleted successfully" };
-  });
-}
-
-export async function activateServerProfile(
-  id: unknown,
-  runtime: ServerProfileRuntime = {},
-) {
-  return withLifecycleLock(id, async () => {
-    const serverId = parseServerId(id);
-    if (serverId === null) fail("Invalid server ID");
-
-    const server = await setActiveServer(serverId);
-    if (!server) fail("Server not found", 404);
-
-    const reloadWarnings: string[] = [];
-    try {
-      await reloadServicesForActiveServer(runtime, server);
-    } catch (error: unknown) {
-      log.warn(
-        `Failed to reload services after activating server: ${errorMessage(error)}`,
-      );
-      reloadWarnings.push(
-        "Server activated, but live services could not be fully reloaded; restart the panel or reconnect RCON before relying on the new settings",
-      );
-    }
-
-    runtime.io?.emit?.("activeServerChanged", {
-      server: sanitizeServerResponse(server),
-    });
-    log.info(`Activated server: ${server.name} (ID: ${server.id})`);
-    return {
-      server,
-      message: `Now managing: ${server.name}`,
-      ...(reloadWarnings.length > 0 ? { warnings: reloadWarnings } : {}),
-    };
   });
 }
 
@@ -885,7 +790,7 @@ export async function activateLifecycleProvider(
     const updated = await updateServer(serverId, {
       lifecycleProvider: providerName,
     });
-    if (updated?.isActive && runtime.serverManager?.reloadConfig) {
+    if (updated && runtime.serverManager?.reloadConfig) {
       await runtime.serverManager.reloadConfig();
     }
     return {

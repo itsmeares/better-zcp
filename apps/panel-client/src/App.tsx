@@ -1,264 +1,275 @@
-import { Outlet, useLocation } from '@tanstack/react-router'
-import { useEffect, useState, useCallback, Suspense } from 'react'
-import type { Socket } from 'socket.io-client'
-import Layout from './components/Layout'
+import { serversApi } from "./lib/api";
+import { getSelectedServerId, selectServer } from "./lib/serverSelection";
+import { Outlet, useLocation, useSearch } from "@tanstack/react-router";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import type { Socket } from "socket.io-client";
+import Layout from "./components/Layout";
 import {
   SocketContext,
   ConnectionStatus,
   ConnectionStatusContext,
-} from './contexts/SocketContext'
-import { ConfirmProvider } from './contexts/ConfirmContext'
-import { useAuth } from './contexts/AuthContext'
-import { isDemoMode } from './lib/demo'
-import { useToast } from './components/ui/use-toast'
-import { PageSkeleton } from './components/PageSkeleton'
-import { ScrollToTop } from './components/ScrollToTop'
-import { getUserErrorMessage } from './lib/errorMessage'
-import { createSocketAuthProvider } from './lib/socketAuth'
-import { registerReconnectRecovery } from './lib/socketRecovery'
+} from "./contexts/SocketContext";
+import { ConfirmProvider } from "./contexts/ConfirmContext";
+import { useAuth } from "./contexts/AuthContext";
+import { isDemoMode } from "./lib/demo";
+import { useToast } from "./components/ui/use-toast";
+import { PageSkeleton } from "./components/PageSkeleton";
+import { ScrollToTop } from "./components/ScrollToTop";
+import { getUserErrorMessage } from "./lib/errorMessage";
+import { createSocketAuthProvider } from "./lib/socketAuth";
+import { registerReconnectRecovery } from "./lib/socketRecovery";
 
 type RouteLoaderMeta = {
-  title: string
-  description: string
-  eyebrow: string
-  variant: 'dashboard' | 'list' | 'form' | 'console' | 'map' | 'default'
-  metrics: string[]
-}
+  title: string;
+  description: string;
+  eyebrow: string;
+  variant: "dashboard" | "list" | "form" | "console" | "map" | "default";
+  metrics: string[];
+};
 
 const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
-  '/': {
-    title: 'Dashboard',
+  "/": {
+    title: "Dashboard",
     description:
-      'Loading live server state, players, actions, and maintenance telemetry.',
-    eyebrow: '// LIVE · OVERVIEW',
-    variant: 'dashboard',
-    metrics: ['status', 'players', 'rcon'],
+      "Loading live server state, players, actions, and maintenance telemetry.",
+    eyebrow: "// LIVE · OVERVIEW",
+    variant: "dashboard",
+    metrics: ["status", "players", "rcon"],
   },
-  '/players': {
-    title: 'Online Players',
+  "/players": {
+    title: "Online Players",
     description:
-      'Preparing player rows, admin actions, notes, and session details.',
-    eyebrow: '// LIVE · PLAYERS',
-    variant: 'list',
-    metrics: ['roster', 'actions', 'notes'],
+      "Preparing player rows, admin actions, notes, and session details.",
+    eyebrow: "// LIVE · PLAYERS",
+    variant: "list",
+    metrics: ["roster", "actions", "notes"],
   },
-  '/console': {
-    title: 'Server Console',
-    description: 'Opening command history, RCON state, and live output stream.',
-    eyebrow: '// LIVE · CONSOLE',
-    variant: 'console',
-    metrics: ['rcon', 'history', 'stream'],
+  "/console": {
+    title: "Server Console",
+    description: "Opening command history, RCON state, and live output stream.",
+    eyebrow: "// LIVE · CONSOLE",
+    variant: "console",
+    metrics: ["rcon", "history", "stream"],
   },
-  '/world-map': {
-    title: 'World Map',
-    description: 'Loading map tiles, marker tools, and player/world overlays.',
-    eyebrow: '// WORLD · MAP',
-    variant: 'map',
-    metrics: ['tiles', 'markers', 'layers'],
+  "/world-map": {
+    title: "World Map",
+    description: "Loading map tiles, marker tools, and player/world overlays.",
+    eyebrow: "// WORLD · MAP",
+    variant: "map",
+    metrics: ["tiles", "markers", "layers"],
   },
-  '/server-config': {
-    title: 'Server Configuration',
+  "/server-config": {
+    title: "Server Configuration",
     description:
-      'Loading INI sections, validation, and server-safe edit controls.',
-    eyebrow: '// CONFIG · INI',
-    variant: 'form',
-    metrics: ['ini', 'validate', 'save'],
+      "Loading INI sections, validation, and server-safe edit controls.",
+    eyebrow: "// CONFIG · INI",
+    variant: "form",
+    metrics: ["ini", "validate", "save"],
   },
-  '/mods': {
-    title: 'Mod Manager',
+  "/mods": {
+    title: "Mod Manager",
     description:
-      'Loading Workshop status, active mod IDs, conflicts, and update state.',
-    eyebrow: '// CONFIG · WORKSHOP',
-    variant: 'list',
-    metrics: ['workshop', 'mods', 'conflicts'],
+      "Loading Workshop status, active mod IDs, conflicts, and update state.",
+    eyebrow: "// CONFIG · WORKSHOP",
+    variant: "list",
+    metrics: ["workshop", "mods", "conflicts"],
   },
-  '/scheduler': {
-    title: 'Scheduled Tasks',
-    description: 'Preparing task rules, run history, and automation controls.',
-    eyebrow: '// MAINTAIN · SCHEDULE',
-    variant: 'list',
-    metrics: ['tasks', 'history', 'cron'],
+  "/scheduler": {
+    title: "Scheduled Tasks",
+    description: "Preparing task rules, run history, and automation controls.",
+    eyebrow: "// MAINTAIN · SCHEDULE",
+    variant: "list",
+    metrics: ["tasks", "history", "cron"],
   },
-  '/backups': {
-    title: 'World Backups',
+  "/backups": {
+    title: "World Backups",
     description:
-      'Loading backup inventory, restore controls, and storage status.',
-    eyebrow: '// MAINTAIN · BACKUPS',
-    variant: 'list',
-    metrics: ['files', 'storage', 'restore'],
+      "Loading backup inventory, restore controls, and storage status.",
+    eyebrow: "// MAINTAIN · BACKUPS",
+    variant: "list",
+    metrics: ["files", "storage", "restore"],
   },
-  '/servers': {
-    title: 'My Servers',
+  "/servers": {
+    title: "My Servers",
     description:
-      'Loading server profiles, active target, and connection details.',
-    eyebrow: '// SERVERS · PROFILES',
-    variant: 'list',
-    metrics: ['profiles', 'active', 'paths'],
+      "Loading server profiles, active target, and connection details.",
+    eyebrow: "// SERVERS · PROFILES",
+    variant: "list",
+    metrics: ["profiles", "active", "paths"],
   },
-  '/server-setup': {
-    title: 'Server Setup',
-    description: 'Preparing install choices, paths, ports, and launch checks.',
-    eyebrow: '// SERVERS · SETUP',
-    variant: 'form',
-    metrics: ['install', 'ports', 'start'],
+  "/server-setup": {
+    title: "Server Setup",
+    description: "Preparing install choices, paths, ports, and launch checks.",
+    eyebrow: "// SERVERS · SETUP",
+    variant: "form",
+    metrics: ["install", "ports", "start"],
   },
-  '/settings': {
-    title: 'Panel Settings',
+  "/settings": {
+    title: "Panel Settings",
     description:
-      'Loading access, paths, network, and panel preference controls.',
-    eyebrow: '// SYSTEM · SETTINGS',
-    variant: 'form',
-    metrics: ['auth', 'paths', 'network'],
+      "Loading access, paths, network, and panel preference controls.",
+    eyebrow: "// SYSTEM · SETTINGS",
+    variant: "form",
+    metrics: ["auth", "paths", "network"],
   },
-  '/debug': {
-    title: 'Debug Logs',
+  "/debug": {
+    title: "Debug Logs",
     description:
-      'Preparing diagnostics, probes, logs, and support bundle tools.',
-    eyebrow: '// SYSTEM · DIAGNOSTICS',
-    variant: 'console',
-    metrics: ['logs', 'probes', 'bundle'],
+      "Preparing diagnostics, probes, logs, and support bundle tools.",
+    eyebrow: "// SYSTEM · DIAGNOSTICS",
+    variant: "console",
+    metrics: ["logs", "probes", "bundle"],
   },
-}
+};
 
 function PageLoader() {
-  const { pathname } = useLocation()
-  const meta = ROUTE_LOADERS[pathname] || ROUTE_LOADERS['/']
-  return <PageSkeleton {...meta} />
+  const { pathname } = useLocation();
+  const meta = ROUTE_LOADERS[pathname] || ROUTE_LOADERS["/"];
+  return <PageSkeleton {...meta} />;
 }
 
-function AppContent() {
-  const demoMode = isDemoMode()
-  const [socket, setSocket] = useState<Socket | null>(null)
+function AppContent({
+  onServersChanged,
+}: {
+  onServersChanged: () => Promise<void>;
+}) {
+  const serverId = getSelectedServerId();
+  const demoMode = isDemoMode();
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     connected: false,
     reconnecting: false,
     reconnectAttempt: 0,
     error: null,
-  })
-  const { toast } = useToast()
-  const { getToken } = useAuth()
+  });
+  const { toast } = useToast();
+  const { getToken } = useAuth();
 
   const handleReconnectSuccess = useCallback(() => {
     toast({
-      title: 'Reconnected',
-      description: 'Connection to server restored',
-      variant: 'success' as const,
-    })
-  }, [toast])
+      title: "Reconnected",
+      description: "Connection to server restored",
+      variant: "success" as const,
+    });
+  }, [toast]);
 
   useEffect(() => {
-    if (demoMode) return
+    if (demoMode) return;
 
-    let cancelled = false
-    let createdSocket: Socket | null = null
-    let disposeRecovery: (() => void) | null = null
+    let cancelled = false;
+    let createdSocket: Socket | null = null;
+    let disposeRecovery: (() => void) | null = null;
 
     const setupSocket = async () => {
-      const { io } = await import('socket.io-client')
-      if (cancelled) return
+      const { io } = await import("socket.io-client");
+      if (cancelled) return;
 
       const newSocket = io(window.location.origin, {
-        transports: ['websocket', 'polling'],
+        transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         autoConnect: false,
-      })
-      createdSocket = newSocket
-      newSocket.auth = createSocketAuthProvider(getToken)
-      newSocket.connect()
+      });
+      createdSocket = newSocket;
+      newSocket.auth = createSocketAuthProvider(getToken, serverId);
+      newSocket.connect();
 
-      newSocket.on('connect', () => {
-        disposeRecovery?.()
-        disposeRecovery = null
+      newSocket.on("servers:changed", onServersChanged);
+      newSocket.on("connect", () => {
+        void onServersChanged();
+        disposeRecovery?.();
+        disposeRecovery = null;
         setConnectionStatus((prev) => {
           if (prev.reconnecting || prev.reconnectAttempt > 0) {
-            handleReconnectSuccess()
+            handleReconnectSuccess();
           }
           return {
             connected: true,
             reconnecting: false,
             reconnectAttempt: 0,
             error: null,
-          }
-        })
-        newSocket.emit('subscribe:status')
-        newSocket.emit('subscribe:players')
-        newSocket.emit('subscribe:logs')
-      })
+          };
+        });
+        newSocket.emit("subscribe:status");
+        newSocket.emit("subscribe:players");
+        newSocket.emit("subscribe:logs");
+      });
 
-      newSocket.on('disconnect', (reason) => {
+      newSocket.on("disconnect", (reason) => {
         setConnectionStatus((prev) => ({
           ...prev,
           connected: false,
           error:
-            reason === 'io server disconnect'
-              ? 'Server closed connection'
+            reason === "io server disconnect"
+              ? "Server closed connection"
               : null,
-        }))
-      })
+        }));
+      });
 
-      newSocket.on('connect_error', (err) => {
+      newSocket.on("connect_error", (err) => {
         if (newSocket.active) {
           setConnectionStatus((prev) => ({
             ...prev,
             connected: false,
             reconnecting: true,
-            error: getUserErrorMessage(err, 'Connection error'),
-          }))
+            error: getUserErrorMessage(err, "Connection error"),
+          }));
         } else {
           setConnectionStatus({
             connected: false,
             reconnecting: false,
             reconnectAttempt: 0,
-            error: getUserErrorMessage(err, 'Connection error'),
-          })
+            error: getUserErrorMessage(err, "Connection error"),
+          });
         }
-      })
+      });
 
-      newSocket.io.on('reconnect_attempt', (attempt) => {
+      newSocket.io.on("reconnect_attempt", (attempt) => {
         setConnectionStatus((prev) => ({
           ...prev,
           reconnecting: true,
           reconnectAttempt: attempt,
-        }))
-      })
+        }));
+      });
 
-      newSocket.io.on('reconnect_failed', () => {
+      newSocket.io.on("reconnect_failed", () => {
         setConnectionStatus({
           connected: false,
           reconnecting: false,
           reconnectAttempt: 0,
-          error: 'Failed to reconnect after multiple attempts',
-        })
+          error: "Failed to reconnect after multiple attempts",
+        });
         toast({
-          title: 'Connection Lost',
+          title: "Connection Lost",
           description:
-            'Unable to reconnect automatically. Reconnecting once this tab is visible or your network is back — or use Retry in the connection status indicator.',
-          variant: 'destructive',
-        })
+            "Unable to reconnect automatically. Reconnecting once this tab is visible or your network is back — or use Retry in the connection status indicator.",
+          variant: "destructive",
+        });
 
-        disposeRecovery?.()
-        disposeRecovery = registerReconnectRecovery(() => newSocket.connect())
-      })
+        disposeRecovery?.();
+        disposeRecovery = registerReconnectRecovery(() => newSocket.connect());
+      });
 
-      setSocket(newSocket)
-    }
+      setSocket(newSocket);
+    };
 
-    void setupSocket()
+    void setupSocket();
 
     return () => {
-      cancelled = true
-      disposeRecovery?.()
-      createdSocket?.close()
-    }
+      cancelled = true;
+      disposeRecovery?.();
+      createdSocket?.close();
+    };
   }, [
     toast,
     handleReconnectSuccess,
     getToken,
     demoMode,
-  ])
+    serverId,
+    onServersChanged,
+  ]);
 
   return (
     <ConnectionStatusContext.Provider value={connectionStatus}>
@@ -271,15 +282,51 @@ function AppContent() {
         </Layout>
       </SocketContext.Provider>
     </ConnectionStatusContext.Provider>
-  )
+  );
+}
+
+function ServerGate() {
+  const { server: serverId } = useSearch({ from: "__root__" });
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const validateSelection = useCallback(async () => {
+    try {
+      const { servers } = await serversApi.getAll();
+      if (getSelectedServerId() !== (serverId ?? null)) return;
+      const next = servers.some((server) => String(server.id) === serverId)
+        ? serverId
+        : (servers[0]?.id ?? null);
+      if ((next ?? null) !== (serverId ?? null)) {
+        await selectServer(next ?? null);
+        return;
+      }
+      setError(null);
+      setReady(true);
+    } catch (error) {
+      setError(getUserErrorMessage(error, "Could not load servers"));
+    }
+  }, [serverId]);
+  useEffect(() => {
+    void validateSelection();
+  }, [validateSelection]);
+  if (error)
+    return (
+      <div role="alert" className="p-6">
+        {error}
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  if (!ready) return <PageLoader />;
+  return (
+    <ConfirmProvider>
+      <AppContent onServersChanged={validateSelection} />
+    </ConfirmProvider>
+  );
 }
 
 function App() {
-  return (
-    <ConfirmProvider>
-      <AppContent />
-    </ConfirmProvider>
-  )
+  const { server } = useSearch({ from: "__root__" });
+  return <ServerGate key={server ?? "panel"} />;
 }
 
-export default App
+export default App;

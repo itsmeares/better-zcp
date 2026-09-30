@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getActiveServer, getServer } from "../database/init.ts";
+import { getCurrentServer, getServer } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("ManagedContainer");
@@ -194,7 +194,7 @@ export async function resolveManagedContainer({
   let server: ServerProfile | null = null;
   try {
     server = (serverId == null
-      ? await getActiveServer()
+      ? await getCurrentServer()
       : await getServer(serverId)) as ServerProfile | null;
   } catch (error: unknown) {
     log.debug(`Could not resolve the server profile: ${errorMessage(error)}`);

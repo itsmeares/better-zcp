@@ -7,7 +7,7 @@ import path from "path";
 let logServerEventShouldThrow = false;
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: async () => null,
+  getCurrentServer: async () => null,
   getSetting: async () => undefined,
   setSetting: async () => {},
   logServerEvent: async () => {

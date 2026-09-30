@@ -6,10 +6,10 @@ import path from "path";
 
 const isLinux = process.platform !== "win32";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
-  getServer: vi.fn(async () => null),
+  getCurrentServer: (...args) => getCurrentServer(...args),
+  getServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -74,7 +74,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         child.once("error", reject);
       });
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       manager.serverPath = tmpDir;
 
       expect(manager.isJvmExecutableBusy()).toBe(true);
@@ -91,7 +91,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         child.once("error", reject);
       });
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       manager.serverPath = tmpDir;
       expect(manager.isJvmExecutableBusy()).toBe(true);
 
@@ -101,7 +101,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
     });
 
     it("is not busy when the file exists but nothing is executing it", () => {
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       manager.serverPath = tmpDir;
 
       expect(manager.isJvmExecutableBusy()).toBe(false);
@@ -110,7 +110,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
     it("is not busy (best-effort false, not an error) when no jre64/jre directory exists at all", () => {
       const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-jvm-busy-empty-"));
       try {
-        const manager = new ServerManager();
+        const manager = new ServerManager({serverId: "test-server"});
         manager.serverPath = emptyDir;
 
         expect(manager.isJvmExecutableBusy()).toBe(false);
@@ -130,14 +130,14 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         child.once("error", reject);
       });
 
-      getActiveServer.mockResolvedValue({
-        serverName: "JvmBusyTest",
-        serverPath: tmpDir,
+      getCurrentServer.mockResolvedValue({
+        id: "test-server", serverName: "JvmBusyTest",
+        installPath: tmpDir,
         serverBat: "start-server.sh",
         rconPort: 1,
       });
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       await expect(
         manager.startServer({ skipRunningCheck: false }),
       ).rejects.not.toThrow(/Text file busy/);
@@ -154,14 +154,14 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         child.once("error", reject);
       });
 
-      getActiveServer.mockResolvedValue({
-        serverName: "JvmBusyTest",
-        serverPath: tmpDir,
+      getCurrentServer.mockResolvedValue({
+        id: "test-server", serverName: "JvmBusyTest",
+        installPath: tmpDir,
         serverBat: "start-server.sh",
         rconPort: 1,
       });
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       vi.spyOn(manager, "isJvmExecutableBusy").mockReturnValue(true);
       const sleepSpy = vi
         .spyOn(manager, "sleep")
@@ -175,14 +175,14 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
     }, 10000);
 
     it("startServer() stops waiting as soon as the binary frees, rather than always sleeping the full bound", async () => {
-      getActiveServer.mockResolvedValue({
-        serverName: "JvmBusyTest",
-        serverPath: tmpDir,
+      getCurrentServer.mockResolvedValue({
+        id: "test-server", serverName: "JvmBusyTest",
+        installPath: tmpDir,
         serverBat: "start-server.sh",
         rconPort: 1,
       });
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       vi.spyOn(manager, "getServerProcessDetails").mockResolvedValue({
         running: false,
         scanFailed: false,
@@ -211,7 +211,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
 
 describe("ServerManager.isJvmExecutableBusy -- non-Linux / no-binary fallthrough", () => {
   it("is not busy when serverPath is empty (nothing configured yet)", () => {
-    const manager = new ServerManager();
+    const manager = new ServerManager({serverId: "test-server"});
     manager.serverPath = "";
 
     expect(manager.isJvmExecutableBusy()).toBe(false);

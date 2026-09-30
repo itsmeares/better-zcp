@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "fs";
 
-const getCircuitBreakerStatus = vi.fn();
-vi.mock("../database/init.ts", () => ({ getCircuitBreakerStatus }));
+const getDatabaseHealth = vi.fn();
+vi.mock("../database/init.ts", () => ({ getDatabaseHealth }));
 
 const getDiskStatusForPath = vi.fn();
 vi.mock("../services/diskMonitor.ts", () => ({ getDiskStatusForPath }));
@@ -42,7 +42,7 @@ function getHandler(routePath) {
 beforeEach(() => {
   getDiskStatusForPath.mockReset();
   getDiskStatusForPath.mockResolvedValue(PANEL_DATA_STATUS);
-  getCircuitBreakerStatus.mockReset();
+  getDatabaseHealth.mockReset();
 });
 
 describe("GET /api/system/disk-space", () => {
@@ -91,13 +91,13 @@ describe("GET /api/system/disk-space", () => {
 
 describe("GET /api/system/storage-health", () => {
   it("combines disk space and circuit breaker status into one payload", async () => {
-    const circuitBreaker = {
-      open: true,
-      lastError: "ENOSPC",
+    const database = {
+      ok: false,
+      error: "ENOSPC",
       failCount: 5,
       cooldownEndsAt: "2026-01-01T00:00:00.000Z",
     };
-    getCircuitBreakerStatus.mockReturnValue(circuitBreaker);
+    getDatabaseHealth.mockReturnValue(database);
     const diskMonitor = { getDiskStatus: () => null };
     const response = createResponse();
 
@@ -105,14 +105,14 @@ describe("GET /api/system/storage-health", () => {
 
     expect(response.json).toHaveBeenCalledWith({
       diskSpace: { saveVolume: null, panelData: PANEL_DATA_STATUS },
-      circuitBreaker,
+      database,
     });
   });
 
   it("sanitizes filesystem paths from the circuit breaker error", async () => {
-    getCircuitBreakerStatus.mockReturnValue({
-      open: true,
-      lastError: "ENOSPC writing C:\\Users\\operator\\panel\\data\\db.json",
+    getDatabaseHealth.mockReturnValue({
+      ok: false,
+      error: "ENOSPC writing C:\\Users\\operator\\panel\\data\\db.json",
       failCount: 5,
       cooldownEndsAt: "2026-01-01T00:00:00.000Z",
     });
@@ -124,12 +124,12 @@ describe("GET /api/system/storage-health", () => {
     );
 
     const payload = response.json.mock.calls[0][0];
-    expect(payload.circuitBreaker.lastError).toContain("ENOSPC");
-    expect(payload.circuitBreaker.lastError).not.toContain("Users");
+    expect(payload.database.error).toContain("ENOSPC");
+    expect(payload.database.error).not.toContain("Users");
   });
 
   it("returns a sanitized 500 when a dependency throws", async () => {
-    getCircuitBreakerStatus.mockImplementation(() => {
+    getDatabaseHealth.mockImplementation(() => {
       throw new Error("boom");
     });
     const response = createResponse();

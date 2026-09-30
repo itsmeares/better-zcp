@@ -7,7 +7,7 @@ import path from "path";
 const settings = new Map();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: async () => null,
+  getCurrentServer: async () => null,
   getSetting: async (key) => settings.get(key),
   setSetting: async (key, value) => {
     settings.set(key, value);

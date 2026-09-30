@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", () => ({
     key === "steamcmdPath" ? configuredSteamCmdPath.value : null,
   ),
   setSetting: vi.fn(async () => undefined),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),
   logServerEvent: vi.fn(async () => undefined),
 }));

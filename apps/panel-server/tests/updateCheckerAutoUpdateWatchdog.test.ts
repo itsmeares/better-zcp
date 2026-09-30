@@ -27,7 +27,7 @@ vi.mock("../database/init.ts", () => ({
     return null;
   }),
   setSetting: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => ({ id: "server-1", installPath })),
+  getCurrentServer: vi.fn(async () => ({ id: "server-1", installPath })),
 }));
 
 vi.mock("../services/managedContainer.ts", () => ({

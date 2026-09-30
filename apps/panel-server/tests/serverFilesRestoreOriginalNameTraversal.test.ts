@@ -4,9 +4,9 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
@@ -66,7 +66,7 @@ beforeEach(() => {
   fs.mkdirSync(configDir, { recursive: true });
   backupDir = path.join(configDir, "backups");
   fs.mkdirSync(backupDir, { recursive: true });
-  getActiveServer.mockReset().mockResolvedValue({
+  getCurrentServer.mockReset().mockResolvedValue({
     serverConfigPath: configDir,
     serverName: SERVER_NAME,
   });

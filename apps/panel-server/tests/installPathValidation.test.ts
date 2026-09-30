@@ -17,7 +17,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting,
   getAllSettings,
   getServer: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   createServer,
   updateServer,
   deleteServer: vi.fn(),

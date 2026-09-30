@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/serverSelection"
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -395,17 +396,17 @@ export default function WorldMap() {
   useEffect(() => {
     if (!socket) return
     const cancelledRef = { current: false }
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       setPlayers([])
       setSelectedPlayer(null)
       setContextMenu(null)
       hasFittedRef.current = false
       loadMapConfig(cancelledRef)
     }
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
       cancelledRef.current = true
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket, loadMapConfig])
 
@@ -549,7 +550,7 @@ export default function WorldMap() {
 
       const ext = 'jpg'
       const versionDir = mapSourceRef.current?.b42Dir ?? null
-      const proxyUrl = `${mapCfgRef.current.tileUrl}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
+      const proxyUrl = `${apiUrl(mapCfgRef.current.tileUrl.slice(4))}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
 
       const loadViaProxy = () => {
         let upstreamParticipated = false

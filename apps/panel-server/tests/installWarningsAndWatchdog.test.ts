@@ -15,7 +15,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),
 }));
 
@@ -147,63 +147,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const payload = await completePromise;
     expect(payload.success).toBe(true);
     expect(payload.warnings).toEqual([]);
-  });
-
-  it("collects an INSTALL_SETTINGS_SAVE_FAILED warning instead of crashing the panel when saving settings throws, and still reports success:true", async () => {
-    const fakeProc = new EventEmitter();
-    fakeProc.stdout = new EventEmitter();
-    fakeProc.stderr = new EventEmitter();
-    spawnMock.mockImplementation(() => {
-      queueMicrotask(() => fakeProc.emit("close", 0));
-      return fakeProc;
-    });
-    vi.mocked(setSetting).mockImplementation(async (key) => {
-      if (key === "serverPath") throw new Error("EBUSY: database locked");
-    });
-
-    const { default: router } = await import("../routes/server.ts");
-    const { io, completePromise } = fakeIoCapturingComplete();
-    const res = createResponse();
-    await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: fakeApp(io) },
-      res,
-    );
-
-    const payload = await completePromise;
-    expect(payload.success).toBe(true);
-    expect(payload.warnings).toContainEqual(
-      expect.objectContaining({
-        progressCode: "INSTALL_SETTINGS_SAVE_FAILED",
-        params: expect.objectContaining({ reason: expect.stringContaining("database locked") }),
-      }),
-    );
-  });
-
-  it("collects an INSTALL_SETTINGS_SAVE_FAILED warning when saving the RCON settings throws, and still reports success:true", async () => {
-    const fakeProc = new EventEmitter();
-    fakeProc.stdout = new EventEmitter();
-    fakeProc.stderr = new EventEmitter();
-    spawnMock.mockImplementation(() => {
-      queueMicrotask(() => fakeProc.emit("close", 0));
-      return fakeProc;
-    });
-    vi.mocked(setSetting).mockImplementation(async (key) => {
-      if (key === "rconPassword") throw new Error("EBUSY: database locked");
-    });
-
-    const { default: router } = await import("../routes/server.ts");
-    const { io, completePromise } = fakeIoCapturingComplete();
-    const res = createResponse();
-    await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: fakeApp(io) },
-      res,
-    );
-
-    const payload = await completePromise;
-    expect(payload.success).toBe(true);
-    expect(payload.warnings).toContainEqual(
-      expect.objectContaining({ progressCode: "INSTALL_SETTINGS_SAVE_FAILED" }),
-    );
+    for (const key of ["serverPath", "serverName", "rconPassword", "rconPort", "minMemory", "maxMemory"]) expect(setSetting).not.toHaveBeenCalledWith(key, expect.anything());
   });
 
   it("collects an INSTALL_RCON_INI_PRECREATE_FAILED warning instead of silently swallowing the failure, and still reports success:true", async () => {
@@ -320,6 +264,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const payload = await completePromise;
     expect(payload.success).toBe(true);
     expect(payload.warnings).toEqual([]);
+    for (const key of ["serverPath", "serverName", "rconPassword", "rconPort", "minMemory", "maxMemory"]) expect(setSetting).not.toHaveBeenCalledWith(key, expect.anything());
   });
 
   it("a watchdog-killed process reports INSTALL_WATCHDOG_KILLED with a real minute count, never the literal word \"null\"", async () => {

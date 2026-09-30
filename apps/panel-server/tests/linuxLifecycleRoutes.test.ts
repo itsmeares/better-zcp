@@ -9,7 +9,7 @@ const directStatus = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getServers: vi.fn().mockResolvedValue([]),
   getServer,
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   createServer: vi.fn(),
   updateServer,
   deleteServer: vi.fn(),

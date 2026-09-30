@@ -1,5 +1,5 @@
 import net from "net";
-import { getSetting, setSetting } from "../database/init.ts";
+import { getSetting, setSetting, setSettings } from "../database/init.ts";
 import {
   sanitizeErrorParams,
   SENSITIVE_FIELD_RE,
@@ -376,11 +376,7 @@ export async function saveAppSettings(
     return true;
   });
 
-  for (const [key, value] of filtered) {
-    if (key === "modCheckInterval")
-      continue;
-    await setSetting(key, value);
-  }
+  await setSettings(filtered.filter(([key]) => key !== "modCheckInterval"));
 
   const modChecker = runtime.modChecker;
   const modCheckIntervalEntry = filtered.find(
@@ -425,10 +421,9 @@ export async function saveAppSettings(
       );
     }
   }
-  if (runtime.rconService?.loadConfig) {
+  if (filtered.some(([key]) => ["rconHost", "rconPort", "rconPassword"].includes(key)) && runtime.rconService?.reloadConfig) {
     try {
-      runtime.rconService.configLoaded = false;
-      await runtime.rconService.loadConfig();
+      await runtime.rconService.reloadConfig();
     } catch (error: unknown) {
       log.warn(
         `rconService reload failed after settings save: ${String(error)}`,

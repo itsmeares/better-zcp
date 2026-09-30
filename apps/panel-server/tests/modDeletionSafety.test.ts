@@ -4,17 +4,17 @@ import os from "node:os";
 import path from "node:path";
 
 const {
-  getActiveServer,
+  getCurrentServer,
   getSetting,
   getTrackedMods,
 } = vi.hoisted(() => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(),
   getTrackedMods: vi.fn(),
 }));
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getSetting,
   getTrackedMods,
   addTrackedMod: vi.fn(),
@@ -69,7 +69,7 @@ describe("disk mod deletion safety", () => {
     );
     fs.mkdirSync(workshopPath, { recursive: true });
     fs.writeFileSync(path.join(workshopPath, "mod.info"), "id=TestMod\n");
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       installPath: root,
       serverName: "servertest",
     });

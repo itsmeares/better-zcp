@@ -5,11 +5,14 @@ vi.mock("../database/init.ts", () => ({
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: vi.fn().mockResolvedValue(),
-  getActiveServer: vi.fn().mockResolvedValue(null),
+  getCurrentServer: vi.fn().mockResolvedValue(null),
 }));
 
 const { Scheduler } = await import("../services/scheduler.ts");
-const { default: panelBridge } = await import("../services/panelBridge.ts");
+const { PanelBridge } = await import("../services/panelBridge.ts");
+const panelBridge = new PanelBridge();
+const { setPanelRuntime } = await import("../utils/panelRuntime.ts");
+setPanelRuntime({ panelBridge: panelBridge });
 
 function makeScheduler() {
   const rconService = { connected: true };

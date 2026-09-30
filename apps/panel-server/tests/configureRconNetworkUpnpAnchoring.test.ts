@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(async () => {}),
   getSetting: vi.fn(async () => null),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 vi.mock("../routes/chunks.ts", () => ({
@@ -18,7 +18,7 @@ vi.mock("../routes/chunks.ts", () => ({
 }));
 
 const { default: router, applyUpnpToIni } = await import("../routes/server.ts");
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 
 function getHandler(routePath) {
   const layer = router.stack.find(
@@ -54,13 +54,13 @@ beforeEach(() => {
     `PVP=false\n${welcomeLine}\nRCONPassword=old\nRCONPort=27015\nUPnP=true\nDefaultPort=16261\nUDPPort=16262\n`,
     "utf-8",
   );
-  getActiveServer.mockResolvedValue({ id: "server-1", serverConfigPath, serverName: "servertest" });
+  getCurrentServer.mockResolvedValue({ id: "server-1", serverConfigPath, serverName: "servertest" });
   updateServerProfile.mockClear();
 });
 
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
-  getActiveServer.mockReset();
+  getCurrentServer.mockReset();
 });
 
 describe("POST /configure-rcon leaves a free-text RCONPassword=/RCONPort= collision untouched", () => {

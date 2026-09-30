@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 
-const getActiveServer = vi.fn();
-vi.mock("../database/init.ts", () => ({ getActiveServer }));
+const getCurrentServer = vi.fn();
+vi.mock("../database/init.ts", () => ({ getCurrentServer }));
 
 const resolveDockerHostSignal = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({
@@ -10,12 +10,15 @@ vi.mock("../services/managedContainer.ts", () => ({
   resolveDockerHostSignal,
 }));
 
-const { getObservedServerRunning } = await import("../index.ts");
+const { resolveObservedServerRunning } = await import("../utils/serverStatus.ts");
+const bridge = {isModConnected: () => false};
+vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({panelBridge: bridge})}));
+const getObservedServerRunning = () => resolveObservedServerRunning(new ServerManager(), {connected: false}, {});
 const { ServerManager } = await import("../services/serverManager.ts");
 
 describe("status watchdog -- Docker provider awareness", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     resolveDockerHostSignal.mockReset();
     vi.spyOn(ServerManager.prototype, "getServerProcessDetails").mockResolvedValue({
       running: false,
@@ -28,7 +31,7 @@ describe("status watchdog -- Docker provider awareness", () => {
   });
 
   it("trusts the Docker signal over the (always-blind) local process scan for docker-local", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
     });
@@ -45,7 +48,7 @@ describe("status watchdog -- Docker provider awareness", () => {
   });
 
   it("reports unknown (not a confident stopped) when Docker control can't verify", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
     });
@@ -55,7 +58,7 @@ describe("status watchdog -- Docker provider awareness", () => {
   });
 
   it("still uses the local process scan for a native server, not the Docker signal", async () => {
-    getActiveServer.mockResolvedValue({ id: "native-server" });
+    getCurrentServer.mockResolvedValue({ id: "native-server" });
     ServerManager.prototype.getServerProcessDetails.mockResolvedValue({
       running: true,
       scanFailed: false,

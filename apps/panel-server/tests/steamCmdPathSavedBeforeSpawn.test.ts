@@ -16,7 +16,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: getSettingMock,
   setSetting: setSettingMock,
   logServerEvent: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 function createResponse() {

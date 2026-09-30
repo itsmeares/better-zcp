@@ -1,10 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
+import { setPanelRuntime, setServerRuntime } from "../utils/panelRuntime.ts";
+const { PanelBridge } = await import("../services/panelBridge.ts");
+import { requireServerId } from "../utils/serverScope.ts";
+import { scopedTests } from "./helpers/serverScope.ts";
+import { createServer } from "../database/init.ts";
+const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
+import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
+
 
 
 vi.mock("../database/init.ts", async () => {
   const actual = await vi.importActual("../database/init.ts");
-  return { ...actual, getRoleByName: mockGetRoleByName };
+  return actual;
 });
 
 const getB42ResolutionStatus = vi.fn();
@@ -55,6 +61,8 @@ function getLayer(routePath, method) {
 }
 
 async function runRoute(routePath, method, req) {
+  setPanelRuntime({});
+  setServerRuntime(requireServerId(), {panelBridge: new PanelBridge()});
   const res = createResponse();
   const layer = getLayer(routePath, method);
   if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);

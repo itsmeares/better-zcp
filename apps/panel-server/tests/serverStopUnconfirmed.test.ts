@@ -5,7 +5,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 const { runManagedLifecycleMock } = vi.hoisted(() => ({

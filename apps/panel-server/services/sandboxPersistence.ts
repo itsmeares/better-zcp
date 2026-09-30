@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getActiveServer, getAllSettings } from "../database/init.ts";
+import { getCurrentServer, getAllSettings } from "../database/init.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { backupWarningFor, createBackup } from "../utils/configBackup.ts";
 import { escapeRegExp } from "../utils/regex.ts";
@@ -32,7 +32,7 @@ export async function getServerConfigPath(
   _serverName?: string,
 ): Promise<string> {
   const resolvedActiveServer =
-    activeServer === undefined ? await getActiveServer() : activeServer;
+    activeServer === undefined ? await getCurrentServer() : activeServer;
 
   if (resolvedActiveServer?.serverConfigPath) {
     return resolvedActiveServer.serverConfigPath;
@@ -59,7 +59,7 @@ export async function getServerName(
   activeServer?: JsonRecord | null,
 ): Promise<string> {
   const resolvedActiveServer =
-    activeServer === undefined ? await getActiveServer() : activeServer;
+    activeServer === undefined ? await getCurrentServer() : activeServer;
   let raw;
   if (resolvedActiveServer) {
     raw = resolvedActiveServer.serverName;
@@ -78,8 +78,8 @@ export async function getServerName(
   return safe;
 }
 
-export async function getActiveServerContext(): Promise<ActiveServerContext> {
-  const activeServer = await getActiveServer();
+export async function getCurrentServerContext(): Promise<ActiveServerContext> {
+  const activeServer = await getCurrentServer();
   let serverConfigPath: string | undefined;
   let configurationError: ServerNotConfiguredError | undefined;
 

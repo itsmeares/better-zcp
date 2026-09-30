@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
 }));
 
 const fakeBridge = { bridgePath: null, isRunning: false, isModConnected: () => false };
-vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: fakeBridge }) }));
 
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
@@ -33,7 +33,7 @@ function fakeApp(overrides = {}) {
 
 describe("GET /api/servers/active/status", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     resolveDockerHostSignal.mockReset();
     resolveDockerHostSignal.mockResolvedValue({ running: false, scanFailed: true });
     fakeBridge.bridgePath = null;
@@ -42,7 +42,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("returns 404 when no server is configured", async () => {
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     const response = createResponse();
 
     await handleActiveServerStatus({ app: fakeApp() }, response);
@@ -51,7 +51,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports container running but RCON disconnected without collapsing to one flag", async () => {
-    getActiveServer.mockResolvedValue({ id: 1 });
+    getCurrentServer.mockResolvedValue({ id: 1 });
     fakeBridge.bridgePath = "/data/panelbridge";
     const response = createResponse();
 
@@ -83,7 +83,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("uses Docker container state instead of the host process scan", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
     });
@@ -117,7 +117,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports an unverifiable Docker state as unknown instead of stopped", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "missing-container",
     });
@@ -144,7 +144,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports the host as unknown, not stopped, when process detection itself failed", async () => {
-    getActiveServer.mockResolvedValue({ id: 1 });
+    getCurrentServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
     await handleActiveServerStatus(
@@ -167,7 +167,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports an active bridge only when running and mod-connected", async () => {
-    getActiveServer.mockResolvedValue({ id: 1 });
+    getCurrentServer.mockResolvedValue({ id: 1 });
     fakeBridge.bridgePath = "/data/panelbridge";
     fakeBridge.isRunning = true;
     fakeBridge.isModConnected = () => true;
@@ -182,7 +182,7 @@ describe("GET /api/servers/active/status", () => {
 
 
   it("does not attempt a Docker lookup for a native server", async () => {
-    getActiveServer.mockResolvedValue({ id: 1 });
+    getCurrentServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
     await handleActiveServerStatus({ app: fakeApp() }, response);
@@ -191,7 +191,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("returns 500 with a sanitized error when the database lookup throws", async () => {
-    getActiveServer.mockRejectedValue(new Error("db exploded"));
+    getCurrentServer.mockRejectedValue(new Error("db exploded"));
     const response = createResponse();
 
     await handleActiveServerStatus({ app: fakeApp() }, response);

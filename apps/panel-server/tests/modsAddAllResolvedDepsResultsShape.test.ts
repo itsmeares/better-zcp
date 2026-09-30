@@ -5,11 +5,11 @@ import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -62,7 +62,7 @@ describe("POST /add-all-resolved-deps: per-item results[]", () => {
       path.join(configPath, "TestServer.ini"),
       "Mods=\nWorkshopItems=\n",
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",

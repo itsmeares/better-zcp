@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 const setSettingMock = vi.fn(async () => {});
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServer: vi.fn(async () => null),
   getAllSettings: vi.fn(async () => ({})),
   setSetting: setSettingMock,
@@ -21,7 +21,7 @@ const bridgeMock = {
   isRunning: false,
 };
 
-vi.mock("../services/panelBridge.ts", () => ({ default: bridgeMock }));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: bridgeMock }) }));
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

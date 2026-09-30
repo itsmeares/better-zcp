@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 
-vi.mock("../database/init.ts", () => ({ getActiveServer }));
+vi.mock("../database/init.ts", () => ({ getCurrentServer }));
 
 const {
   requireStoppedForLocalConfigMutation,
@@ -33,7 +33,7 @@ function buildServerManager(reloadThrows = false) {
 }
 
 beforeEach(() => {
-  getActiveServer.mockReset().mockResolvedValue({});
+  getCurrentServer.mockReset().mockResolvedValue({});
 });
 
 describe("config mutation guards reload the active server before trusting process state", () => {

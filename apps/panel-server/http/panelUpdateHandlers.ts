@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { getDatabaseFilePath, setSetting, flushWrites } from "../database/init.ts";
+import { getDatabaseFilePath, setSetting } from "../database/init.ts";
 import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
@@ -107,7 +107,7 @@ async function savePreUpdateDataBackup(version: string): Promise<void> {
     );
     if (dataBackupPath) {
       await setSetting("preUpdateDataBackupPath", dataBackupPath);
-      await flushWrites();
+
     }
   } catch {
     // Keep the existing best-effort snapshot behavior for panel updates.
@@ -139,7 +139,7 @@ export async function handlePanelRestart(request: Request, response: Response): 
       await savePreUpdateDataBackup(staged.version);
       if (staged.version) {
         await setSetting("pendingPanelUpdate", staged.version);
-        await flushWrites();
+
       }
       checker.writeSupervisorMarker(staged);
       setTimeout(() => process.exit(75), 500);
@@ -167,7 +167,7 @@ export async function handlePanelRestart(request: Request, response: Response): 
       await savePreUpdateDataBackup(staged.version);
       if (staged.version) {
         await setSetting("pendingPanelUpdate", staged.version);
-        await flushWrites();
+
       }
       const appliedBundle = applyUpdateBundle(staged.journalPath);
       const targetPath = appliedBundle.paths.binary;
@@ -187,7 +187,7 @@ export async function handlePanelRestart(request: Request, response: Response): 
   }
 
   setTimeout(async () => {
-    await flushWrites().catch(() => {});
+
     const linuxSupervisor = isLinuxPanelSupervisor();
     const orchestrated = isPackaged && Boolean(
       process.env.INVOCATION_ID ||

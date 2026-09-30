@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+const it = scopedTests("server-a");
+import { beforeEach, describe, expect, vi } from "vite-plus/test";
 
 
 const ROLES = {
@@ -10,14 +12,14 @@ const ROLES = {
 
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
-  getActiveServer: vi.fn().mockResolvedValue(null),
+  getCurrentServer: vi.fn().mockResolvedValue(null),
   logScheduleExecution: vi.fn().mockResolvedValue(),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 
-const { getScheduledTasks, getActiveServer } = await import("../database/init.ts");
+const { getScheduledTasks, getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/scheduler.ts");
 const { Scheduler } = await import("../services/scheduler.ts");
 
@@ -26,7 +28,7 @@ describe("Scheduler.runTaskNow return value", () => {
     const rconService = { connected: true, save: vi.fn().mockResolvedValue({ success: true }) };
     const scheduler = new Scheduler(rconService, { _serverId: null });
 
-    const result = await scheduler.runTaskNow({ id: 1, name: "Save", command: "save" });
+    const result = await scheduler.runTaskNow({ id: 1, name: "Save", server_id: "server-a", command: "save" });
 
     expect(result).toEqual({ success: true, message: "Completed successfully" });
   });
@@ -38,7 +40,7 @@ describe("Scheduler.runTaskNow return value", () => {
     };
     const scheduler = new Scheduler(rconService, { _serverId: null });
 
-    const result = await scheduler.runTaskNow({ id: 2, name: "Save", command: "save" });
+    const result = await scheduler.runTaskNow({ id: 2, name: "Save", server_id: "server-a", command: "save" });
 
     expect(result).toEqual({ success: false, message: "world save failed" });
   });
@@ -61,7 +63,7 @@ const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("scheduler:action_result socket emission", () => {
   beforeEach(() => {
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
   });
 
   it("POST /restart-now emits the real outcome after performRestart resolves, distinct from the immediate response", async () => {
@@ -193,7 +195,7 @@ describe("scheduler:action_result socket emission", () => {
 
   it("POST /tasks/:id/run emits the real outcome, including the task name", async () => {
     const emit = vi.fn();
-    const task = { id: 3, name: "Nightly save", command: "save" };
+    const task = { id: 3, name: "Nightly save", server_id: "server-a", command: "save" };
     getScheduledTasks.mockResolvedValue([task]);
     const runTaskNow = vi.fn().mockResolvedValue({ success: false, message: "RCON not connected" });
     const response = createResponse();
