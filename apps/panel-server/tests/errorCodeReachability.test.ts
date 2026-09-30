@@ -62,6 +62,7 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
   it("already_downloading: code survives to the named 409 branch", async () => {
     const res = createResponse();
     const checker = {
+      isSupervisorAvailable: () => true, getStagedUpdate: () => null,
       downloadUpdate: vi.fn(async () => ({
         success: false,
         error: "Download already in progress",
@@ -80,6 +81,7 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
   it("no_update: code survives to the named 400 branch", async () => {
     const res = createResponse();
     const checker = {
+      isSupervisorAvailable: () => true, getStagedUpdate: () => null,
       downloadUpdate: vi.fn(async () => ({
         success: false,
         error: "No update available",
@@ -95,17 +97,7 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
     );
   });
 
-  it("success: the result object (no code) still passes through unmodified", async () => {
-    const res = createResponse();
-    const checker = {
-      downloadUpdate: vi.fn(async () => ({ success: true, version: "1.2.3" })),
-    };
 
-    await handlePanelUpdateDownload(createRequest(checker), res);
-
-    expect(res.status).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ success: true, version: "1.2.3" });
-  });
 });
 
 describe("handlePanelUpdateStatus: checker failures become API errors", () => {

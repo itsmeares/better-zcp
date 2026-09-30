@@ -26,7 +26,7 @@ const { Scheduler } = await import("../services/scheduler.ts");
 describe("Scheduler.runTaskNow return value", () => {
   it("returns {success:true, message} on success -- previously undefined on every path", async () => {
     const rconService = { connected: true, save: vi.fn().mockResolvedValue({ success: true }) };
-    const scheduler = new Scheduler(rconService, { _serverId: null });
+    const scheduler = new Scheduler(rconService, { _serverId: null }, { active: null, cancel: () => false, run: async () => ({ success: true }) });
 
     const result = await scheduler.runTaskNow({ id: 1, name: "Save", server_id: "server-a", command: "save" });
 
@@ -38,7 +38,7 @@ describe("Scheduler.runTaskNow return value", () => {
       connected: true,
       save: vi.fn().mockRejectedValue(new Error("world save failed")),
     };
-    const scheduler = new Scheduler(rconService, { _serverId: null });
+    const scheduler = new Scheduler(rconService, { _serverId: null }, { active: null, cancel: () => false, run: async () => ({ success: true }) });
 
     const result = await scheduler.runTaskNow({ id: 2, name: "Save", server_id: "server-a", command: "save" });
 

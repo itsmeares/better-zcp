@@ -21,7 +21,7 @@ import {
   createLinuxServiceLifecycle,
   isManagedLifecycleProvider,
 } from "./linuxServiceLifecycle.ts";
-import { hasActiveSteamOperation } from "./activeSteamOperations.ts";
+import { hasActiveSteamOperation, steamInstallKey } from "./activeSteamOperations.ts";
 import { listNonInternalIPv4Interfaces } from "../utils/networkInterfaces.ts";
 import {
   getConfiguredIpv4Address,
@@ -954,9 +954,7 @@ export class ServerManager {
       const installPathForSteamCheck =
         this._serverRecord?.installPath || this.serverPath;
       if (installPathForSteamCheck) {
-        const normalizedInstallPath = path
-          .normalize(installPathForSteamCheck)
-          .toLowerCase();
+        const normalizedInstallPath = steamInstallKey(installPathForSteamCheck);
         if (hasActiveSteamOperation(normalizedInstallPath)) {
           throw new Error(
             "A Steam install or update is currently in progress for this server's install directory. Wait for it to finish before starting the server.",

@@ -1,28 +1,15 @@
 import { requireServerId } from "../utils/serverScope.ts";
 import { getPanelRuntime } from "../utils/panelRuntime.ts";
-import fs from "fs";
-import path from "path";
 import cron from "node-cron";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
-import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
-import {
-  acquireLifecycleLock,
-  lifecycleInProgressResponse,
-} from "./lifecycleCoordinator.ts";
-import { createBackupIfChanged } from "../utils/configBackup.ts";
-import {
-  candidateIniPaths,
-  isFirstBootMissingAdminPassword,
-  refreshLaunchTargetBeforeStart,
-} from "./serverLaunch.ts";
+import { type LifecycleLock } from "./lifecycleCoordinator.ts";
+import { type ServerMaintenance } from "./serverMaintenance.ts";
 import {
   getScheduledTasks,
   updateTaskLastRun,
   logServerEvent,
   logScheduleExecution,
-  getCurrentServer,
-  getServer,
   getSetting,
   setSetting,
 } from "../database/init.ts";
@@ -36,7 +23,6 @@ import {
 import {
   defaultRestartWarningSettings,
   formatRestartWarning,
-  getRestartWarningNotice,
   getRestartWarningPresetTemplates,
   normalizeRestartWarningSettings,
   RESTART_WARNING_SETTING_KEY,
@@ -52,9 +38,6 @@ export { classifyScheduledCommand } from "../utils/schedulerCommands.ts";
 
 const SCHEDULER_TIMEZONE_SETTING_KEY = "schedulerTimezone";
 type ScheduledTask = Record<string, any>;
-type LifecycleLock = {
-  release: () => void;
-};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -123,19 +106,15 @@ export class Scheduler {
   jobLabels: Map<any, string>;
   autoRestartJob: any;
   backupJob: any;
-  backupRetryTimer: ReturnType<typeof setTimeout> | null;
-  backupScheduleGeneration: number;
-  restartInProgress: boolean;
-  restartCancelled: boolean;
   runningTasks: Set<any>;
-  pendingRestarts: Map<any, ReturnType<typeof setTimeout>>;
-  autoRestartRetryTimer: ReturnType<typeof setTimeout> | null;
   effectiveTimezone: string;
   configuredTimezone: string | null;
   timezoneFallback: Record<string, string> | null;
   restartWarning: any;
 
-  constructor(rconService: any, serverManager: any) {
+  readonly maintenance: ServerMaintenance;
+  constructor(rconService: any, serverManager: any, maintenance: ServerMaintenance) {
+    this.maintenance = maintenance;
     this.rconService = rconService;
     this.serverManager = serverManager;
     this.backupService = null;
@@ -144,13 +123,7 @@ export class Scheduler {
     this.jobLabels = new Map();
     this.autoRestartJob = null;
     this.backupJob = null;
-    this.backupRetryTimer = null;
-    this.backupScheduleGeneration = 0;
-    this.restartInProgress = false;
-    this.restartCancelled = false;
     this.runningTasks = new Set();
-    this.pendingRestarts = new Map();
-    this.autoRestartRetryTimer = null;
     this.effectiveTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     this.configuredTimezone = null;
     this.timezoneFallback = null;
@@ -163,14 +136,6 @@ export class Scheduler {
 
   setIo(io: any): void {
     this.io = io;
-  }
-
-  _emitVerifiedTransition(running: boolean): void {
-    if (typeof this.io?.emit === "function") {
-      this.io.emit("server:status", {
-        state: running ? "starting" : "stopping",
-      });
-    }
   }
 
   async resolveTimezone(): Promise<string> {
@@ -303,15 +268,11 @@ export class Scheduler {
       return false;
     }
 
-    const pending = this.pendingRestarts.get(task.id);
-    if (pending) clearTimeout(pending);
-    this.pendingRestarts.delete(task.id);
-
     if (this.jobs.has(task.id)) {
       this.jobs.get(task.id).stop();
     }
 
-    const job = cron.schedule(task.cron_expression, () => this.runTaskNow(task, true), {
+    const job = cron.schedule(task.cron_expression, () => this.runTaskNow(task), {
       timezone: this.effectiveTimezone,
     });
     job.on("execution:missed", (context: any) =>
@@ -336,7 +297,7 @@ export class Scheduler {
     return { scheduled: true, dstWarning };
   }
 
-  async runTaskNow(task: ScheduledTask, retryWhenEmpty = false): Promise<{ success: boolean; message: string }> {
+  async runTaskNow(task: ScheduledTask): Promise<{ success: boolean; message: string }> {
     if (this.runningTasks.has(task.id)) {
       log.debug(
         `Skipping duplicate execution of task ${task.name} (already running)`,
@@ -344,17 +305,11 @@ export class Scheduler {
       return { success: false, message: "Already running" };
     }
 
-    if (retryWhenEmpty) {
-      const pending = this.pendingRestarts.get(task.id);
-      if (pending) clearTimeout(pending);
-      this.pendingRestarts.delete(task.id);
-    }
-
     this.runningTasks.add(task.id);
     log.info(`Executing scheduled task: ${task.name}`);
     const startTime = Date.now();
     try {
-      await this.executeTask(task, retryWhenEmpty);
+      await this.executeTask(task);
       const duration = Date.now() - startTime;
       await updateTaskLastRun(task.id);
       const message = "Completed successfully";
@@ -417,7 +372,7 @@ export class Scheduler {
     };
   }
 
-  async executeTask(task: ScheduledTask, retryWhenEmpty = false): Promise<void> {
+  async executeTask(task: ScheduledTask): Promise<void> {
     const commandKind = classifyScheduledCommand(task.command);
 
     const { rconService, serverManager } =
@@ -431,12 +386,6 @@ export class Scheduler {
           onlyWhenEmpty: true,
         });
         if (!result?.success) {
-          if (result?.deferred && retryWhenEmpty && this.jobs.has(task.id)) {
-            this.pendingRestarts.set(task.id, setTimeout(() => {
-              this.pendingRestarts.delete(task.id);
-              if (this.jobs.has(task.id)) void this.runTaskNow(task, true);
-            }, 60000));
-          }
           throw new Error(result?.message || "Restart failed");
         }
       } else if (commandKind === "save") {
@@ -467,75 +416,6 @@ export class Scheduler {
     } finally {
       // The profile runtime owns its connections across scheduled tasks.
     }
-  }
-
-  async _ensureRestartTarget(
-    serverManager: any,
-    pinnedServerId: string | number | null,
-  ): Promise<void> {
-    if (pinnedServerId == null) return;
-
-    let current = serverManager._serverId ?? null;
-    if (current == null) {
-      try {
-        current = (await getCurrentServer())?.id ?? null;
-      } catch (error: unknown) {
-        log.debug(`Could not verify restart target: ${errorMessage(error)}`);
-        return;
-      }
-    }
-    if (String(current) === String(pinnedServerId)) return;
-
-    log.warn(
-      `Auto-restart: active server changed mid-restart — re-targeting server ${pinnedServerId} so the restart finishes on the server it began on`,
-    );
-    throw new Error("Restart target does not match the bound server runtime");
-  }
-
-  async _backupConfigBeforeRestart(
-    pinnedServerId: string | number | null,
-  ): Promise<any> {
-    let server: any = null;
-    try {
-      server =
-        pinnedServerId != null
-          ? await getServer(pinnedServerId)
-          : await getCurrentServer();
-      if (!server?.serverName) return server;
-
-      const serverConfigPath =
-        server.serverConfigPath ||
-        (server.zomboidDataPath
-          ? path.join(server.zomboidDataPath, "Server")
-          : null);
-      if (!serverConfigPath) return server;
-
-      const iniPath =
-        candidateIniPaths(
-          serverConfigPath,
-          server.zomboidDataPath,
-          server.serverName,
-        ).find((candidate) => fs.existsSync(candidate)) ||
-        path.join(serverConfigPath, `${server.serverName}.ini`);
-
-      const configDir = path.dirname(iniPath);
-      const iniFilename = path.basename(iniPath);
-      const sandboxFilename = iniFilename.toLowerCase().endsWith(".ini")
-        ? `${iniFilename.slice(0, -4)}_SandboxVars.lua`
-        : `${server.serverName}_SandboxVars.lua`;
-
-      for (const filename of [iniFilename, sandboxFilename]) {
-        const result = await createBackupIfChanged(configDir, filename);
-        if (result.reason === "failed") {
-          log.warn(
-            `Pre-restart config backup of ${filename} failed: ${result.error}`,
-          );
-        }
-      }
-    } catch (error: unknown) {
-      log.warn(`Pre-restart config backup failed: ${errorMessage(error)}`);
-    }
-    return server;
   }
 
   async _resolveServicesForTask(task: ScheduledTask) {
@@ -573,9 +453,6 @@ export class Scheduler {
   }
 
   cancelTask(taskId: string | number): boolean {
-    const pending = this.pendingRestarts.get(taskId);
-    if (pending) clearTimeout(pending);
-    this.pendingRestarts.delete(taskId);
     if (this.jobs.has(taskId)) {
       this.jobs.get(taskId).stop();
       this.jobs.delete(taskId);
@@ -586,23 +463,14 @@ export class Scheduler {
     return false;
   }
 
+  get restartInProgress(): boolean { return this.maintenance.active?.kind === "restart" || this.maintenance.active?.kind === "workshop"; }
+
   cancelRestart(): { success: boolean; message: string } {
-    if (this.restartInProgress) {
-      this.restartCancelled = true;
-      log.info("Restart cancellation requested");
-      return { success: true, message: "Restart cancellation requested" };
-    }
-    return { success: false, message: "No restart in progress" };
+    const success = this.maintenance.cancel("restart") || this.maintenance.cancel("workshop");
+    return { success, message: success ? "Restart cancellation requested" : "No cancellable restart in progress" };
   }
 
   stopAllJobs(): void {
-    for (const pending of this.pendingRestarts.values()) clearTimeout(pending);
-    this.pendingRestarts.clear();
-    if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
-    this.autoRestartRetryTimer = null;
-    if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
-    this.backupRetryTimer = null;
-    this.backupScheduleGeneration++;
     for (const [taskId, job] of this.jobs) {
       job.stop();
       log.debug(`Stopped scheduled task: ${taskId}`);
@@ -624,211 +492,24 @@ export class Scheduler {
   }
 
   async setupBackupSchedule(): Promise<void> {
-    const generation = ++this.backupScheduleGeneration;
-    if (this.backupRetryTimer) clearTimeout(this.backupRetryTimer);
-    this.backupRetryTimer = null;
-    if (this.backupJob) {
-      this.backupJob.stop();
-      this.backupJob = null;
+    this.backupJob?.stop(); this.backupJob = null;
+    if (!this.backupService) return;
+    const settings = await this.backupService.getSettings();
+    if (!settings.enabled) return;
+    if (!isSupportedFiveFieldCron(settings.schedule) || isCronTooFrequent(settings.schedule)) {
+      log.error(`Invalid backup schedule: ${settings.schedule}`); return;
     }
-
-    if (!this.backupService) {
-      log.debug("Backup service not available");
-      return;
-    }
-
-    try {
-      const settings = await this.backupService.getSettings();
-
-      if (!settings.enabled) {
-        log.info("Scheduled backups are disabled");
-        return;
-      }
-
-      if (
-        !isSupportedFiveFieldCron(settings.schedule) ||
-        isCronTooFrequent(settings.schedule)
-      ) {
-        log.error(
-          `Invalid backup schedule cron expression: ${settings.schedule}`,
-        );
-        return;
-      }
-
-      let pendingSince: number | null = null;
-      let running = false;
-
-      const queueRetry = (serverId: string | number | null) => {
-        if (this.backupRetryTimer || generation !== this.backupScheduleGeneration) return;
-        this.backupRetryTimer = setTimeout(() => {
-          this.backupRetryTimer = null;
-          void runBackup(serverId).catch((error: unknown) =>
-            log.error(`Scheduled backup retry failed: ${errorMessage(error)}`));
-        }, 5 * 60_000);
-      };
-      const runBackup = async (expectedServerId?: string | number | null) => {
-        if (running || generation !== this.backupScheduleGeneration) return;
-        running = true;
-        try {
-          const activeServer = await getCurrentServer();
-          if (expectedServerId != null && String(activeServer?.id ?? "") !== String(expectedServerId)) {
-            log.info("Deferred backup cancelled because the active server changed");
-            pendingSince = null;
-            return;
-          }
-          pendingSince ??= Date.now();
-          if (this.restartInProgress) {
-            log.warn(
-              "Scheduled backup skipped: a restart is currently in progress (would risk archiving a save mid-write)",
-            );
-            await recordScheduleExecution(
-              null,
-              "Scheduled Backup",
-              "backup",
-              false,
-              "Skipped: a restart was in progress",
-              0,
-            );
-            queueRetry(activeServer?.id ?? null);
-            return;
-          }
-          log.info("Executing scheduled backup");
-          const startTime = Date.now();
-          try {
-            let allowOccupiedScheduled = false;
-            if (settings.forceAfterMinutes != null &&
-                Date.now() - pendingSince >= (settings.forceAfterMinutes - settings.forceWarningMinutes) * 60_000) {
-              let players;
-              try { players = await this.rconService?.getPlayers?.(); } catch { /* backup service will defer */ }
-              if (players?.success && Array.isArray(players.players) && players.players.length > 0) {
-                allowOccupiedScheduled = await this.warnForForcedBackup(
-                  activeServer?.id ?? null, settings.forceWarningMinutes, generation,
-                );
-                if (!allowOccupiedScheduled) {
-                  if (generation !== this.backupScheduleGeneration) return;
-                  await recordScheduleExecution(null, "Scheduled Backup", "backup", false,
-                    "Forced backup postponed: player warning or schedule verification failed", Date.now() - startTime);
-                  queueRetry(activeServer?.id ?? null);
-                  return;
-                }
-              }
-            }
-            if (generation !== this.backupScheduleGeneration) return;
-            const result = await this.backupService.createBackup({
-              includeDb: settings.includeDb,
-              scheduled: true,
-              allowOccupiedScheduled,
-              activeServer,
-            });
-            const duration = Date.now() - startTime;
-            if (result.success) {
-              const skipNote = result.skippedFiles?.length
-                ? ` (${result.skippedFiles.length} file(s) not included -- a temp/log/lock file rewritten mid-backup, or a symbolic link deliberately not followed: ${result.skippedFiles.join(", ")})`
-                : "";
-              await recordScheduleExecution(
-                null,
-                "Scheduled Backup",
-                "backup",
-                true,
-                `Created: ${result.backup.name}${skipNote}`,
-                duration,
-              );
-              log.info(`Scheduled backup completed: ${result.backup.name}${skipNote}`);
-              pendingSince = null;
-            } else {
-              await recordScheduleExecution(
-                null,
-                "Scheduled Backup",
-                "backup",
-                false,
-                result.message,
-                duration,
-              );
-              if (result.deferred) {
-                log.info(`Scheduled backup postponed: ${result.message}`);
-                queueRetry(activeServer?.id ?? null);
-              } else {
-                log.error(`Scheduled backup failed: ${result.message}`);
-                pendingSince = null;
-              }
-            }
-          } catch (error: unknown) {
-            const duration = Date.now() - startTime;
-            await recordScheduleExecution(
-              null,
-              "Scheduled Backup",
-              "backup",
-              false,
-              errorMessage(error),
-              duration,
-            );
-            log.error(`Scheduled backup error: ${errorMessage(error)}`);
-            pendingSince = null;
-          }
-        } catch (error: unknown) {
-          pendingSince = null;
-          log.error(`Scheduled backup could not read its target: ${errorMessage(error)}`);
-        } finally {
-          running = false;
-        }
-      };
-      this.backupJob = cron.schedule(settings.schedule, async () => {
-        if (this.backupRetryTimer) return;
-        await runBackup();
-      }, { timezone: this.effectiveTimezone });
-      this.backupJob.on("execution:missed", (context: any) =>
-        recordMissedExecution(null, "Scheduled Backup", "backup", context),
-      );
-
-      log.info(`Backup schedule configured: ${settings.schedule} (timezone: ${this.effectiveTimezone})`);
-
-      const dstWarning = dstFallBackWarning(
-        settings.schedule,
-        this.effectiveTimezone,
-        "backup",
-      );
-      if (dstWarning) log.warn(dstWarning);
-    } catch (error: unknown) {
-      log.error(`Failed to setup backup schedule: ${errorMessage(error)}`);
-    }
-  }
-
-  async warnForForcedBackup(
-    serverId: string | number | null,
-    warningMinutes: number,
-    generation: number,
-  ): Promise<boolean> {
-    try {
-      const stillCurrent = async () =>
-        generation === this.backupScheduleGeneration &&
-        !this.restartInProgress &&
-        !this.backupService?.backupInProgress &&
-        !this.backupService?.restoreInProgress &&
-        String((await getCurrentServer())?.id ?? "") === String(serverId ?? "");
-      const minutes = [...new Set([warningMinutes, 10, 5, 3, 2, 1])]
-        .filter((minute) => minute <= warningMinutes).sort((a, b) => b - a);
-      let previous = warningMinutes;
-      for (const minute of minutes) {
-        await this.sleep((previous - minute) * 60_000);
-        if (!(await stillCurrent())) return false;
-        const warned = await this.rconService?.serverMessage?.(
-          `Full backup in ${minute} minute(s). The server will save, stop and restart.`,
-        );
-        if (!warned?.success || warned.rejected) return false;
-        previous = minute;
-      }
-      await this.sleep(30_000);
-      if (!(await stillCurrent())) return false;
-      const warned = await this.rconService?.serverMessage?.(
-        "Full backup in 30 seconds. The server will save, stop and restart.",
-      );
-      if (!warned?.success || warned.rejected) return false;
-      await this.sleep(30_000);
-      return stillCurrent();
-    } catch (error: unknown) {
-      log.warn(`Forced backup warning failed: ${errorMessage(error)}`);
-      return false;
-    }
+    this.backupJob = cron.schedule(settings.schedule, async () => {
+      const started = Date.now();
+      try {
+        const result = await this.backupService.createBackup({ scheduled: true, io: this.io });
+        await recordScheduleExecution(null, "Scheduled Backup", "backup", result.success,
+          result.success ? `Created: ${result.backup.name}${result.skippedFiles?.length ? `; files not included (temporary files or symbolic links): ${result.skippedFiles.join(", ")}` : ""}` : result.message, Date.now() - started);
+      } catch (error) { log.error(`Scheduled backup failed: ${errorMessage(error)}`); }
+    }, { timezone: this.effectiveTimezone });
+    this.backupJob.on("execution:missed", (context: any) => recordMissedExecution(null, "Scheduled Backup", "backup", context));
+    const warning = dstFallBackWarning(settings.schedule, this.effectiveTimezone, "backup");
+    if (warning) log.warn(warning);
   }
 
   setupAutoRestart(): void {
@@ -836,8 +517,6 @@ export class Scheduler {
     const cronExpression = process.env.AUTO_RESTART_CRON || "0 */6 * * *";
     if (this.autoRestartJob) this.autoRestartJob.stop();
     this.autoRestartJob = null;
-    if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
-    this.autoRestartRetryTimer = null;
     if (!enabled) {
       log.info("Auto-restart is disabled");
       return;
@@ -852,14 +531,9 @@ export class Scheduler {
     }
 
     const runAutoRestart = async () => {
-      if (this.autoRestartRetryTimer) clearTimeout(this.autoRestartRetryTimer);
-      this.autoRestartRetryTimer = null;
-      log.info("Executing scheduled auto-restart");
+          log.info("Executing scheduled auto-restart");
       try {
         const result = await this.performRestart(null, { onlyWhenEmpty: true });
-        if (result?.deferred && this.autoRestartJob) {
-          this.autoRestartRetryTimer = setTimeout(() => void runAutoRestart(), 60000);
-        }
         if (!result?.success) {
           const message = `Scheduled auto-restart did not complete: ${result?.message || "unknown error"}`;
           if (result?.deferred) log.info(message);
@@ -884,651 +558,24 @@ export class Scheduler {
     if (dstWarning) log.warn(dstWarning);
   }
 
-  async _broadcastRestartMessage(
-    text: string,
-    rconService: any = this.rconService,
-  ): Promise<boolean> {
-    let delivered = false;
-    try {
-      const r = await rconService.serverMessage(text, { skipLog: true });
-      delivered = r?.success === true && r.rejected !== true;
-      if (!delivered) {
-        log.warn(
-          `Restart broadcast (RCON) failed: ${r?.error || r?.response || "unknown"}`,
-        );
-      }
-    } catch (err: unknown) {
-      log.warn(`Restart broadcast (RCON) threw: ${errorMessage(err)}`);
+  async performRestart(warningMinutes: number | null = null, options: {
+    rconService?: any; serverManager?: any; label?: string; onlyWhenEmpty?: boolean;
+    lifecycleLock?: LifecycleLock | null;
+  } = {}): Promise<any> {
+    if (options.rconService && options.rconService !== this.rconService || options.serverManager && options.serverManager !== this.serverManager) {
+      throw new Error("Restart target does not match the bound server runtime");
     }
-
-    if (rconService !== this.rconService) return delivered;
-    try {
-      if (
-        getPanelRuntime().panelBridge &&
-        typeof getPanelRuntime().panelBridge.isModConnected === "function" &&
-        getPanelRuntime().panelBridge.isModConnected()
-      ) {
-        getPanelRuntime().panelBridge
-          .sendCommand("sendToServerChat", { message: text, isAlert: true })
-          .catch((err: unknown) => {
-            log.debug(`Restart broadcast (bridge) failed: ${errorMessage(err)}`);
-          });
-      }
-    } catch (err: unknown) {
-      log.debug(`Restart broadcast (bridge) threw: ${errorMessage(err)}`);
-    }
-    return delivered;
-  }
-
-  async performRestart(
-    warningMinutesParam: number | null = null,
-    {
-      rconService = this.rconService,
-      serverManager = this.serverManager,
-      label = "Auto Restart",
-      onlyWhenEmpty = false,
-      requireWarnings = false,
-      lifecycleLock: providedLifecycleLock = null,
-    }: {
-      rconService?: any;
-      serverManager?: any;
-      label?: string;
-      onlyWhenEmpty?: boolean;
-      requireWarnings?: boolean;
-      lifecycleLock?: LifecycleLock | null;
-    } = {},
-  ): Promise<any> {
-    if (this.restartInProgress) {
-      log.info("Restart already in progress, ignoring duplicate request");
-      return { success: false, message: "Restart already in progress" };
-    }
-
-    const lifecycleLock =
-      providedLifecycleLock ||
-      acquireLifecycleLock("restart", serverManager?.serverName || null);
-    if (!lifecycleLock) {
-      return { success: false, ...lifecycleInProgressResponse() };
-    }
-
-    this.restartInProgress = true;
-    this.restartCancelled = false;
-    const warningMinutes =
-      warningMinutesParam ??
-      (parseInt(process.env.RESTART_WARNING_MINUTES ?? "", 10) || 5);
-    const restartWarning = normalizeRestartWarningSettings(this.restartWarning);
-    const restartStartTime = Date.now();
-
-    let pinnedServerId = serverManager._serverId ?? null;
-    if (pinnedServerId == null) {
-      try {
-        pinnedServerId = (await getCurrentServer())?.id ?? null;
-      } catch (error: unknown) {
-        log.debug(`Could not pin restart target: ${errorMessage(error)}`);
-      }
-    }
-
-    try {
-      const readProcessDetails = async () => {
-        if (typeof serverManager.getServerProcessDetails === "function") {
-          return serverManager.getServerProcessDetails();
-        }
-        return { running: false, scanFailed: true };
-      };
-
-      const initialProcessDetails = await readProcessDetails();
-      const processScanFailed = Boolean(initialProcessDetails?.scanFailed);
-      let wasRunning = Boolean(initialProcessDetails?.running);
-      log.info(`Auto-restart: Process check returned: ${wasRunning}`);
-
-      if (!wasRunning && rconService.connected) {
-        log.info(
-          "Auto-restart: Process check failed but RCON is connected - server IS running",
-        );
-        wasRunning = true;
-      }
-
-      if (!wasRunning) {
-        try {
-          const testResult = await rconService.execute("players", {
-            skipLog: true,
-          });
-          if (testResult.success) {
-            log.info(
-              "Auto-restart: RCON command succeeded - server IS running",
-            );
-            wasRunning = true;
-          }
-        } catch (e: unknown) {
-          log.debug(`Auto-restart: RCON test failed: ${errorMessage(e)}`);
-        }
-      }
-
-      if (!wasRunning) {
-        if (processScanFailed) {
-          const restartDuration = Date.now() - restartStartTime;
-          const errorMsg =
-            "Could not confirm whether the server is stopped because process detection failed";
-          await recordScheduleExecution(
-            null,
-            label,
-            "restart",
-            false,
-            errorMsg,
-            restartDuration,
-          );
-          recordServerEvent("auto_restart_error", errorMsg);
-          return { success: false, wasRunning: false, message: errorMsg };
-        }
-
-        log.info(
-          "Auto-restart triggered but server was not running - starting server",
-        );
-        const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
-        if (isFirstBootMissingAdminPassword(restartTarget)) {
-          const errorMsg = "Set an admin password before starting this game for the first time";
-          await recordScheduleExecution(null, label, "restart", false, errorMsg, Date.now() - restartStartTime);
-          return { success: false, wasRunning: false, message: errorMsg };
-        }
-        await refreshLaunchTargetBeforeStart(restartTarget, {
-          managedHandled: Boolean(restartTarget?.dockerContainerName) && !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(restartTarget)),
-        });
-        if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") await ensureBundledGameContainer(restartTarget);
-        const managedStart = await runManagedLifecycle("start", { serverId: pinnedServerId });
-        const started = managedStart.handled
-          ? managedStart
-          : await serverManager.startServer({ serverId: pinnedServerId });
-        if (!started?.success) {
-          log.warn(
-            `Auto-restart: start command reported failure: ${started?.error || started?.message || "unknown error"}`,
-          );
-        }
-
-        await this.sleep(10000);
-        const postStartDetails = await readProcessDetails();
-        const isNowRunning =
-          rconService.connected ||
-          Boolean(postStartDetails && !postStartDetails.scanFailed && postStartDetails.running);
-
-        const restartDuration = Date.now() - restartStartTime;
-        if (isNowRunning) {
-          await recordScheduleExecution(
-            null,
-            label,
-            "restart",
-            true,
-            "Server was offline - started successfully",
-            restartDuration,
-          );
-          recordServerEvent(
-            "auto_restart",
-            "Server was offline - started successfully",
-          );
-          log.info("Server started successfully (was not running)");
-        } else {
-          await recordScheduleExecution(
-            null,
-            label,
-            "restart",
-            false,
-            "Server was offline - failed to start",
-            restartDuration,
-          );
-          recordServerEvent(
-            "auto_restart_error",
-            "Server was offline - failed to start",
-          );
-          log.error("Failed to start server");
-        }
-        return { success: isNowRunning, wasRunning: false };
-      }
-
-      if (!rconService.connected) {
-        log.info("Auto-restart: RCON not connected, attempting to connect...");
-        try {
-          await rconService.connect();
-        } catch (e: unknown) {
-          log.error(`Auto-restart: Failed to connect RCON: ${errorMessage(e)}`);
-        }
-      }
-
-      const testResult = await rconService.execute("players", {
-        skipLog: true,
-      });
-      if (!testResult.success) {
-        const restartDuration = Date.now() - restartStartTime;
-        const errorMsg = `RCON not available: ${testResult.error || "connection failed"}`;
-        log.error(`Auto-restart failed: ${errorMsg}`);
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          false,
-          errorMsg,
-          restartDuration,
-        );
-        recordServerEvent("auto_restart_error", errorMsg);
-        return { success: false, message: errorMsg };
-      }
-
-      const deferForPlayers = async (): Promise<any | null> => {
-        if (!onlyWhenEmpty) return null;
-        let players;
-        try {
-          players = await rconService.getPlayers?.();
-        } catch (error: unknown) {
-          log.warn(`Could not check online players before restart: ${errorMessage(error)}`);
-        }
-        if (players?.success && Array.isArray(players.players) && players.players.length === 0) return null;
-        const message = players?.success && Array.isArray(players.players)
-          ? `${players.players.length} player(s) online; restart postponed until the server is empty`
-          : "Could not verify whether players are online; restart postponed";
-        log.info(message);
-        return { success: false, deferred: true, wasRunning: true, message };
-      };
-
-      const initialDeferral = await deferForPlayers();
-      if (initialDeferral) return initialDeferral;
-
-      const broadcast = async (message: string) => {
-        const delivered = await this._broadcastRestartMessage(message, rconService);
-        if (requireWarnings && !delivered) throw new Error("Could not warn online players; restart cancelled");
-      };
-
-      log.info("Auto-restart: RCON verified, sending warnings...");
-
-      if (warningMinutes > 0) {
-        for (let i = warningMinutes; i > 0; i--) {
-          if (this.restartCancelled) {
-            log.info("Auto-restart: Cancelled during countdown");
-            await this._broadcastRestartMessage(
-              getRestartWarningNotice(restartWarning, "cancelled"),
-              rconService,
-            );
-            return { success: false, message: "Restart cancelled" };
-          }
-          await broadcast(
-            formatRestartWarning(restartWarning, i, "minute"),
-          );
-
-          if (i > 1) {
-            await this.sleep(60000);
-          }
-        }
-
-        const finalTicks = [
-          { wait: 30000, count: 30 },
-          { wait: 20000, count: 10 },
-          { wait: 5000, count: 5 },
-          { wait: 1000, count: 4 },
-          { wait: 1000, count: 3 },
-          { wait: 1000, count: 2 },
-          { wait: 1000, count: 1 },
-        ];
-        for (const tick of finalTicks) {
-          await this.sleep(tick.wait);
-          if (this.restartCancelled) {
-            log.info("Auto-restart: Cancelled during final countdown");
-            await this._broadcastRestartMessage(
-              getRestartWarningNotice(restartWarning, "cancelled"),
-              rconService,
-            );
-            return { success: false, message: "Restart cancelled" };
-          }
-          await broadcast(
-            formatRestartWarning(restartWarning, tick.count, "second"),
-          );
-        }
-
-        await this.sleep(1000);
-        const finalDeferral = await deferForPlayers();
-        if (finalDeferral) return finalDeferral;
-        await broadcast(
-          getRestartWarningNotice(restartWarning, "restarting"),
-        );
-        await this.sleep(2000);
-      } else {
-        const finalDeferral = await deferForPlayers();
-        if (finalDeferral) return finalDeferral;
-        await broadcast(
-          getRestartWarningNotice(restartWarning, "restarting"),
-        );
-        await this.sleep(2000);
-      }
-
-      log.info("Auto-restart: Saving world...");
-      const saveResult = await rconService.save({ skipLog: true });
-      if (!saveResult?.success) {
-        const restartDuration = Date.now() - restartStartTime;
-        const errorMsg = `Save failed; restart cancelled: ${saveResult?.error || "unknown error"}`;
-        log.error(`Auto-restart: ${errorMsg}`);
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          false,
-          errorMsg,
-          restartDuration,
-        );
-        await recordServerEvent("auto_restart_error", errorMsg);
-        return { success: false, wasRunning: true, message: errorMsg };
-      }
-      await this.sleep(3000);
-      const postSaveDeferral = await deferForPlayers();
-      if (postSaveDeferral) return postSaveDeferral;
-
-      const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
-      if (restartTarget?.dockerContainerName) {
-        await refreshLaunchTargetBeforeStart(restartTarget, {
-          managedHandled: !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(restartTarget)),
-        });
-      }
-      const managed = await runManagedLifecycle("restart", {
-        serverId: pinnedServerId,
-      });
-      if (managed.handled && !managed.success) {
-        const restartDuration = Date.now() - restartStartTime;
-        const errorMsg = `Container restart failed: ${managed.error || "unknown error"}`;
-        log.error(`Auto-restart failed: ${errorMsg}`);
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          false,
-          errorMsg,
-          restartDuration,
-        );
-        recordServerEvent("auto_restart_error", errorMsg);
-        return { success: false, wasRunning: true, message: errorMsg };
-      }
-
-      if (!managed.handled) {
-        log.info("Auto-restart: Sending quit command...");
-        const quit = await rconService.quit({ skipLog: true });
-        if (!quit?.success) {
-          log.warn(
-            `Auto-restart: quit command failed (${quit?.error || "unknown error"}), falling back to a forced stop`,
-          );
-        }
-        await this.sleep(10000);
-
-        let attempts = 0;
-        let processDetails = await readProcessDetails();
-        if (!processDetails || processDetails.scanFailed) {
-          const restartDuration = Date.now() - restartStartTime;
-          const errorMsg =
-            "Could not confirm the old server stopped because process detection failed";
-          await recordScheduleExecution(
-            null,
-            label,
-            "restart",
-            false,
-            errorMsg,
-            restartDuration,
-          );
-          recordServerEvent("auto_restart_error", errorMsg);
-          return { success: false, wasRunning: true, message: errorMsg };
-        }
-        while (processDetails.running && attempts < 60) {
-          await this.sleep(1000);
-          attempts++;
-          processDetails = await readProcessDetails();
-          if (!processDetails || processDetails.scanFailed) {
-            const restartDuration = Date.now() - restartStartTime;
-            const errorMsg =
-              "Could not confirm the old server stopped because process detection failed";
-            await recordScheduleExecution(
-              null,
-              label,
-              "restart",
-              false,
-              errorMsg,
-              restartDuration,
-            );
-            recordServerEvent("auto_restart_error", errorMsg);
-            return { success: false, wasRunning: true, message: errorMsg };
-          }
-        }
-
-        if (processDetails.running) {
-          const forced = await serverManager.stopServer(false, {
-            serverId: pinnedServerId,
-          });
-          if (!forced?.success || forced.confirmed === false) {
-            const stopError =
-              forced?.error || forced?.message || "unknown error";
-            const restartDuration = Date.now() - restartStartTime;
-            log.warn(`Auto-restart: forced stop failed: ${stopError}`);
-            await recordScheduleExecution(
-              null,
-              label,
-              "restart",
-              false,
-              `Could not confirm the old server stopped: ${stopError}`,
-              restartDuration,
-            );
-            recordServerEvent(
-              "auto_restart_error",
-              `Could not confirm the old server stopped: ${stopError}`,
-            );
-            return {
-              success: false,
-              wasRunning: true,
-              message: `Could not confirm the old server stopped: ${stopError}`,
-            };
-          }
-          await this.sleep(5000);
-        }
-
-        this._emitVerifiedTransition(false);
-
-        await this.sleep(3000);
-      }
-
-      if (!managed.handled) {
-        await refreshLaunchTargetBeforeStart(restartTarget, { managedHandled: false });
-      }
-
-      if (rconService.setServerStarting) {
-        rconService.setServerStarting(true);
-      } else {
-        rconService.serverStarting = true;
-      }
-
-      let serverStarted = false;
-      if (managed.handled) {
-        serverStarted = true;
-        log.info("Auto-restart: Managed container restarted");
-      } else {
-        log.info("Auto-restart: Starting server...");
-        await this._ensureRestartTarget(serverManager, pinnedServerId);
-        const restarted = await serverManager.startServer({
-          skipRunningCheck: true,
-          serverId: pinnedServerId,
-        });
-        if (!restarted?.success) {
-          log.warn(
-            `Auto-restart: start command reported failure: ${restarted?.error || restarted?.message || "unknown error"}`,
-          );
-        }
-
-        for (let i = 0; i < 60; i++) {
-          await this.sleep(1000);
-          const processDetails = await readProcessDetails();
-          if (
-            rconService.connected ||
-            (processDetails &&
-              !processDetails.scanFailed &&
-              processDetails.running)
-          ) {
-            serverStarted = true;
-            log.info("Auto-restart: Server process detected as running");
-            break;
-          }
-        }
-      }
-
-      if (!serverStarted) {
-        if (rconService.setServerStarting) {
-          rconService.setServerStarting(false);
-        } else {
-          rconService.serverStarting = false;
-        }
-        const restartDuration = Date.now() - restartStartTime;
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          false,
-          "Server stopped but failed to start",
-          restartDuration,
-        );
-        recordServerEvent(
-          "auto_restart_error",
-          "Server stopped but failed to start",
-        );
-        log.error("Auto-restart: Server stopped but failed to start");
-        return { success: false, wasRunning: true };
-      }
-
-      this._emitVerifiedTransition(true);
-
-      log.info("Auto-restart: Waiting for RCON to be ready...");
-      const rconDelays = [60000, 45000, 45000, 45000, 45000];
-      let rconConnected = false;
-
-      for (let i = 0; i < rconDelays.length; i++) {
-        const delaySeconds = rconDelays[i] / 1000;
-        log.info(
-          `Auto-restart: RCON waiting ${delaySeconds}s before attempt ${i + 1}/${rconDelays.length}...`,
-        );
-        await this.sleep(rconDelays[i]);
-
-        if (rconService.connected) {
-          rconConnected = true;
-          log.info("Auto-restart: RCON connected during wait period");
-          break;
-        }
-
-        if (rconService.forceResetConnectionState) {
-          rconService.forceResetConnectionState();
-        }
-
-        let connectTimeoutId!: ReturnType<typeof setTimeout>;
-        try {
-          log.info(
-            `Auto-restart: RCON attempting connection ${i + 1}/${rconDelays.length}...`,
-          );
-          const connectPromise = rconService.connect();
-          const timeoutPromise = new Promise((_, reject) => {
-            connectTimeoutId = setTimeout(
-              () => reject(new Error("Connection attempt timed out after 15s")),
-              15000,
-            );
-          });
-
-          const connectResult = await Promise.race([
-            connectPromise,
-            timeoutPromise,
-          ]);
-
-          if (rconService.connected) {
-            rconConnected = true;
-            log.info("Auto-restart: RCON connected after server startup");
-            break;
-          } else {
-            log.info(
-              `Auto-restart: RCON attempt ${i + 1} - not connected (result: ${connectResult})`,
-            );
-          }
-        } catch (e: unknown) {
-          log.info(`Auto-restart: RCON attempt ${i + 1} failed: ${errorMessage(e)}`);
-          if (rconService.forceResetConnectionState) {
-            rconService.forceResetConnectionState();
-          }
-        } finally {
-          clearTimeout(connectTimeoutId);
-        }
-        // Don't toggle serverStarting - keep it true to block auto-reconnect
-      }
-
-      if (rconConnected) {
-        log.info("Auto-restart: RCON startup sequence completed - connected");
-      } else {
-        log.warn(
-          "Auto-restart: RCON startup sequence completed - NOT connected (auto-reconnect will keep trying every 30s)",
-        );
-      }
-
-      if (rconService.setServerStarting) {
-        rconService.setServerStarting(false);
-      } else {
-        rconService.serverStarting = false;
-      }
-      this.io?.emit?.("server:status", {
-        running: true,
-        state: rconConnected ? "ready" : "running-not-ready",
-      });
-
-      const restartDuration = Date.now() - restartStartTime;
-
-      if (serverStarted) {
-        const rconStatus = rconConnected
-          ? " (RCON connected)"
-          : " (RCON not yet connected)";
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          true,
-          "Server restarted successfully" + rconStatus,
-          restartDuration,
-        );
-        recordServerEvent(
-          "auto_restart",
-          "Server restarted successfully" + rconStatus,
-        );
-        log.info(
-          `Auto-restart completed successfully (took ${Math.round(restartDuration / 1000)}s)${rconStatus}`,
-        );
-      } else {
-        await recordScheduleExecution(
-          null,
-          label,
-          "restart",
-          false,
-          "Server stopped but failed to start",
-          restartDuration,
-        );
-        recordServerEvent(
-          "auto_restart_error",
-          "Server stopped but failed to start",
-        );
-        log.error("Auto-restart: Server stopped but failed to start");
-      }
-
-      return { success: serverStarted, wasRunning: true };
-    } catch (error: unknown) {
-      const restartDuration = Date.now() - restartStartTime;
-      log.error(`Auto-restart failed: ${errorMessage(error)}`);
-      await recordScheduleExecution(
-        null,
-        label,
-        "restart",
-        false,
-        errorMessage(error),
-        restartDuration,
-      );
-      recordServerEvent("auto_restart_error", errorMessage(error));
-      if (rconService.setServerStarting) {
-        rconService.setServerStarting(false);
-      } else {
-        rconService.serverStarting = false;
-      }
-      throw error;
-    } finally {
-      this.restartInProgress = false;
-      lifecycleLock.release();
-    }
+    const started = Date.now();
+    const label = options.label || "Restart";
+    const result = await this.maintenance.run({ kind: "restart", label,
+      automatic: options.onlyWhenEmpty === true,
+      warningMinutes: warningMinutes ?? (parseInt(process.env.RESTART_WARNING_MINUTES || "", 10) || 5),
+      lifecycleLock: options.lifecycleLock,
+      notice: (count, unit) => formatRestartWarning(this.restartWarning, count, unit === "minutes" ? "minute" : "second"),
+    });
+    await recordScheduleExecution(null, label, "restart", result.success, result.message || label, Date.now() - started);
+    await recordServerEvent(result.success ? "auto_restart" : "auto_restart_error", result.message || label);
+    return result;
   }
 
   getStatus(): Record<string, any> {
@@ -1541,6 +588,7 @@ export class Scheduler {
       activeTasks: tasks.length,
       autoRestartEnabled: !!this.autoRestartJob,
       backupScheduleEnabled: !!this.backupJob,
+      maintenance: this.maintenance.active,
       nextRun: this.getNextRun(),
       timezone: this.effectiveTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
       configuredTimezone: this.configuredTimezone,
@@ -1548,10 +596,6 @@ export class Scheduler {
       restartWarning: normalizeRestartWarningSettings(this.restartWarning),
       restartWarningPresets: getRestartWarningPresetTemplates(),
     };
-  }
-
-  sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   shutdown(): void {

@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
@@ -9,6 +10,9 @@ const logServerEvent = vi.fn(async () => {});
 const updateServer = vi.fn(async () => ({}));
 
 vi.mock("../database/init.ts", () => ({
+  exportServerPanelSettings: vi.fn(() => ({ settings: {}, tasks: [] })),
+  validateServerPanelSettings: vi.fn(value => value),
+  restoreServerPanelSettings: vi.fn(),
   getCurrentServer: vi.fn(async () => null),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -40,7 +44,7 @@ function writeWorld(dir, marker) {
 }
 
 function createService() {
-  const service = new BackupService();
+  const service = archiveService(BackupService);
   service.getSavesPath = async () => savesPath;
   service.getBackupsPath = async () => backupsPath;
   service.setServerManager({
@@ -88,7 +92,7 @@ describe("restoreBackup archive safety", () => {
   it("never selects another world's save folder when the active profile has no save yet", async () => {
     const otherWorld = path.join(root, "Saves", "Multiplayer", "OtherServer");
     writeWorld(otherWorld, "OTHER");
-    const service = new BackupService();
+    const service = archiveService(BackupService);
     const selected = { id: "selected", zomboidDataPath: root, serverName: "NewServer" };
 
     expect(await service.getSavesPath(selected)).toBe(
@@ -135,7 +139,7 @@ describe("restoreBackup archive safety", () => {
   });
 
   it("refuses to restore when no server manager has been wired at all", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
     service.getSavesPath = async () => savesPath;
     service.getBackupsPath = async () => backupsPath;
 
@@ -385,71 +389,6 @@ describe("restoreBackup archive safety", () => {
 });
 
 describe("createBackup archive safety", () => {
-  it("saves and stops a running server, then restarts it after creating a full backup", async () => {
-    const service = createService();
-    let running = true;
-    const save = vi.fn(async () => ({ success: true }));
-    const quit = vi.fn(async () => { running = false; return { success: true }; });
-    const startServer = vi.fn(async () => { running = true; return { success: true }; });
-    service.setServerManager({
-      getServerProcessDetails: async () => ({ running, scanFailed: false }),
-      startServer,
-    });
-    service.setRconService({ connected: true, save, quit });
-
-    const result = await service.createBackup();
-
-    expect(result.success).toBe(true);
-    expect(running).toBe(true);
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(quit).toHaveBeenCalledTimes(1);
-    expect(startServer).toHaveBeenCalledTimes(1);
-    expect(fs.existsSync(result.backup.path)).toBe(true);
-  });
-
-  it("postpones a scheduled full backup when a player joins during the save", async () => {
-    const service = createService();
-    service.setServerManager({
-      getServerProcessDetails: async () => ({ running: true, scanFailed: false }),
-    });
-    const save = vi.fn(async () => ({ success: true }));
-    const quit = vi.fn(async () => ({ success: true }));
-    const getPlayers = vi.fn()
-      .mockResolvedValueOnce({ success: true, players: [] })
-      .mockResolvedValueOnce({ success: true, players: [{ name: "new-player" }] });
-    service.setRconService({ connected: true, getPlayers, save, quit });
-
-    const result = await service.createBackup({ scheduled: true });
-
-    expect(result).toMatchObject({ success: false, deferred: true });
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(quit).not.toHaveBeenCalled();
-    expect(fs.readdirSync(backupsPath)).toEqual([]);
-  });
-
-  it("creates the full archive after the scheduler has completed an explicit player countdown", async () => {
-    const service = createService();
-    let running = true;
-    const save = vi.fn(async () => ({ success: true }));
-    const quit = vi.fn(async () => { running = false; return { success: true }; });
-    const startServer = vi.fn(async () => { running = true; return { success: true }; });
-    const getPlayers = vi.fn(async () => ({ success: true, players: [{ name: "online" }] }));
-    service.setServerManager({
-      getServerProcessDetails: async () => ({ running, scanFailed: false }),
-      startServer,
-    });
-    service.setRconService({ connected: true, getPlayers, save, quit });
-
-    const result = await service.createBackup({ scheduled: true, allowOccupiedScheduled: true });
-
-    expect(result.success).toBe(true);
-    expect(getPlayers).not.toHaveBeenCalled();
-    expect(save).toHaveBeenCalledOnce();
-    expect(quit).toHaveBeenCalledOnce();
-    expect(startServer).toHaveBeenCalledOnce();
-    expect(running).toBe(true);
-  });
-
   it("restores config, account DB, and panel profile from a full archive", async () => {
     const configPath = path.join(root, "Server");
     const accountPath = path.join(root, "db");

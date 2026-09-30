@@ -3,17 +3,21 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Updates");
-import { getSetting, setSetting, getCurrentServer, getServers } from "../database/init.ts";
-import { getDockerClient, isBundledGameProfile, resolveDockerHostSignal, resolveManagedContainer, runManagedLifecycle } from "./managedContainer.ts";
+import { getSetting, setSetting, getCurrentServer, getServers, updateServer } from "../database/init.ts";
+import { isBundledGameProfile } from "./managedContainer.ts";
+import { getServerRuntimes } from "../utils/panelRuntime.ts";
+import { runForServer } from "../utils/serverScope.ts";
+import { isLifecycleLocked } from "./lifecycleCoordinator.ts";
+import { type ServerMaintenance, type MaintenanceResult } from "./serverMaintenance.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import {
   hasActiveSteamOperation,
+  steamInstallKey,
   getActiveSteamOperations,
   clearActiveSteamOperation,
   isSteamOperationIdle,
   STEAM_OPERATION_IDLE_TIMEOUT_MS,
 } from "./activeSteamOperations.ts";
-import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 
 type UpdateSocket = {
@@ -51,6 +55,7 @@ type ServerManager = {
 type UpdateCheckerOptions = {
   rconService?: RconService;
   serverManager?: ServerManager;
+  maintenance?: ServerMaintenance;
 };
 
 type InstalledBuildInfo = {
@@ -73,42 +78,8 @@ type UpdateInfo = {
   lastCheck: string;
 };
 
-type AutoUpdateResult = {
-  status: "success" | "failed";
-  at: string;
-  dismissed: boolean;
-  appliedVersion?: string | null;
-  reason?: string;
-  params?: unknown;
-  phase?: string;
-  serverUp?: boolean | null;
-};
-
-type AutoUpdateResultInput = Omit<AutoUpdateResult, "dismissed">;
-
-class AutoUpdateError extends Error {
-  autoUpdateReason?: string;
-  autoUpdateParams?: unknown;
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function errorCode(error: unknown): string {
-  if (error && typeof error === "object" && "code" in error) {
-    return String(error.code);
-  }
-  return "unknown";
-}
-
-export function parseAutoUpdateWarningMinutes(value: unknown): number {
-  if (value === null || value === undefined) return 15;
-  if (typeof value === "string" && value.trim() === "") return 15;
-
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 15;
-  return Math.min(60, Math.max(0, Math.floor(parsed)));
 }
 
 async function getSteamLoginArgs() {
@@ -126,13 +97,13 @@ export class UpdateChecker {
   gameVersion: string | null;
   isChecking: boolean;
   initialTimeout: ReturnType<typeof setTimeout> | null;
-  autoUpdateTimer: ReturnType<typeof setTimeout> | null;
-  autoUpdateRunning: boolean;
+  maintenance?: ServerMaintenance;
+  updating = false;
+  lastUpdateResult: (MaintenanceResult & { at: string }) | null = null;
   intervalMs: number;
   checkStartTime: number | null;
-  lastAutoUpdateResult: AutoUpdateResult | null | undefined;
 
-  constructor(io: UpdateSocket, { rconService, serverManager }: UpdateCheckerOptions = {}) {
+  constructor(io: UpdateSocket, { rconService, serverManager, maintenance }: UpdateCheckerOptions = {}) {
     this.io = io;
     this.rconService = rconService;
     this.serverManager = serverManager;
@@ -141,13 +112,11 @@ export class UpdateChecker {
     this.updateAvailable = null;
     this.gameVersion = null;
     this.isChecking = false;
-    this.autoUpdateTimer = null;
-    this.autoUpdateRunning = false;
+    this.maintenance = maintenance;
 
     this.intervalMs = 30 * 60 * 1000;
     this.initialTimeout = null;
     this.checkStartTime = null;
-    this.lastAutoUpdateResult = undefined;
   }
 
   async start(): Promise<void> {
@@ -173,10 +142,6 @@ export class UpdateChecker {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
-    }
-    if (this.autoUpdateTimer) {
-      clearTimeout(this.autoUpdateTimer);
-      this.autoUpdateTimer = null;
     }
     log.info("stopped");
   }
@@ -312,7 +277,7 @@ export class UpdateChecker {
 
     let normalizedInstallPath = null;
     if (installPath) {
-      normalizedInstallPath = path.normalize(installPath).toLowerCase();
+      normalizedInstallPath = steamInstallKey(installPath);
       if (hasActiveSteamOperation(normalizedInstallPath)) {
         throw new Error(
           "A Steam install or update is already in progress for this server's install directory. Skipping this version check until it finishes.",
@@ -519,7 +484,6 @@ export class UpdateChecker {
         if (!wasAvailable || forceEmit) {
           this.io.emit("server:updateAvailable", updateInfo);
         }
-        await this.scheduleAutoUpdate(updateInfo);
       } else {
         log.debug(
           `Server is up to date (build ${installed.buildId}, ${installed.branch} branch)`,
@@ -540,326 +504,105 @@ export class UpdateChecker {
     }
   }
 
-  async scheduleAutoUpdate(updateInfo: UpdateInfo): Promise<void> {
-    const rconService = this.rconService;
-    const serverManager = this.serverManager;
-    if (this.autoUpdateRunning || this.autoUpdateTimer || !rconService || !serverManager) return;
-
-    const enabled = await getSetting("serverAutoUpdate");
-    if (enabled !== true && enabled !== "true") return;
-
-    const warningMinutes = parseAutoUpdateWarningMinutes(
-      await getSetting("serverAutoUpdateWarningMinutes"),
-    );
-    const activeServer = await getCurrentServer();
-    if (!activeServer?.installPath) {
-      log.warn("Auto-update skipped: the active server has no install path");
-      return;
-    }
-
-    this.autoUpdateRunning = true;
-    const message = warningMinutes > 0
-      ? `A server update was detected. The server will restart in ${warningMinutes} minute${warningMinutes === 1 ? "" : "s"}.`
-      : "A server update was detected. The server is restarting now.";
-    try {
-      if (rconService.connected) {
-        const announced = await rconService.serverMessage(message, { skipLog: true });
-        if (!announced?.success) log.warn(`Could not announce automatic update: ${announced?.error || "unknown error"}`);
+  async beginUpdate(options: { installPath?: string; steamcmdPath?: string; branch?: string; validateFiles?: boolean; warningMinutes?: number } = {}): Promise<{ success: boolean; message: string }> {
+    if (isLifecycleLocked()) throw new Error("Another lifecycle operation is already in progress for this server.");
+    if (this.updating || this.maintenance?.active) throw new Error("Maintenance is already pending for this server.");
+    if (!this.maintenance) throw new Error("The server maintenance service is unavailable.");
+    const server = await getCurrentServer();
+    if (!server?.installPath || !server.serverName) throw new Error("A configured game installation is required.");
+    if (options.installPath && steamInstallKey(options.installPath) !== steamInstallKey(server.installPath)) throw new Error("Update target does not match the server in the URL.");
+    if (server.dockerContainerName && !isBundledGameProfile(server)) throw new Error("Update this external container through its owner.");
+    const steamcmdPath = options.steamcmdPath || await getSetting("steamcmdPath") || (isBundledGameProfile(server) ? "/home/steam/steamcmd" : null);
+    if (!steamcmdPath) throw new Error("Configure the SteamCMD path first.");
+    const exe = process.platform === "win32" ? path.join(steamcmdPath, "steamcmd.exe") : ["steamcmd.sh", "steamcmd"].map(name => path.join(steamcmdPath, name)).find(file => fs.existsSync(file));
+    if (!exe || !fs.existsSync(exe)) throw new Error("SteamCMD executable was not found.");
+    const installed = await this.getInstalledBuildInfo(server.installPath);
+    if (!installed?.buildId) throw new Error("The installed Steam build could not be verified.");
+    const branch = options.branch || installed.branch;
+    if (!/^(?:stable|public|unstable|42(?:\.\d+){1,2})$/.test(branch)) throw new Error("Choose a supported Build 42 Steam branch.");
+    const warningMinutes = options.warningMinutes ?? 15;
+    if (!Number.isInteger(warningMinutes) || warningMinutes < 0 || warningMinutes > 60 || typeof options.validateFiles !== "undefined" && typeof options.validateFiles !== "boolean") throw new Error("Invalid update options.");
+    const expectedBuild = this.updateAvailable?.latest.branch === branch ? this.updateAvailable.latest.buildId : null;
+    const key = steamInstallKey(server.installPath);
+    if (hasActiveSteamOperation(key)) throw new Error("A Steam operation is already in progress for this install.");
+    // Reserve before the first asynchronous peer check; every native/container start checks the same reservation.
+    getActiveSteamOperations().set(key, { type: "update", startTime: Date.now(), lastOutputAt: Date.now(), branch });
+    this.updating = true;
+    const peersStopped = async () => {
+      for (const peer of await getServers()) {
+        if (peer.id === server.id || !peer.installPath || steamInstallKey(peer.installPath) !== key) continue;
+        const runtime = getServerRuntimes().find(runtime => String(runtime.serverId) === String(peer.id));
+        if (!runtime?.maintenance || (await runForServer(peer.id, () => runtime.maintenance.state())).running) throw new Error(`Stop ${peer.name || peer.serverName} before updating its shared game install.`);
       }
-    } catch (error) {
-      log.warn(`Could not announce automatic update: ${errorMessage(error)}`);
-    }
-    this.io.emit("server:autoUpdateScheduled", { warningMinutes, updateInfo });
-    this.autoUpdateTimer = setTimeout(() => {
-      this.autoUpdateTimer = null;
-      this.runAutoUpdate(updateInfo).catch((error) => log.error(`Automatic update failed: ${errorMessage(error)}`));
-    }, warningMinutes * 60 * 1000);
+    };
+    try { await peersStopped(); await this.maintenance.state(); }
+    catch (error) { clearActiveSteamOperation(key); this.updating = false; throw error; }
+    this.io.emit("steam:start", { type: options.validateFiles ? "verify" : "update", message: "Saving and stopping the server before SteamCMD..." });
+    void this.maintenance.run({ kind: "pz-update", label: options.validateFiles ? "Verify game files" : "Game update", warningMinutes,
+      work: async signal => {
+        try {
+          await peersStopped(); signal.throwIfAborted();
+          const beta = ["public", "stable"].includes(branch) ? [] : ["-beta", branch];
+          const login = await getSteamLoginArgs();
+          await this.runSteamCmd(exe, steamcmdPath, ["+force_install_dir", server.installPath!, ...login, "+app_update", "380870", ...beta, "validate", "+quit"], key, signal);
+          const updated = await this.getInstalledBuildInfo(server.installPath!);
+          if (!updated?.buildId || ![branch, branch === "stable" ? "public" : branch].includes(updated.branch)) throw new Error("SteamCMD did not install the selected branch; the game was left stopped.");
+          if (!options.validateFiles && branch === installed.branch && BigInt(updated.buildId) < BigInt(installed.buildId!)) throw new Error("SteamCMD installed an older build; the game was left stopped.");
+          if (!options.validateFiles && expectedBuild && BigInt(updated.buildId) < BigInt(expectedBuild)) throw new Error(`SteamCMD did not install the expected build ${expectedBuild}; the game was left stopped.`);
+          await updateServer(server.id, { branch });
+          this.updateAvailable = null;
+          return { success: true, message: `Game ${options.validateFiles ? "verification" : "update"} completed (build ${updated.buildId}).` };
+        } finally { clearActiveSteamOperation(key); }
+      },
+    }).then(async result => {
+      this.lastUpdateResult = { ...result, at: new Date().toISOString() };
+      try { await setSetting("lastGameUpdateResult", this.lastUpdateResult); }
+      catch (error) { log.error(`Update completed; result could not be recorded: ${errorMessage(error)}`); }
+      this.io.emit("steam:complete", result); this.io.emit("server:updateComplete", this.lastUpdateResult);
+    }).catch(error => { log.error(`Update result could not be recorded: ${errorMessage(error)}`); this.io.emit("steam:complete", { success: false, message: sanitizeError(errorMessage(error)) }); })
+      .finally(() => { clearActiveSteamOperation(key); this.updating = false; });
+    return { success: true, message: "Game maintenance started." };
   }
 
-  async runAutoUpdate(updateInfo: UpdateInfo): Promise<{ success: false; message: string } | void> {
-    const serverManager = this.serverManager;
-    const lifecycleLock = acquireLifecycleLock("automatic-update", serverManager?.serverName || null);
-    if (!lifecycleLock) {
-      this.autoUpdateRunning = false;
-      log.warn("Automatic update skipped because another lifecycle operation is in progress");
-      return { success: false, message: "Another server lifecycle operation is in progress" };
-    }
-
-    let shouldRestart = false;
-    let bundledGame = false;
-    let normalizedInstallPath = null;
-  let targetServerId: string | null = null;
-    let phase: "not-started" | "before-stop" | "updating" = "not-started";
-    const fail = (reason: string, message: string, params?: unknown): never => {
-      const err = new AutoUpdateError(message);
-      err.autoUpdateReason = reason;
-      if (params) err.autoUpdateParams = params;
-      throw err;
-    };
-    try {
-      const rconService = this.rconService;
-      if (!rconService || !serverManager) {
-        fail("NOT_CONFIGURED", "RCON or server manager is not configured");
-      }
-      const configuredRconService = rconService as RconService;
-      const configuredServerManager = serverManager as ServerManager;
-      const enabled = await getSetting("serverAutoUpdate");
-      if (enabled !== true && enabled !== "true") {
-        log.info("Automatic server update cancelled because the setting was disabled");
-        return;
-      }
-      const activeServer = await getCurrentServer();
-      if (!activeServer) {
-        fail("NOT_CONFIGURED", "No active server is configured");
-      }
-      const configuredActiveServer = activeServer as NonNullable<typeof activeServer>;
-      targetServerId = (activeServer?.id as string | null | undefined) ?? null;
-      bundledGame = process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(configuredActiveServer);
-      const steamcmdPath = (await getSetting("steamcmdPath")) || (bundledGame ? "/home/steam/steamcmd" : null);
-      const managed = await resolveManagedContainer({ serverId: activeServer?.id });
-      if (managed.handled && !bundledGame) {
-        fail("MANAGED_CONTAINER", "This server runs in an external managed container. Update its game install through that container's owner.");
-      }
-      if (!activeServer?.installPath || !steamcmdPath) fail("NOT_CONFIGURED", "SteamCMD path or server install path is not configured");
-
-      const readTargetState = async () => bundledGame
-        ? await resolveDockerHostSignal(configuredActiveServer, getDockerClient())
-        : await configuredServerManager.getServerProcessDetails();
-      const checkSharedInstall = async () => {
-        if (!bundledGame) return;
-        const peers = await getServers();
-        for (const peer of peers) {
-          if (String(peer.id) === String(configuredActiveServer.id) ||
-              path.resolve(peer.installPath || "") !== path.resolve(String(configuredActiveServer.installPath))) continue;
-          const state = await resolveDockerHostSignal(peer, getDockerClient());
-          if (state.scanFailed || state.running) {
-            fail("SHARED_INSTALL_BUSY", `Another server (${peer.name || peer.serverName}) uses this game install and is running or cannot be checked`);
-          }
+  private async runSteamCmd(exe: string, cwd: string, args: string[], key: string, signal: AbortSignal): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(exe, args, { cwd, detached: process.platform !== "win32", env: process.platform === "win32" ? process.env : buildLinuxWritableHomeEnv(cwd) });
+      let output = "", failure: Error | null = null;
+      const stop = (error: Error) => {
+        if (failure) return;
+        failure = error;
+        if (process.platform === "win32") {
+          if (child.pid) spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }).on("error", () => child.kill("SIGKILL"));
+        } else if (child.pid) {
+          try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
         }
       };
-      await checkSharedInstall();
-
-      const initialDetails = await readTargetState();
-      if (initialDetails.scanFailed) fail("INITIAL_SCAN_FAILED", "Could not verify whether the server is running, so the automatic update was abandoned for safety");
-      if (initialDetails.running) {
-        shouldRestart = true;
-        phase = "before-stop";
-        if (!configuredRconService.connected) fail("RCON_NOT_CONNECTED", "RCON is not connected, so the server cannot be stopped safely");
-        const players = await configuredRconService.getPlayers?.();
-        const onlinePlayers = players?.success && Array.isArray(players.players)
-          ? players.players
-          : fail("PLAYER_STATUS_UNKNOWN", "Could not verify whether players are online, so the automatic update was postponed");
-        if (onlinePlayers.length > 0) {
-          log.info(`Automatic server update postponed: ${onlinePlayers.length} player(s) online`);
-          return { success: false, message: "Players are online; the update will be checked again later" };
-        }
-        const saved = await configuredRconService.save({ skipLog: true });
-        if (!saved?.success) fail("SAVE_FAILED", `The world could not be saved (${saved?.error || "unknown error"}), so the update was abandoned rather than lose progress`, { reason: sanitizeError(saved?.error || "unknown error") });
-        const playersAfterSave = await configuredRconService.getPlayers?.();
-        const onlineAfterSave = playersAfterSave?.success && Array.isArray(playersAfterSave.players)
-          ? playersAfterSave.players
-          : fail("PLAYER_STATUS_UNKNOWN", "Could not verify whether players are online after saving, so the automatic update was postponed");
-        if (onlineAfterSave.length > 0) {
-          log.info("Automatic server update postponed: a player joined while saving");
-          return { success: false, message: "A player joined while saving; the update will be checked again later" };
-        }
-        const quit = bundledGame
-          ? await runManagedLifecycle("stop", { serverId: targetServerId })
-          : await configuredRconService.quit();
-        if (bundledGame && quit?.success) phase = "updating";
-        if (!quit?.success) log.warn(`Stop command failed (${quit?.error || "unknown error"}); waiting to see whether the server stops anyway`);
-        const deadline = Date.now() + 5 * 60 * 1000;
-        while (true) {
-          const details = await readTargetState();
-          if (details.scanFailed) fail("STOP_SCAN_FAILED", "Lost the ability to verify the server had stopped, so the automatic update was abandoned for safety");
-          if (!details.running) break;
-          if (Date.now() >= deadline) fail("STOP_TIMEOUT", "Server did not stop within 5 minutes");
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-        }
-      }
-
-      phase = "updating";
-      await checkSharedInstall();
-      const steamcmdExe = process.platform === "win32"
-        ? path.join(steamcmdPath, "steamcmd.exe")
-        : fs.existsSync(path.join(steamcmdPath, "steamcmd.sh"))
-          ? path.join(steamcmdPath, "steamcmd.sh")
-          : path.join(steamcmdPath, "steamcmd");
-      if (!fs.existsSync(steamcmdExe)) fail("STEAMCMD_NOT_FOUND", `SteamCMD not found at ${steamcmdExe}`, { path: sanitizeError(steamcmdExe) });
-      const branch = ["public", "stable"].includes(updateInfo.installed.branch) ? [] : ["-beta", updateInfo.installed.branch];
-      const loginArgs = await getSteamLoginArgs();
-
-      const candidateInstallPath = path.normalize(String(configuredActiveServer.installPath)).toLowerCase();
-      if (hasActiveSteamOperation(candidateInstallPath)) {
-        fail(
-          "STEAM_OPERATION_IN_PROGRESS",
-          "A Steam install or update is already in progress for this server's install directory, so this automatic update was abandoned rather than race it. Retry manually from Server > Update once the other Steam operation finishes.",
-          { path: sanitizeError(candidateInstallPath) },
-        );
-      }
-      getActiveSteamOperations().set(candidateInstallPath, {
-        type: "auto-update",
-        startTime: Date.now(),
-        lastOutputAt: Date.now(),
+      const abort = () => stop(new Error("Game update cancelled; the game was left stopped."));
+      signal.addEventListener("abort", abort, { once: true });
+      const timer = setInterval(() => {
+        if (isSteamOperationIdle(getActiveSteamOperations().get(key))) stop(new Error(`SteamCMD produced no output for ${STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000} minutes.`));
+      }, 30000); timer.unref?.();
+      const operation = getActiveSteamOperations().get(key)!; operation.pid = child.pid; operation.watchdog = timer;
+      const read = (data: Buffer, stream: string) => {
+        operation.lastOutputAt = Date.now(); const line = data.toString(); output = (output + line).slice(-65536);
+        this.io.emit("steam:log", { text: line.slice(-4096), stream, message: line.slice(-4096) });
+      };
+      child.stdout?.on("data", data => read(data, "stdout")); child.stderr?.on("data", data => read(data, "stderr"));
+      const clean = () => { clearInterval(timer); signal.removeEventListener("abort", abort); operation.pid = undefined; };
+      child.once("error", error => { clean(); reject(error); });
+      child.once("close", code => {
+        clean(); if (failure) reject(failure);
+        else if (code !== 0 || !/Success! App ['"]?380870['"]? fully installed/i.test(output)) reject(new Error(`SteamCMD did not confirm a complete install (exit ${code}). The game was left stopped.`));
+        else resolve();
       });
-      normalizedInstallPath = candidateInstallPath;
-
-      let code: number | null;
-      let killedByWatchdog = false;
-      try {
-        code = await new Promise<number | null>((resolve, reject) => {
-          const autoUpdateSpawnOpts: SpawnOptions = { cwd: steamcmdPath };
-          if (process.platform !== "win32") {
-            autoUpdateSpawnOpts.env = buildLinuxWritableHomeEnv(steamcmdPath);
-          }
-          const child = spawn(
-            steamcmdExe,
-            [
-              "+force_install_dir",
-              String(configuredActiveServer.installPath),
-              ...loginArgs,
-              "+app_update",
-              "380870",
-              ...branch,
-              "validate",
-              "+quit",
-            ],
-            autoUpdateSpawnOpts,
-          );
-          child.once("error", reject);
-          child.once("close", resolve);
-
-          const bumpLastOutput = () => {
-            const operation = getActiveSteamOperations().get(candidateInstallPath);
-            if (operation) operation.lastOutputAt = Date.now();
-          };
-          child.stdout?.on("data", bumpLastOutput);
-          child.stderr?.on("data", bumpLastOutput);
-
-          const operation = getActiveSteamOperations().get(candidateInstallPath);
-          if (operation) {
-            operation.watchdog = setInterval(() => {
-              const activeOperation = getActiveSteamOperations().get(candidateInstallPath);
-              if (!activeOperation || !isSteamOperationIdle(activeOperation)) return;
-              log.error(
-                `Auto-update SteamCMD produced no output for ${STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000} minutes; terminating the stalled process`,
-              );
-              killedByWatchdog = true;
-              child.kill();
-            }, 30_000);
-            operation.watchdog.unref?.();
-          }
-        });
-      } finally {
-        clearActiveSteamOperation(normalizedInstallPath);
-      }
-      if (killedByWatchdog) {
-        const idleMinutes = STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000;
-        fail(
-          "STEAMCMD_STALLED",
-          `SteamCMD produced no output for ${idleMinutes} minutes and was stopped`,
-          { minutes: idleMinutes },
-        );
-      }
-      if (code !== 0) fail("STEAMCMD_EXIT_CODE", `SteamCMD exited with code ${code}`, { code });
-
-      const postUpdate = await this.getInstalledBuildInfo(
-        String(configuredActiveServer.installPath),
-      );
-      const postBuildId = postUpdate?.buildId
-        ? parseInt(postUpdate.buildId, 10)
-        : NaN;
-      const preBuildId = parseInt(updateInfo.installed.buildId ?? "", 10);
-      if (isNaN(postBuildId) || postBuildId <= preBuildId) {
-        fail(
-          "BUILD_DID_NOT_ADVANCE",
-          `SteamCMD exited successfully but the installed build did not change (still ${postUpdate?.buildId ?? "unreadable"}, expected newer than ${updateInfo.installed.buildId})`,
-          {
-            installedBuildId: sanitizeError(postUpdate?.buildId ?? "unknown"),
-            previousBuildId: sanitizeError(updateInfo.installed.buildId),
-          },
-        );
-      }
-
-      this.io.emit("server:autoUpdateComplete", { success: true });
-      await this._recordAutoUpdateResult({
-        status: "success",
-        at: new Date().toISOString(),
-        appliedVersion: postUpdate?.buildId ?? null,
-      });
-    } catch (error) {
-      const updateError = error instanceof AutoUpdateError ? error : new AutoUpdateError(errorMessage(error));
-      this.io.emit("server:autoUpdateComplete", { success: false, error: updateError.message });
-      await this._recordAutoUpdateResult({
-        status: "failed",
-        at: new Date().toISOString(),
-        reason: updateError.autoUpdateReason || "UNKNOWN",
-        params: updateError.autoUpdateParams || null,
-        phase,
-        serverUp: phase === "before-stop" ? true : phase === "not-started" ? null : false,
-      });
-      throw error;
-    } finally {
-      this.autoUpdateRunning = false;
-      if (normalizedInstallPath) clearActiveSteamOperation(normalizedInstallPath);
-      if (shouldRestart && phase !== "before-stop") {
-        try {
-          const started = bundledGame
-            ? await runManagedLifecycle("start", { serverId: targetServerId })
-            : await this.serverManager!.startServer({ serverId: targetServerId });
-          if (started?.success) {
-            await this._patchAutoUpdateResultServerUp(true);
-          } else {
-            log.error(`Automatic update could not restart the server: ${started?.error || started?.message || "unknown error"}`);
-            await this._patchAutoUpdateResultServerUp(false);
-          }
-        } catch (error) {
-          log.error(`Automatic update could not restart the server: ${errorMessage(error)}`);
-          await this._patchAutoUpdateResultServerUp(false);
-        }
-      }
-      lifecycleLock.release();
-    }
+      if (signal.aborted) abort();
+    });
   }
 
-  async _recordAutoUpdateResult(result: AutoUpdateResultInput): Promise<void> {
-    this.lastAutoUpdateResult = { ...result, dismissed: false };
-    await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
-  }
-
-  async _patchAutoUpdateResultServerUp(serverUp: boolean): Promise<void> {
-    if (!this.lastAutoUpdateResult || this.lastAutoUpdateResult.status !== "failed") return;
-    this.lastAutoUpdateResult = { ...this.lastAutoUpdateResult, serverUp };
-    await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
-  }
-
-  async dismissAutoUpdateResult(): Promise<void> {
-    if (this.lastAutoUpdateResult === undefined) {
-      this.lastAutoUpdateResult = (await getSetting("lastAutoUpdateResult")) || null;
-    }
-    if (!this.lastAutoUpdateResult) return;
-    this.lastAutoUpdateResult = { ...this.lastAutoUpdateResult, dismissed: true };
-    await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
-  }
-
-  async getStatus(): Promise<{
-    updateAvailable: UpdateInfo | null;
-    gameVersion: string | null;
-    lastCheck: string | null;
-    intervalMinutes: number;
-    isChecking: boolean;
-    lastAutoUpdateResult: AutoUpdateResult | null;
-  }> {
-    if (this.lastAutoUpdateResult === undefined) {
-      this.lastAutoUpdateResult = (await getSetting("lastAutoUpdateResult")) || null;
-    }
-    return {
-      updateAvailable: this.updateAvailable,
-      gameVersion: this.gameVersion,
-      lastCheck: this.lastCheck,
-      intervalMinutes: this.intervalMs / 60000,
-      isChecking: this.isChecking,
-      lastAutoUpdateResult: this.lastAutoUpdateResult ?? null,
+  async getStatus() {
+    return { updateAvailable: this.updateAvailable, gameVersion: this.gameVersion, lastCheck: this.lastCheck,
+      intervalMinutes: this.intervalMs / 60000, isChecking: this.isChecking, updating: this.updating,
+      lastUpdateResult: this.lastUpdateResult || await getSetting("lastGameUpdateResult") || null,
     };
   }
 }

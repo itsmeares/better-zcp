@@ -2,6 +2,7 @@ import { Router } from "../http/apiRouter.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.ts";
 import { RconService } from "../services/rcon.ts";
+import { runManagedLifecycle } from "../services/managedContainer.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   acquireLifecycleLock,
@@ -159,10 +160,7 @@ router.post("/containers/:id/:action", async (req, res) => {
         });
       }
     }
-    const result = await dockerClient.runManagedAction(
-      req.params.id,
-      req.params.action,
-    );
+    const result = await runManagedLifecycle(req.params.action as "start" | "stop" | "restart", { serverId: server.id, dockerClient });
     if (!result.success) {
       return res
         .status(403)

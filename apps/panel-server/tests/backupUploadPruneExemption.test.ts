@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
@@ -7,6 +8,9 @@ import path from "path";
 const settings = new Map();
 
 vi.mock("../database/init.ts", () => ({
+  exportServerPanelSettings: vi.fn(() => ({ settings: {}, tasks: [] })),
+  validateServerPanelSettings: vi.fn(value => value),
+  restoreServerPanelSettings: vi.fn(),
   getCurrentServer: async () => null,
   getSetting: async (key) => settings.get(key),
   setSetting: async (key, value) => {
@@ -53,7 +57,7 @@ describe("backup pruning: uploaded archives are exempt from automatic prune, not
   beforeEach(async () => {
     settings.clear();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-prune-"));
-    service = new BackupService();
+    service = archiveService(BackupService);
     backupsPath = await service.getBackupsPath();
   });
 

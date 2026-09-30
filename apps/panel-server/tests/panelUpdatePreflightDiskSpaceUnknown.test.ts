@@ -2,90 +2,26 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-
-
-process.pkg = {};
-
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
-
-describe("preflight() surfaces an unknown free-disk-space result instead of staying silent", () => {
-  let scratchDir;
-  let fakeExePath;
-  let originalExecPath;
-
-  function setExecPath(p) {
-    Object.defineProperty(process, "execPath", { value: p, configurable: true });
-  }
-
-  function makeChecker() {
-    const checker = new PanelUpdateChecker();
-    const assetName =
-      process.platform === "win32"
-        ? "ZomboidControlPanel.exe"
-        : "ZomboidControlPanel";
-    checker.latestRelease = {
-      version: "9.9.9",
-      assets: [{ name: assetName, size: 1024 }],
-    };
-    checker.updateAvailable = true;
-    return checker;
-  }
-
-  function unknownWarning(result) {
-    return result.warningDetails.find(
-      (w) => w.key === "updates.preflight.diskSpaceUnknown",
-    );
-  }
-
-  afterEach(() => {
-    if (scratchDir) fs.rmSync(scratchDir, { recursive: true, force: true });
-    if (originalExecPath) setExecPath(originalExecPath);
-    vi.restoreAllMocks();
-  });
-
-  it("warns when getFreeDiskSpace resolves to null", async () => {
-    originalExecPath = process.execPath;
-    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-disk-"));
-    fakeExePath = path.join(scratchDir, "ZomboidControlPanel.exe");
-    fs.writeFileSync(fakeExePath, "fake-exe");
-    setExecPath(fakeExePath);
-
-    const checker = makeChecker();
-    vi.spyOn(checker, "getFreeDiskSpace").mockResolvedValue(null);
-
-    const result = await checker.preflight();
-    expect(unknownWarning(result)).toBeDefined();
-    expect(result.info.freeBytes).toBeNull();
-    expect(result.blockerDetails.some((b) => b.key === "updates.preflight.diskSpace")).toBe(false);
-  });
-
-  it("warns when getFreeDiskSpace throws", async () => {
-    originalExecPath = process.execPath;
-    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-disk-"));
-    fakeExePath = path.join(scratchDir, "ZomboidControlPanel.exe");
-    fs.writeFileSync(fakeExePath, "fake-exe");
-    setExecPath(fakeExePath);
-
-    const checker = makeChecker();
-    vi.spyOn(checker, "getFreeDiskSpace").mockRejectedValue(new Error("statfs exploded"));
-
-    const result = await checker.preflight();
-    expect(unknownWarning(result)).toBeDefined();
-    expect(result.info.freeBytes).toBeNull();
-  });
-
-  it("stays silent on disk space when a real, sufficient value is available", async () => {
-    originalExecPath = process.execPath;
-    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-disk-"));
-    fakeExePath = path.join(scratchDir, "ZomboidControlPanel.exe");
-    fs.writeFileSync(fakeExePath, "fake-exe");
-    setExecPath(fakeExePath);
-
-    const checker = makeChecker();
-    vi.spyOn(checker, "getFreeDiskSpace").mockResolvedValue(1024 * 1024 * 1024 * 10);
-
-    const result = await checker.preflight();
-    expect(unknownWarning(result)).toBeUndefined();
-    expect(result.info.freeBytes).toBe(1024 * 1024 * 1024 * 10);
-  });
+let directory: string;
+vi.mock("../utils/logger.ts", () => ({ createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }) }));
+vi.mock("../database/init.ts", () => ({ getAdmin: async () => ({}), getServers: async () => [], getDatabaseFilePath: () => path.join(directory, "panel.sqlite") }));
+vi.mock("../utils/paths.ts", () => ({ getDataPaths: () => ({ dataDir: directory }) }));
+vi.mock("../utils/dockerDetect.ts", () => ({ isContainerized: () => false }));
+import { PanelUpdateChecker } from "../services/panelUpdateChecker.ts";
+afterEach(() => { vi.restoreAllMocks(); if (directory) fs.rmSync(directory, { recursive: true, force: true }); });
+async function preflight(diskError = false) {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-preflight-"));
+  fs.writeFileSync(path.join(directory, "panel.sqlite"), "temporary-fixture");
+  const checker = new PanelUpdateChecker();
+  vi.spyOn(checker, "getExeBasePath").mockReturnValue(path.join(directory, "ZomboidControlPanel"));
+  vi.spyOn(checker, "isSupervisorAvailable").mockReturnValue(true);
+  const pkg = Object.getOwnPropertyDescriptor(process, "pkg");
+  Object.defineProperty(process, "pkg", { configurable: true, value: {} });
+  checker.latestRelease = { version: "9.9.9", assets: [{ name: process.platform === "win32" ? "ZomboidControlPanel-windows.zip" : "ZomboidControlPanel-linux.tar.gz", size: 1024 }, { name: "checksums.txt", size: 1 }] } as never;
+  if (diskError) vi.spyOn(fs, "statfsSync").mockImplementation(() => { throw new Error("not supported"); });
+  try { return await checker.preflight(); } finally { if (pkg) Object.defineProperty(process, "pkg", pkg); else delete process.pkg; }
+}
+describe("native updater preflight", () => {
+  it("keeps the warning if disk space cannot be determined", async () => { const result = await preflight(true); expect(result.ok).toBe(true); expect(result.warnings).toContainEqual(expect.stringMatching(/disk space could not be checked/i)); });
+  it("does not warn when disk space is sufficient", async () => { const result = await preflight(); expect(result.ok).toBe(true); expect(result.warnings).toEqual([]); });
 });

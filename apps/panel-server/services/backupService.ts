@@ -14,14 +14,17 @@ import {
   setSetting,
   logServerEvent,
   getLatestScheduleExecutionByCommand,
-  getDatabaseFilePath,
-  exportDatabase,
+  exportServerPanelSettings,
+  validateServerPanelSettings,
+  restoreServerPanelSettings,
+  type ServerPanelSettings,
 } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.ts";
 import { invalidateMapFolderScan } from "../utils/mapFolderScan.ts";
-import { acquireLifecycleLock, lifecycleInProgressResponse } from "./lifecycleCoordinator.ts";
+import { type ServerMaintenance } from "./serverMaintenance.ts";
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
@@ -47,7 +50,7 @@ type BackupSettings = {
   enabled: boolean;
   schedule: string;
   maxBackups: number;
-  includeDb: boolean;
+  waitMinutes: number;
   forceAfterMinutes: number | null;
   forceWarningMinutes: number;
 };
@@ -60,11 +63,10 @@ type BackupOptions = {
   activeServer?: Record<string, any> | null;
   isPreRestore?: boolean;
   isPreWipe?: boolean;
-  includeDb?: boolean;
   force?: boolean;
   createPreRestoreBackup?: boolean;
   scheduled?: boolean;
-  allowOccupiedScheduled?: boolean;
+  signal?: AbortSignal;
 };
 type ProgressEmitter = (
   phase: string,
@@ -278,7 +280,9 @@ export class BackupService {
   serverManager: any;
   rconService: any;
 
-  constructor() {
+  readonly maintenance: ServerMaintenance;
+  constructor(maintenance: ServerMaintenance) {
+    this.maintenance = maintenance;
     this.backupInProgress = false;
     this.restoreInProgress = false;
     this.lastBackup = null;
@@ -396,11 +400,11 @@ export class BackupService {
     const enabled = (await getSetting("backupEnabled")) ?? false;
     const schedule = (await getSetting("backupSchedule")) ?? "0 */6 * * *";
     const maxBackups = (await getSetting("backupMaxCount")) ?? 10;
-    const includeDb = (await getSetting("backupIncludeDb")) ?? false;
+    const waitMinutes = (await getSetting("backupWaitMinutes")) ?? 60;
     const forceAfterMinutes = (await getSetting("backupForceAfterMinutes")) ?? null;
     const forceWarningMinutes = (await getSetting("backupForceWarningMinutes")) ?? 15;
 
-    return { enabled, schedule, maxBackups, includeDb, forceAfterMinutes, forceWarningMinutes };
+    return { enabled, schedule, maxBackups, waitMinutes, forceAfterMinutes, forceWarningMinutes };
   }
 
   async updateSettings(settings: Partial<BackupSettings>): Promise<BackupSettings> {
@@ -418,11 +422,8 @@ export class BackupService {
     ) {
       throw new Error("maxBackups must be an integer between 1 and 100");
     }
-    if (
-      settings.includeDb !== undefined &&
-      typeof settings.includeDb !== "boolean"
-    ) {
-      throw new Error("includeDb must be a boolean");
+    if (settings.waitMinutes !== undefined && (!Number.isInteger(settings.waitMinutes) || settings.waitMinutes < 15 || settings.waitMinutes > 1440)) {
+      throw new Error("waitMinutes must be 15-1440 whole minutes");
     }
     if (settings.forceAfterMinutes !== undefined && settings.forceAfterMinutes !== null &&
       (!Number.isInteger(settings.forceAfterMinutes) || settings.forceAfterMinutes < 15 || settings.forceAfterMinutes > 1440)) {
@@ -457,9 +458,7 @@ export class BackupService {
     if (settings.maxBackups !== undefined) {
       await setSetting("backupMaxCount", settings.maxBackups);
     }
-    if (settings.includeDb !== undefined) {
-      await setSetting("backupIncludeDb", settings.includeDb);
-    }
+    if (settings.waitMinutes !== undefined) await setSetting("backupWaitMinutes", settings.waitMinutes);
     if (settings.forceAfterMinutes !== undefined) {
       await setSetting("backupForceAfterMinutes", settings.forceAfterMinutes);
     }
@@ -471,151 +470,32 @@ export class BackupService {
   }
 
   async createBackup(options: BackupOptions = {}): Promise<BackupResult> {
-    if (this.backupInProgress) {
-      return { success: false, deferred: options.scheduled, message: "Backup already in progress" };
+    if (this.backupInProgress || this.restoreInProgress && !options.isPreRestore) {
+      return { success: false, deferred: options.scheduled, message: "Backup or restore already in progress" };
     }
-    if (this.restoreInProgress && !options.isPreRestore) {
-      return { success: false, deferred: options.scheduled, message: "Restore in progress, please wait" };
-    }
-
-    const activeServer = options.activeServer === undefined
-      ? await getCurrentServer()
-      : options.activeServer;
-    const lifecycleLock = options.isPreRestore || options.isPreWipe
-      ? null
-      : acquireLifecycleLock("backup", activeServer?.serverName || null);
-    if (!lifecycleLock && !options.isPreRestore && !options.isPreWipe) {
-      return { success: false, deferred: options.scheduled, message: lifecycleInProgressResponse().error };
-    }
-
+    const activeServer = options.activeServer === undefined ? await getCurrentServer() : options.activeServer;
+    if (String(activeServer?.id) !== this.maintenance.serverId) return { success: false, message: "Backup target does not match this server runtime" };
     this.backupInProgress = true;
-    const startTime = Date.now();
-    const io = options.io;
-
-    const emitProgress: ProgressEmitter = (
-      phase,
-      percent,
-      message,
-      extra = {},
-    ) => {
-      if (io) {
-        io.emit("backup:progress", { phase, percent, message, ...extra });
-      }
-    };
-
-    let restartAfterBackup = false;
-    let result: BackupResult = { success: false };
+    const started = Date.now();
+    const emitProgress: ProgressEmitter = (phase, percent, message, extra = {}) => options.io?.emit("backup:progress", { phase, percent, message, ...extra });
     try {
-      if (!this.serverManager?.getServerProcessDetails) {
-        throw new Error("Cannot verify the server is stopped because process detection is unavailable");
+      // Restore/wipe already owns the lifecycle lock and must never stop a running game on its caller's behalf.
+      if (options.isPreRestore || options.isPreWipe) {
+        if ((await this.maintenance.state()).running) throw new Error("Stop the server before creating a safety backup");
+        return await this._doCreateBackup({ ...options, activeServer }, started, emitProgress);
       }
-      if (activeServer?.id != null && this.serverManager._serverId != null &&
-          String(activeServer.id) !== String(this.serverManager._serverId)) {
-        throw new Error("The selected server changed. Retry the backup after it finishes loading.");
-      }
-      const processDetails = await this.serverManager.getServerProcessDetails();
-      if (!processDetails || processDetails.scanFailed) {
-        throw new Error("Cannot verify the server is stopped because process detection failed");
-      }
-      if (processDetails.running) {
-        if (options.isPreRestore || options.isPreWipe) {
-          throw new Error("The server must be stopped before creating a safety backup");
-        }
-        if (!this.rconService?.connected) {
-          if (options.scheduled) {
-            result = { success: false, deferred: true, message: "Scheduled full backup postponed: RCON is not connected" };
-            return result;
-          }
-          throw new Error("RCON is required to save and stop a running server before a full backup");
-        }
-        const scheduledPlayerDeferral = async (): Promise<string | null> => {
-          if (!options.scheduled || options.allowOccupiedScheduled) return null;
-          let players;
-          try {
-            players = await this.rconService.getPlayers();
-          } catch (error: unknown) {
-            log.warn(`Scheduled backup could not check players: ${errorMessage(error)}`);
-          }
-          if (!players?.success || !Array.isArray(players.players)) {
-            return "Scheduled full backup postponed: player count could not be verified";
-          }
-          if (players.players.length > 0) {
-            return `${players.players.length} player(s) online; full backup postponed until the server is empty`;
-          }
-          return null;
-        };
-        const initialDeferral = await scheduledPlayerDeferral();
-        if (initialDeferral) {
-          result = { success: false, deferred: true, message: initialDeferral };
-          return result;
-        }
-        emitProgress("preparing", 2, "Saving and stopping the server...");
-        const saved = await this.rconService.save({ retryOnConnectionError: false });
-        if (!saved?.success) throw new Error(`Server save failed: ${saved?.error || "unknown error"}`);
-        const postSaveDeferral = await scheduledPlayerDeferral();
-        if (postSaveDeferral) {
-          result = { success: false, deferred: true, message: postSaveDeferral };
-          return result;
-        }
-        restartAfterBackup = true;
-        const stopped = this.serverManager.usesManagedServiceLifecycle?.()
-          ? await this.serverManager.stopServer(false, { serverId: activeServer?.id ?? null })
-          : await this.rconService.quit({ retryOnConnectionError: false });
-        if (!stopped?.success || stopped.confirmed === false && this.serverManager.usesManagedServiceLifecycle?.()) {
-          throw new Error(`Server stop failed: ${stopped?.error || stopped?.message || "unknown error"}`);
-        }
-        const deadline = Date.now() + 60_000;
-        while (true) {
-          const state = await this.serverManager.getServerProcessDetails();
-          if (!state || state.scanFailed) throw new Error("Cannot verify that the server stopped after saving");
-          if (!state.running) break;
-          if (Date.now() >= deadline) throw new Error("Server did not stop within 60 seconds; no archive was created");
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-      }
-      result = await this._doCreateBackup({ ...options, activeServer }, startTime,
-        (phase, percent, message, extra) => {
-          if (restartAfterBackup && phase === "complete") return;
-          emitProgress(phase, percent, message, extra);
-        });
-    } catch (error: unknown) {
-      log.error(`Backup failed: ${errorMessage(error)}`);
-      emitProgress(
-        "error",
-        0,
-        `Backup failed: ${sanitizeError(errorMessage(error))}`,
-      );
-      result = { success: false, message: sanitizeError(errorMessage(error)) };
-    } finally {
-      if (restartAfterBackup) {
-        try {
-          const state = await this.serverManager.getServerProcessDetails();
-          if (!state || state.scanFailed) {
-            result.success = false;
-            result.message = "Could not verify whether the server restarted after the backup; check its status before taking another action";
-            emitProgress("error", 0, result.message);
-          } else if (!state.running) {
-            emitProgress("finalizing", 98, "Restarting the server...");
-            const started = await this.serverManager.startServer({ serverId: activeServer?.id ?? null });
-            if (!started?.success) {
-              result.success = false;
-              result.message = `${result.backup ? `Backup ${result.backup.name} was created, but ` : "Backup failed and "}the server could not be restarted automatically: ${sanitizeError(started?.error || started?.message || "unknown error")}`;
-              emitProgress("error", 0, result.message);
-            } else if (result.success) {
-              emitProgress("complete", 100, "Full backup created and server restarted");
-            }
-          }
-        } catch (error: unknown) {
-          log.error(`Could not restart server after backup: ${errorMessage(error)}`);
-          result.success = false;
-          result.message = `${result.backup ? `Backup ${result.backup.name} was created, but ` : "Backup failed and "}the server could not be restarted automatically: ${sanitizeError(errorMessage(error))}`;
-          emitProgress("error", 0, result.message);
-        }
-      }
-      this.backupInProgress = false;
-      lifecycleLock?.release();
-    }
-    return result;
+      const settings = await this.getSettings();
+      const result = await this.maintenance.run({ kind: "backup", label: "Full backup", automatic: options.scheduled,
+        policy: { waitMinutes: settings.forceAfterMinutes ?? settings.waitMinutes, forceAfterDeadline: settings.forceAfterMinutes !== null, warningMinutes: settings.forceWarningMinutes },
+        work: async signal => this._doCreateBackup({ ...options, activeServer, signal }, started,
+          (phase, percent, message, extra) => { if (phase !== "complete") emitProgress(phase, percent, message, extra); }),
+      });
+      emitProgress(result.success ? "complete" : "error", result.success ? 100 : 0, result.success ? "Full backup complete" : result.message || "Backup failed");
+      return result;
+    } catch (error) {
+      const message = sanitizeError(errorMessage(error));
+      emitProgress("error", 0, message); return { success: false, message };
+    } finally { this.backupInProgress = false; }
   }
 
   async _doCreateBackup(
@@ -702,17 +582,6 @@ export class BackupService {
     }
     totalFiles += portableFiles.length + (activeServer ? 2 : 1);
 
-    let dbPathToInclude: string | null = null;
-    if (options.includeDb) {
-
-      const dbPath = getDatabaseFilePath();
-      if (fs.existsSync(dbPath)) {
-        dbPathToInclude = `${tempBackupPath}.sqlite`;
-        exportDatabase(dbPathToInclude);
-        totalFiles++;
-      }
-    }
-
     emitProgress("archiving", 15, `Found ${totalFiles} files to backup...`, {
       totalFiles,
     });
@@ -726,6 +595,10 @@ export class BackupService {
     const skippedFiles: string[] = [];
 
     return new Promise<BackupResult>((resolve, reject) => {
+      let failed = false;
+      const abort = () => { failed = true; archive.abort(); output.destroy(); reject(options.signal?.reason || new Error("Backup cancelled")); };
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted) abort();
       archive.on("entry", (entry: { name: string }) => {
         filesProcessed++;
         const percent = Math.min(
@@ -747,7 +620,8 @@ export class BackupService {
       });
 
       output.on("close", async () => {
-        if (dbPathToInclude) fs.rmSync(dbPathToInclude, { force: true });
+        options.signal?.removeEventListener("abort", abort);
+        if (failed) { fs.rmSync(tempBackupPath, { force: true }); return; }
         emitProgress("finalizing", 95, "Finalizing backup...");
 
         try {
@@ -824,7 +698,7 @@ export class BackupService {
       });
 
       const cleanupTemp = () => {
-        if (dbPathToInclude) fs.rmSync(dbPathToInclude, { force: true });
+        failed = true; options.signal?.removeEventListener("abort", abort); archive.abort(); output.destroy();
         fs.rm(tempBackupPath, { force: true }, (cleanupErr) => {
           if (cleanupErr) {
             log.warn(
@@ -878,7 +752,7 @@ export class BackupService {
               .filter((key) => Object.hasOwn(activeServer, key))
               .map((key) => [key, activeServer[key]]));
             const profileResult = await waitForArchiveEntry(archive, () =>
-              archive.append(JSON.stringify({ schemaVersion: 1, server: { serverName, ...portableProfile } }, null, 2), {
+              archive.append(JSON.stringify({ schemaVersion: 2, server: { serverName, ...portableProfile }, panel: exportServerPanelSettings() }, null, 2), {
                 name: "panel-server-profile.json",
               }),
             );
@@ -892,13 +766,7 @@ export class BackupService {
           );
           if (snapshotResult.skipped) skippedFiles.push("panel-server-snapshot.json");
 
-          if (dbPathToInclude) {
-            const databaseName = path.basename(getDatabaseFilePath());
-            const dbResult = await waitForArchiveEntry(archive, () =>
-              archive.file(dbPathToInclude, { name: databaseName }),
-            );
-            if (dbResult.skipped) skippedFiles.push(databaseName);
-          }
+
 
           await archive.finalize();
         } catch (error: unknown) {
@@ -1150,7 +1018,7 @@ export class BackupService {
         "{ServerName}/ - world and player saves",
         "Server/{ServerName}.ini and Lua files - server settings and mod list",
         "db/{ServerName}.db - player accounts and access levels, when present",
-        "panel-server-profile.json - portable panel server settings",
+        "panel-server-profile.json - this server’s panel settings and schedules",
         "panel-server-snapshot.json - server settings summary",
       ],
       location: "Zomboid data and server config folders",
@@ -1197,51 +1065,8 @@ export class BackupService {
       ) {
         return { success: false, message: "The selected server changed. Retry the restore after it finishes loading." };
       }
-      if (options.force !== true) {
-        if (!this.serverManager) {
-          log.warn("Could not confirm server is stopped: no server manager wired");
-          return {
-            success: false,
-            message:
-              "Could not confirm the server is stopped because no server manager is available. Stop the server and try again.",
-          };
-        }
-        try {
-          let running;
-          if (typeof this.serverManager.getServerProcessDetails === "function") {
-            const processDetails =
-              await this.serverManager.getServerProcessDetails();
-            if (!processDetails || processDetails.scanFailed) {
-              log.warn("Could not confirm server is stopped: process scan failed");
-              return {
-                success: false,
-                message:
-                  "Could not confirm the server is stopped because process detection failed. Stop the server and try again.",
-              };
-            }
-            running = processDetails.running;
-          } else {
-            return {
-              success: false,
-              message:
-                "Could not confirm the server is stopped because process detection is unavailable. Stop the server and try again.",
-            };
-          }
-
-          if (running) {
-            return {
-              success: false,
-              message:
-                "Server is still running. Stop the server before restoring a backup, otherwise the running world will overwrite the restored save.",
-            };
-          }
-        } catch (error: unknown) {
-          log.warn(`Could not confirm server is stopped: ${errorMessage(error)}`);
-          return {
-            success: false,
-            message: `Could not confirm the server is stopped (${errorMessage(error)}). Stop the server and try again.`,
-          };
-        }
+      if ((await this.maintenance.state()).running) {
+        return { success: false, message: "Stop the server before restoring a backup." };
       }
 
       emitProgress("preparing", 5, "Preparing restore...");
@@ -1421,17 +1246,20 @@ export class BackupService {
       const configPath = activeServer?.serverConfigPath || path.join(dataPath, "Server");
       const profilePath = path.join(stagingPath, "panel-server-profile.json");
       let restoredProfile: Record<string, any> | null = null;
+      let restoredPanel: ServerPanelSettings | null = null;
+      const previousPanel = fs.existsSync(profilePath) ? exportServerPanelSettings() : null;
       const extraFiles: Array<{ staged: string; target: string }> = [];
       if (fs.existsSync(profilePath)) {
         const manifest = JSON.parse(fs.readFileSync(profilePath, "utf8"));
         const sourceName = manifest?.server?.serverName;
-        if (manifest?.schemaVersion !== 1 || typeof sourceName !== "string" ||
+        if (![1, 2].includes(manifest?.schemaVersion) || typeof sourceName !== "string" ||
             !sourceName || sourceName === "." || sourceName === ".." ||
             /[\\/]/.test(sourceName) || path.basename(sourceName) !== sourceName) {
           throw new Error("Backup contains an invalid panel server profile; live files were left untouched");
         }
         const profile = manifest.server as Record<string, any>;
         restoredProfile = profile;
+        restoredPanel = manifest.schemaVersion === 2 ? validateServerPanelSettings(manifest.panel) : null;
         for (const key of PORTABLE_PROFILE_KEYS) {
           if (!Object.hasOwn(profile, key)) continue;
           const value = profile[key];
@@ -1483,6 +1311,7 @@ export class BackupService {
       }
       const applied: Array<{ target: string; retired: string | null }> = [];
       let profileUpdated = false;
+      let panelUpdated = false;
       try {
         for (const replacement of replacements) {
           fs.mkdirSync(path.dirname(replacement.target), { recursive: true });
@@ -1525,11 +1354,15 @@ export class BackupService {
             .map((key) => [key, restoredProfile[key]]));
           await updateServer(activeServer.id, updates);
           profileUpdated = true;
+          if (restoredPanel) { restoreServerPanelSettings(restoredPanel); panelUpdated = true; }
 
           await this.serverManager?.reloadConfig?.(activeServer.id);
           await this.rconService?.reloadConfig?.();
         }
       } catch (swapError: unknown) {
+        if (panelUpdated) {
+          try { restoreServerPanelSettings(previousPanel!); } catch (error) { log.error(`Could not restore the previous panel settings: ${errorMessage(error)}`); }
+        }
         if (profileUpdated && activeServer?.id != null) {
           try {
             const previous = Object.fromEntries(PORTABLE_PROFILE_KEYS
@@ -1550,6 +1383,14 @@ export class BackupService {
           }
         }
         throw swapError;
+      }
+      if (panelUpdated) {
+        try {
+          const runtime = getPanelRuntime();
+          runtime.scheduler.stopAllJobs();
+          await runtime.scheduler.init();
+          await runtime.modChecker.init(runtime.scheduler, runtime.serverManager, runtime.io);
+        } catch (error) { log.warn(`Backup restored; maintenance settings could not be reloaded: ${errorMessage(error)}`); }
       }
       for (const entry of applied) {
         if (!entry.retired) continue;

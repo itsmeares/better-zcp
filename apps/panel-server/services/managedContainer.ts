@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { hasActiveSteamOperation, steamInstallKey } from "./activeSteamOperations.ts";
 import path from "node:path";
 import { getCurrentServer, getServer } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
@@ -299,6 +300,12 @@ export async function runManagedLifecycle(
       };
     }
 
+    if (action !== "stop") {
+      const profile = serverId == null ? await getCurrentServer() : await getServer(serverId);
+      if (profile?.installPath && hasActiveSteamOperation(steamInstallKey(profile.installPath))) {
+        return { handled: true, success: false, error: "A Steam operation is in progress for this game install. Wait before starting the server." };
+      }
+    }
     const result = await dockerClient.runManagedAction(current.ref, action);
     log.info(
       `Managed container ${current.ref}: ${action} -> ${result?.success ? "ok" : result?.error || "failed"}`,

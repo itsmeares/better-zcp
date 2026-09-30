@@ -61,7 +61,7 @@ import {
   redactKnownSecrets,
 } from "../utils/secretRedaction.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
-import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
+import { hasActiveSteamOperation, steamInstallKey } from "../services/activeSteamOperations.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
@@ -3438,9 +3438,7 @@ router.get("/diagnostics", async (req, res) => {
               unresolvedMods.length > 5
                 ? `${shown}, +${unresolvedMods.length - 5} more`
                 : shown;
-            const normalizedInstallPathForOp = path
-              .normalize(installPath)
-              .toLowerCase();
+            const normalizedInstallPathForOp = steamInstallKey(installPath);
             const steamOperationActive = hasActiveSteamOperation(
               normalizedInstallPathForOp,
             );

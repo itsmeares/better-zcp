@@ -12,13 +12,12 @@ const {
 } = await import("../services/lifecycleCoordinator.ts");
 const {
   getActiveSteamOperations,
+  steamInstallKey,
   clearActiveSteamOperation,
 } = await import("../services/activeSteamOperations.ts");
 
 const restoreInstallPath = "/opt/restore-server";
-const normalizedRestoreInstallPath = path
-  .normalize(restoreInstallPath)
-  .toLowerCase();
+const normalizedRestoreInstallPath = steamInstallKey(restoreInstallPath);
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

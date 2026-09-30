@@ -25,6 +25,7 @@ import {
   getActiveSteamOperations,
   clearActiveSteamOperation,
   hasActiveSteamOperation,
+  steamInstallKey,
   STEAM_OPERATION_IDLE_TIMEOUT_MS,
 } from "../services/activeSteamOperations.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
@@ -1132,7 +1133,7 @@ router.post("/install", async (req, res) => {
       }
     }
 
-    const normalizedPath = path.normalize(installPath).toLowerCase();
+    const normalizedPath = steamInstallKey(installPath);
     if (hasActiveSteamOperation(normalizedPath)) {
       return res.status(409).json({
         error:
@@ -2038,305 +2039,11 @@ router.post("/stats", async (req, res) => {
 });
 
 router.post("/steam-update", async (req, res) => {
-  let activeOperationPath = null;
   try {
-    let {
-      steamcmdPath,
-      installPath,
-      branch,
-      useUnstable = false,
-      validateFiles = false,
-    } = req.body;
-
-    const selectedBranch = branch || (useUnstable ? "unstable" : "stable");
-
-    if (!steamcmdPath) {
-      steamcmdPath = await getSetting("steamcmdPath");
-    }
-
-    if (!steamcmdPath || !installPath) {
-      return res
-        .status(400)
-        .json({ error: "Missing required fields: steamcmdPath, installPath", code: ErrorCode.STEAM_UPDATE_MISSING_FIELDS });
-    }
-
-    if (!isValidPath(steamcmdPath)) {
-      return res.status(400).json({ error: "Invalid SteamCMD path", code: ErrorCode.STEAMCMD_PATH_INVALID });
-    }
-
-    if (!isValidPath(installPath)) {
-      return res.status(400).json({ error: "Invalid install path", code: ErrorCode.INSTALL_PATH_INVALID });
-    }
-
-    const steamUpdateTargetServer = await resolveTargetServerForRunningCheck(installPath);
-    const steamUpdateNotStoppedError = await checkSpecificServerStopped(
-      req.app.get("serverManager"),
-      steamUpdateTargetServer,
-      "updating it",
-      ErrorCode.STEAM_UPDATE_SERVER_RUNNING,
-    );
-    if (steamUpdateNotStoppedError) {
-      return res
-        .status(steamUpdateNotStoppedError.status)
-        .json(steamUpdateNotStoppedError.body);
-    }
-    if (isLifecycleLockedForServer(steamUpdateTargetServer)) {
-      return res.status(409).json(lifecycleInProgressResponse());
-    }
-
-    if (steamcmdDownloadInProgress) {
-      return res.status(409).json({
-        error: "A SteamCMD download is already in progress",
-        code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
-      });
-    }
-    let steamcmdExe = await saveAndResolveSteamCmdExe(steamcmdPath);
-    if (!steamcmdExe || !fs.existsSync(steamcmdExe)) {
-      try {
-        steamcmdExe = await ensureSteamCmdInstalled(
-          steamcmdPath,
-          req.app.get("io"),
-        );
-      } catch (dlErr: any) {
-        if (dlErr?.code === ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS) {
-          return res.status(409).json({
-            error: "A SteamCMD download is already in progress",
-            code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
-          });
-        }
-        return res.status(500).json({
-          error: `SteamCMD not found and auto-download failed: ${sanitizeError(dlErr.message)}`,
-          code: ErrorCode.STEAMCMD_AUTO_DOWNLOAD_FAILED,
-        });
-      }
-    }
-
-    try {
-      const recovery = recoverMismatchedSteamBranchManifest(
-        installPath,
-        selectedBranch,
-      );
-      if (recovery) {
-        log.warn(
-          `Reset stale SteamCMD branch manifest (${recovery.mountedBranch} -> ${recovery.targetBranch}); backup: ${recovery.backupPath}`,
-        );
-      }
-    } catch (error: any) {
-      log.warn(`Could not inspect SteamCMD branch manifest: ${error.message}`);
-    }
-
-    try {
-      const recovery = recoverBlockedSteamManifest(installPath);
-      if (recovery) {
-        log.warn(
-          `Reset SteamCMD manifest stuck in access-denied state 0x6; backup: ${recovery.backupPath}`,
-        );
-      }
-    } catch (error: any) {
-      log.warn(`Could not reset blocked SteamCMD manifest: ${error.message}`);
-    }
-
-    const normalizedPath = path.normalize(installPath).toLowerCase();
-    if (hasActiveSteamOperation(normalizedPath)) {
-      return res.status(409).json({
-        error:
-          "A Steam operation is already in progress for this server. Please wait for it to complete.",
-        code: ErrorCode.STEAM_OPERATION_IN_PROGRESS_SERVER,
-      });
-    }
-
-    const operation = validateFiles ? "verification" : "update";
-    log.info(`Starting PZ server ${operation} (branch: ${selectedBranch})...`);
-
-    activeSteamOperations.set(normalizedPath, {
-      type: operation,
-      startTime: Date.now(),
-      lastOutputAt: Date.now(),
-      branch: selectedBranch,
-    });
-    activeOperationPath = normalizedPath;
-
-    const betaArgs = getBetaArgs(selectedBranch);
-    const loginArgs = await getSteamLoginArgs();
-    const steamcmdArgs = [
-      "+force_install_dir",
-      installPath,
-      ...loginArgs,
-      "+app_update",
-      "380870",
-      ...betaArgs,
-      "validate",
-      "+quit",
-    ];
-
-    const io = req.app.get("io");
-
-    io.emit("steam:start", {
-      type: validateFiles ? "verify" : "update",
-      message: validateFiles ? "Verifying game files..." : "Updating server...",
-      progressCode: validateFiles
-        ? ProgressCode.STEAM_START_VERIFY
-        : ProgressCode.STEAM_START_UPDATE,
-    });
-
-    const updateSpawnOpts: AnyRecord = { cwd: steamcmdPath };
-    if (!isWindows) {
-      const ldPaths = [
-        path.join(steamcmdPath, "linux32"),
-        path.join(steamcmdPath, "linux64"),
-        steamcmdPath,
-        process.env.LD_LIBRARY_PATH || "",
-      ]
-        .filter(Boolean)
-        .join(":");
-      updateSpawnOpts.env = {
-        ...buildLinuxWritableHomeEnv(steamcmdPath),
-        LD_LIBRARY_PATH: ldPaths,
-      };
-    }
-    const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, updateSpawnOpts);
-    const updateOperation = activeSteamOperations.get(normalizedPath);
-    if (!updateOperation) {
-      throw new Error("SteamCMD operation state disappeared before update started");
-    }
-    updateOperation.pid = steamcmd.pid;
-    const updateWatchdog = setInterval(() => {
-      const activeOperation = activeSteamOperations.get(normalizedPath);
-      if (!activeOperation) return;
-      if (!isSteamOperationIdle(activeOperation)) return;
-
-      log.error(
-        `SteamCMD ${activeOperation.type} produced no output for ${STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000} minutes; terminating the stalled process`,
-      );
-      steamcmd.kill();
-    }, 30_000);
-    updateOperation.watchdog = updateWatchdog;
-    updateWatchdog.unref?.();
-
-    let output = "";
-    let stdoutBuffer = "";
-    let stderrBuffer = "";
-
-    steamcmd.stdout.on("data", (data: any) => {
-      const operation = activeSteamOperations.get(normalizedPath);
-      if (operation) operation.lastOutputAt = Date.now();
-      const text = data.toString();
-      output += text;
-      stdoutBuffer += text;
-
-      const lines = stdoutBuffer.split(/\r?\n/);
-      stdoutBuffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.trim()) {
-          emitRawSteamCmdLine(io, "steam:log", "stdout", line);
-          log.info(`SteamCMD: ${line}`);
-        }
-      }
-    });
-
-    steamcmd.stderr.on("data", (data: any) => {
-      const operation = activeSteamOperations.get(normalizedPath);
-      if (operation) operation.lastOutputAt = Date.now();
-      const text = data.toString();
-      output += text;
-      stderrBuffer += text;
-
-      const lines = stderrBuffer.split(/\r?\n/);
-      stderrBuffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.trim()) {
-          emitRawSteamCmdLine(io, "steam:log", "stderr", line);
-          log.warn(`SteamCMD stderr: ${line}`);
-        }
-      }
-    });
-
-    steamcmd.on("close", (code: any) => {
-      if (stdoutBuffer.trim()) {
-        emitRawSteamCmdLine(io, "steam:log", "stdout", stdoutBuffer.trim());
-      }
-      if (stderrBuffer.trim()) {
-        emitRawSteamCmdLine(io, "steam:log", "stderr", stderrBuffer.trim());
-      }
-
-      clearActiveSteamOperation(normalizedPath);
-
-      const success = code === 0;
-      const steamDepotAccessDenied =
-        /app ['"]?380870['"]? state is 0x6/i.test(output) ||
-        /manifest.*access denied/i.test(output);
-      const failureMessage = steamDepotAccessDenied
-        ? "SteamCMD could not access a Project Zomboid depot manifest. Your installed server files were not changed. Retry later; if it persists, update using a Steam account that owns Project Zomboid."
-        : `Server ${operation} failed with code ${code}`;
-
-      let completeProgressCode;
-      let completeParams;
-      if (success) {
-        completeProgressCode = validateFiles
-          ? ProgressCode.STEAM_VERIFY_COMPLETE_SUCCESS
-          : ProgressCode.STEAM_UPDATE_COMPLETE_SUCCESS;
-      } else if (steamDepotAccessDenied) {
-        completeProgressCode = ProgressCode.STEAM_DEPOT_ACCESS_DENIED;
-      } else {
-        completeProgressCode = validateFiles
-          ? ProgressCode.STEAM_VERIFY_FAILED
-          : ProgressCode.STEAM_UPDATE_FAILED;
-        completeParams = { code };
-      }
-
-      io.emit("steam:complete", {
-        success,
-        message: success
-          ? `Server ${operation} completed successfully`
-          : failureMessage,
-        progressCode: completeProgressCode,
-        ...(completeParams ? { params: completeParams } : {}),
-      });
-
-      if (success) {
-        try {
-          const updateChecker = req.app.get("updateChecker");
-          if (updateChecker) {
-            setTimeout(() => updateChecker.checkForUpdates(true), 3000);
-          }
-        } catch (e: any) {
-          // Non-critical
-        }
-      }
-
-      logServerEvent(
-        success ? "server_update" : "server_update_failed",
-        `Server ${operation} ${success ? "completed" : "failed"}`,
-      ).catch((e: any) => log.error("Failed to log server event:", e));
-
-      log.info(`SteamCMD ${operation} finished with code ${code}`);
-    });
-
-    steamcmd.on("error", (error: any) => {
-      clearActiveSteamOperation(normalizedPath);
-
-      io.emit("steam:complete", {
-        success: false,
-        message: `Failed to run SteamCMD: ${sanitizeError(error.message)}`,
-        progressCode: ProgressCode.STEAMCMD_RUN_FAILED,
-        params: { reason: sanitizeError(error.message) },
-      });
-      log.error(`SteamCMD error: ${error.message}`);
-    });
-
-    res.json({
-      success: true,
-      message: `Server ${operation} started`,
-    });
-  } catch (error: any) {
-    if (activeOperationPath) {
-      activeSteamOperations.delete(activeOperationPath);
-    }
-    log.error(`Steam update failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
+    const checker = req.app.get("updateChecker");
+    if (!checker) return res.status(503).json({ error: "Update service unavailable" });
+    res.json(await checker.beginUpdate(req.body || {}));
+  } catch (error: any) { res.status(409).json({ error: sanitizeError(error.message) }); }
 });
 
 router.post("/steamcmd/download", async (req, res) => {
@@ -2858,9 +2565,7 @@ router.post("/delete-files", async (req, res) => {
       return res.status(409).json({ error: "File target does not match the server in the URL" });
     }
 
-    const normalizedDeleteTargetPath = path
-      .normalize(deletePath)
-      .toLowerCase();
+    const normalizedDeleteTargetPath = steamInstallKey(deletePath);
     if (hasActiveSteamOperation(normalizedDeleteTargetPath)) {
       return res.status(409).json({
         error:
@@ -3383,20 +3088,6 @@ router.get("/update-check/status", async (req, res) => {
   }
 });
 
-router.post("/update-check/auto-update-result/dismiss", async (req, res) => {
-  try {
-    const updateChecker = req.app.get("updateChecker");
-    if (!updateChecker) {
-      return res.status(503).json({ error: "Update checker not available", code: ErrorCode.UPDATE_CHECKER_NOT_AVAILABLE });
-    }
-
-    await updateChecker.dismissAutoUpdateResult();
-    res.json(await updateChecker.getStatus());
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
 router.post("/update-check/interval", async (req, res) => {
   try {
     const updateChecker = req.app.get("updateChecker");
@@ -3799,7 +3490,7 @@ router.post("/wipe", async (req, res) => {
       serverManager.serverPath &&
       confineToRoots(savePath, [path.resolve(serverManager.serverPath)]) &&
       hasActiveSteamOperation(
-        path.normalize(serverManager.serverPath).toLowerCase(),
+        steamInstallKey(serverManager.serverPath),
       )
     ) {
       return res.status(409).json({

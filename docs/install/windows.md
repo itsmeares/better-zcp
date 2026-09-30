@@ -37,9 +37,9 @@ The zip's `ZomboidControlPanel.exe` isn't digitally signed — this project
 doesn't code-sign its Windows builds — so Windows will challenge you twice
 before it runs. Both are expected; neither means anything is actually wrong.
 
-1. Double-click `Start.bat` (not the `.exe` directly — `Start.bat` is a
-   supervisor that restarts the panel automatically if it ever crashes, and
-   keeps a log of why).
+1. Double-click `Start.bat`. It launches the packaged supervisor, which
+   restarts the panel after a crash and applies panel updates after the
+   panel process has stopped.
 2. **SmartScreen:** a blue **"Windows protected your PC"** screen appears
    first. Click **More info**, then **Run anyway**. This happens because the
    `.exe` is unsigned and new to your machine, not because anything is
@@ -336,15 +336,14 @@ needing to double-click `Start.bat` yourself every time.
    asked because of the "run whether logged on or not" option from step 3).
 
 **You know it worked when:** right-click the task → **Run**, then check
-`logs\supervisor.log` inside the extracted folder for a fresh `Supervisor v2
-starting` / `Launching ZomboidControlPanel.exe` line, and confirm
+`logs` inside the extracted folder for panel startup messages, and confirm
 `http://localhost:3001` loads without you having double-clicked anything.
 The real test is a reboot: restart the PC and confirm the panel is already
 reachable once Windows finishes starting, with no console window required to
 stay open under your own login.
 
 **If this goes wrong:** the task shows as run but the panel isn't reachable
-— check `logs\supervisor.log` for what actually happened; a task running as
+Check the panel logs for what happened. a task running as
 a different Windows account than the one who extracted the zip can hit
 permission errors writing to that folder, which the log will show even
 though Task Scheduler itself reports the task as having run successfully.

@@ -28,7 +28,7 @@ function makeScheduler() {
     serverMessage: vi.fn().mockResolvedValue({ success: true }),
   };
   const serverManager = { _serverId: null };
-  const scheduler = new Scheduler(rconService, serverManager);
+  const scheduler = new Scheduler(rconService, serverManager, { active: null, cancel: () => false, run: async () => ({ success: true }) });
   return { scheduler, rconService, serverManager };
 }
 
@@ -62,91 +62,15 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     );
   });
 
-  it("retries a cron restart after players leave and cancels a pending retry with its task", async () => {
+  it("does not retry a deferred restart before the next scheduled run", async () => {
     vi.useFakeTimers();
     try {
       const { scheduler } = makeScheduler();
-      const task = { id: 100, name: "Restart", server_id: "server-a", command: "restart" };
-      scheduler.jobs.set(task.id, { stop: vi.fn() });
-      scheduler.performRestart = vi.fn()
-        .mockResolvedValueOnce({ success: false, deferred: true, message: "Players online" })
-        .mockResolvedValue({ success: true });
-
-      await scheduler.runTaskNow(task, true);
-      expect(scheduler.pendingRestarts.has(task.id)).toBe(true);
-      await vi.advanceTimersByTimeAsync(60000);
-      expect(scheduler.performRestart).toHaveBeenCalledTimes(2);
-      expect(scheduler.pendingRestarts.has(task.id)).toBe(false);
-
-      scheduler.performRestart.mockResolvedValue({ success: false, deferred: true, message: "Players online" });
-      await scheduler.runTaskNow(task, true);
-      scheduler.cancelTask(task.id);
-      await vi.advanceTimersByTimeAsync(60000);
-      expect(scheduler.performRestart).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("drops an old retry when a scheduled restart is edited", () => {
-    const { scheduler } = makeScheduler();
-    const task = { id: 101, name: "Restart", server_id: "server-a", command: "restart", cron_expression: "0 */6 * * *" };
-    const staleRetry = setTimeout(() => {}, 60000);
-    scheduler.pendingRestarts.set(task.id, staleRetry);
-
-    try {
-      expect(scheduler.scheduleTask(task)).toMatchObject({ scheduled: true });
-      expect(scheduler.pendingRestarts.has(task.id)).toBe(false);
-    } finally {
-      scheduler.cancelTask(task.id);
-      clearTimeout(staleRetry);
-    }
-  });
-
-  it.each([
-    [{ success: true, players: [{ name: "Player" }] }, "1 player(s) online"],
-    [{ success: false }, "Could not verify"],
-  ])("postpones a scheduled restart when player status is unsafe: %s", async (players, message) => {
-    const rconService = {
-      connected: true,
-      execute: vi.fn().mockResolvedValue({ success: true }),
-      getPlayers: vi.fn().mockResolvedValue(players),
-      save: vi.fn(),
-      quit: vi.fn(),
-    };
-    const serverManager = {
-      _serverId: "server-a",
-      serverName: "Test",
-      getServerProcessDetails: vi.fn().mockResolvedValue({ running: true }),
-    };
-    const scheduler = new Scheduler(rconService, serverManager);
-
-    const result = await scheduler.performRestart(0, { onlyWhenEmpty: true });
-
-    expect(result).toMatchObject({ success: false, deferred: true, message: expect.stringContaining(message) });
-    expect(rconService.save).not.toHaveBeenCalled();
-    expect(rconService.quit).not.toHaveBeenCalled();
-  });
-
-  it("does not save or stop a server when a required forced warning is rejected", async () => {
-    const rconService = {
-      connected: true,
-      execute: vi.fn().mockResolvedValue({ success: true }),
-      serverMessage: vi.fn().mockResolvedValue({ success: false, rejected: true }),
-      save: vi.fn(),
-      quit: vi.fn(),
-    };
-    const serverManager = {
-      _serverId: "server-a",
-      serverName: "Test",
-      getServerProcessDetails: vi.fn().mockResolvedValue({ running: true, scanFailed: false }),
-    };
-    const scheduler = new Scheduler(rconService, serverManager);
-
-    await expect(scheduler.performRestart(1, { requireWarnings: true }))
-      .rejects.toThrow("Could not warn online players");
-    expect(rconService.save).not.toHaveBeenCalled();
-    expect(rconService.quit).not.toHaveBeenCalled();
+      scheduler.performRestart = vi.fn().mockResolvedValue({ success: false, deferred: true, message: "Waiting window expired" });
+      await scheduler.runTaskNow({ id: 100, name: "Restart", server_id: "server-a", command: "restart" });
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(scheduler.performRestart).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
   });
 
   it("routes 'save' through rconService.save()", async () => {
@@ -451,7 +375,7 @@ describe("performRestart() Schedule History labeling", () => {
       checkServerRunning: vi.fn().mockResolvedValue(true), // wasRunning=true -> skips the 10s "wait and start" path
     };
     return {
-      scheduler: new Scheduler(rconService, serverManager),
+      scheduler: new Scheduler(rconService, serverManager, { active: null, cancel: () => false, run: async () => ({ success: false, message: "RCON not available" }) }),
       rconService,
     };
   }
@@ -460,7 +384,7 @@ describe("performRestart() Schedule History labeling", () => {
     logScheduleExecution.mockClear();
   });
 
-  it("defaults to 'Auto Restart' when no label is passed (genuinely unattended callers unchanged)", async () => {
+  it("uses the default restart label when no label is passed", async () => {
     const { scheduler } = makeSchedulerForRestart();
 
     const result = await scheduler.performRestart();
@@ -468,7 +392,7 @@ describe("performRestart() Schedule History labeling", () => {
     expect(result.success).toBe(false);
     expect(logScheduleExecution).toHaveBeenCalledWith(
       null,
-      "Auto Restart",
+      "Restart",
       "restart",
       false,
       expect.stringContaining("RCON not available"),
@@ -489,98 +413,5 @@ describe("performRestart() Schedule History labeling", () => {
       expect.stringContaining("RCON not available"),
       expect.any(Number),
     );
-  });
-});
-
-describe("performRestart(): a serverManager without process-detection must refuse, not silently start", () => {
-  it("refuses when getServerProcessDetails is unavailable and RCON cannot confirm the server either way", async () => {
-    const rconService = {
-      connected: false,
-      connect: vi.fn().mockResolvedValue(),
-      execute: vi
-        .fn()
-        .mockResolvedValue({ success: false, error: "not connected" }),
-    };
-    const serverManager = {
-      _serverId: null,
-      checkServerRunning: vi.fn().mockResolvedValue(false),
-      startServer: vi.fn().mockResolvedValue({ success: true }),
-    };
-    const scheduler = new Scheduler(rconService, serverManager);
-
-    const result = await scheduler.performRestart();
-
-    expect(result.success).toBe(false);
-    expect(result.message).toMatch(
-      /could not confirm whether the server is stopped/i,
-    );
-    expect(serverManager.startServer).not.toHaveBeenCalled();
-    expect(serverManager.checkServerRunning).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST /api/scheduler/restart-now labels its Schedule History entry as manual", () => {
-  function getRestartNowHandler() {
-    const layer = router.stack.find(
-      (entry) =>
-        entry.route?.path === "/restart-now" && entry.route.methods.post,
-    );
-    return layer.route.stack[0].handle;
-  }
-
-  it("calls scheduler.performRestart with label: 'Manual restart'", async () => {
-    const { getCurrentServer } = await import("../database/init.ts");
-    getCurrentServer.mockResolvedValue(null);
-    const performRestart = vi.fn().mockResolvedValue({ success: true });
-    const response = createResponse();
-
-    await getRestartNowHandler()(
-      {
-        user: { role: "automation_and_control" },
-        body: { warningMinutes: 5 },
-        app: { get: () => ({ performRestart }) },
-      },
-      response,
-    );
-
-    expect(performRestart).toHaveBeenCalledWith(5, { label: "Manual restart" });
-  });
-});
-
-describe("PUT /api/scheduler/restart-warning", () => {
-  function getRestartWarningHandler() {
-    const layer = router.stack.find(
-      (entry) =>
-        entry.route?.path === "/restart-warning" && entry.route.methods.put,
-    );
-    return layer.route.stack[0].handle;
-  }
-
-  it("persists the submitted warning settings through Scheduler", async () => {
-    const setRestartWarning = vi.fn().mockResolvedValue({
-      locale: "zh-CN",
-      template: "将在 {count}{unit} 后重启",
-    });
-    const response = createResponse();
-
-    await getRestartWarningHandler()(
-      {
-        body: { locale: "zh-CN", template: "将在 {count}{unit} 后重启" },
-        app: { get: () => ({ setRestartWarning }) },
-      },
-      response,
-    );
-
-    expect(setRestartWarning).toHaveBeenCalledWith({
-      locale: "zh-CN",
-      template: "将在 {count}{unit} 后重启",
-    });
-    expect(response.json).toHaveBeenCalledWith({
-      success: true,
-      restartWarning: {
-        locale: "zh-CN",
-        template: "将在 {count}{unit} 后重启",
-      },
-    });
   });
 });

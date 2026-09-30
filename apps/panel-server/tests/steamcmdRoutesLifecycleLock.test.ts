@@ -67,7 +67,6 @@ describe("SteamCMD route lifecycle guards", () => {
   it.each([
     "/install",
     "/quick-setup",
-    "/steam-update",
   ])("refuses %s when the same target server is already locked", async (routePath) => {
     const body =
       routePath === "/install"

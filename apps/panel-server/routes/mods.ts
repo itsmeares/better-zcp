@@ -767,7 +767,9 @@ router.post("/cancel-pending-restart", async (req, res) => {
       });
     }
 
-    modChecker.cancelPendingRestart();
+    if (!modChecker.cancelPendingRestart()) {
+      return res.status(409).json({ success: false, message: "The restart is already stopping the server and cannot be cancelled." });
+    }
     res.json({ success: true, message: "Pending restart cancelled" });
   } catch (error: any) {
     log.error(`Failed to cancel pending restart: ${error.message}`);

@@ -83,7 +83,6 @@ import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
 import { HelpTip } from '@/components/HelpTip'
 import { DisabledReason } from '@/components/DisabledReason'
-import { AutoUpdateResultBanner } from '@/components/AutoUpdateResultBanner'
 import { cn, copyText } from '@/lib/utils'
 import { getUserErrorMessage, getRecoveryUrl } from '@/lib/errorMessage'
 import { panelQueryKeys } from '@/lib/queryClient'
@@ -1341,7 +1340,7 @@ export default function Dashboard() {
           onClick: () => {
             void handleAction('Create backup', () =>
               backupApi
-                .createBackup({ includeDb: true })
+                .createBackup()
                 .then(() => fetchMaintenance()),
             )
           },
@@ -1469,7 +1468,6 @@ export default function Dashboard() {
 
   return (
     <div className="page-transition pb-12">
-      <AutoUpdateResultBanner />
       <header
         aria-label={'Server status'}
         className="overflow-hidden rounded-lg border border-border/55 bg-card/45 shadow-sm"
@@ -1744,7 +1742,7 @@ export default function Dashboard() {
                   onClick={() =>
                     handleAction('Create backup', () =>
                       backupApi
-                        .createBackup({ includeDb: true })
+                        .createBackup()
                         .then(() => fetchMaintenance()),
                     )
                   }
@@ -1883,7 +1881,7 @@ export default function Dashboard() {
                 {lastFailed
                   ? 'Last apply attempt failed — see Settings for diagnostics.'
                   : isStaged
-                    ? 'Downloaded and ready. Restart the panel to apply.'
+                    ? 'A verified update is ready. Continue from Settings.'
                     : 'A new panel version is available.'}
               </span>
               {latest && (
@@ -2308,7 +2306,7 @@ export default function Dashboard() {
                 onClick={() =>
                   handleAction('Create backup', () =>
                     backupApi
-                      .createBackup({ includeDb: true })
+                      .createBackup()
                       .then(() => fetchMaintenance()),
                   )
                 }

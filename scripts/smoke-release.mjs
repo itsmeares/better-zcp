@@ -313,12 +313,11 @@ async function main() {
         ? 'ZomboidControlPanel.exe'
         : 'ZomboidControlPanel',
     );
-    child = spawn(binary, [], {
+    child = spawn(binary, ['--panel-child'], {
       cwd: smokeReleaseDir,
       env: {
         ...process.env,
-        PANEL_NO_SUPERVISOR: '1',
-        PORT: String(port),
+                PORT: String(port),
         ...(authSmokeEnabled ? { SETUP_TOKEN: authSmokeSetupToken } : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],

@@ -17,7 +17,7 @@ setPanelRuntime({ panelBridge: panelBridge });
 function makeScheduler() {
   const rconService = { connected: true };
   const serverManager = { _serverId: null };
-  return new Scheduler(rconService, serverManager);
+  return new Scheduler(rconService, serverManager, { active: null, cancel: () => false, run: async () => ({ success: true }) });
 }
 
 describe("Scheduler.executeBridgeAction() against the real panelBridge.sendCommand contract", () => {

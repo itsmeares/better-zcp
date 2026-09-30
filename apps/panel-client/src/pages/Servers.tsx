@@ -1450,12 +1450,14 @@ export default function Servers() {
           steamcmdPath,
           installFolder,
           steamOperation.branch,
+          steamOperation.server.id,
         )
       } else {
         await serversApi.steamUpdate(
           steamcmdPath,
           installFolder,
           steamOperation.branch,
+          steamOperation.server.id,
         )
       }
     } catch (error) {

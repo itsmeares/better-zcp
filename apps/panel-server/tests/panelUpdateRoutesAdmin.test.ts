@@ -7,7 +7,7 @@ const guardedRoutes = [
   ["get", "/panel/update-status"],
   ["get", "/panel/update-preflight"],
   ["get", "/panel/update-apply-log"],
-  ["post", "/panel/update-download"],
+  ["post", "/panel/update"],
   ["post", "/panel/restart"],
 ];
 

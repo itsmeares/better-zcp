@@ -1,180 +1,30 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import fs from "fs";
-import os from "os";
-import path from "path";
-
-
-const getSettingMock = vi.fn(async () => null);
-const setSettingMock = vi.fn(async () => {});
-const getServersMock = vi.fn(async () => []);
-
-vi.mock("../database/init.ts", () => ({
-  logServerEvent: vi.fn(async () => {}),
-  setSetting: (...args) => setSettingMock(...args),
-  getSetting: (...args) => getSettingMock(...args),
-  getCurrentServer: vi.fn(async () => null),
-  getServers: (...args) => getServersMock(...args),
-}));
-
-const { default: router } = await import("../routes/server.ts");
-const { setDockerClient } = await import("../services/managedContainer.ts");
-
-function createResponse() {
-  const response = { status: vi.fn(), json: vi.fn() };
-  response.status.mockReturnValue(response);
-  return response;
-}
-
-function getSteamUpdateHandler() {
-  const layer = router.stack.find(
-    (entry) =>
-      entry.route?.path === "/steam-update" && entry.route.methods.post,
-  );
-  const stack = layer.route.stack;
-  return stack[stack.length - 1].handle;
-}
-
-let root;
-let steamcmdPath;
-let installPath;
-
-beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "pz-steamupdate-race-"));
-  steamcmdPath = path.join(root, "steamcmd");
-  installPath = path.join(root, "install");
-  fs.mkdirSync(steamcmdPath, { recursive: true });
-  fs.mkdirSync(installPath, { recursive: true });
-  const fakeSteamcmd = path.join(steamcmdPath, "steamcmd.sh");
-  fs.writeFileSync(fakeSteamcmd, "#!/bin/sh\nexit 0\n");
-  fs.chmodSync(fakeSteamcmd, 0o755);
-
-  getSettingMock.mockReset();
-  setSettingMock.mockReset();
-  getServersMock.mockReset();
-  getServersMock.mockResolvedValue([]);
-  setSettingMock.mockResolvedValue(undefined);
-});
-
-afterEach(() => {
-  setDockerClient(null);
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-const isWindows = process.platform === "win32";
-
-describe("POST /api/server/steam-update concurrency guard", () => {
-  it("refuses to update a shared install while a different game container is running", async () => {
-    getServersMock.mockResolvedValue([
-      { id: "a", name: "World A", installPath, dockerContainerName: "zomboid-game-a" },
-      { id: "b", name: "World B", installPath, dockerContainerName: "zomboid-game-b" },
-    ]);
-    const inspectManagedContainer = vi.fn(async (name) => ({ State: { Running: name === "zomboid-game-b" } }));
-    setDockerClient({ enabled: true, available: true, inspectManagedContainer, runManagedAction: vi.fn() });
-    const serverManager = { getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })) };
-    const response = createResponse();
-
-    await getSteamUpdateHandler()({
-      app: { get: (key) => key === "serverManager" ? serverManager : { emit: vi.fn() } },
-      body: { steamcmdPath, installPath, branch: "stable" },
-    }, response);
-
-    expect(response.status).toHaveBeenCalledWith(400);
-    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: "STEAM_UPDATE_SERVER_RUNNING" }));
-    expect(serverManager.getServerProcessDetails).not.toHaveBeenCalled();
-    expect(inspectManagedContainer).toHaveBeenCalledWith("zomboid-game-b");
+import { afterEach, expect, it, vi } from "vite-plus/test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createServer } from "../database/init.ts";
+import { runForServer } from "../utils/serverScope.ts";
+import { UpdateChecker } from "../services/updateChecker.ts";
+import { clearActiveSteamOperation, steamInstallKey, getActiveSteamOperations } from "../services/activeSteamOperations.ts";
+import { setPanelRuntime } from "../utils/panelRuntime.ts";
+let directory: string | undefined;
+afterEach(() => { getActiveSteamOperations().clear(); if (directory) fs.rmSync(directory, { recursive: true, force: true }); });
+it("two concurrent requests reserve a shared Steam install once, retaining the lock through the stopped maintenance work", async () => {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), "SteamCase-"));
+  fs.mkdirSync(path.join(directory, "steamapps"));
+  fs.writeFileSync(path.join(directory, "steamapps", "appmanifest_380870.acf"), '"buildid" "100"');
+  fs.writeFileSync(path.join(directory, process.platform === "win32" ? "steamcmd.exe" : "steamcmd.sh"), "fixture");
+  const server = await createServer({ serverName: "Only", installPath: directory });
+  let release: (() => void) | undefined;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const maintenance = { active: null, state: async () => ({ running: false }), run: vi.fn(async () => { await pending; return { success: false, deferred: true, message: "Fixture complete" }; }) };
+  setPanelRuntime({});
+  const checker = new UpdateChecker({ emit: vi.fn() }, { maintenance: maintenance as any });
+  await runForServer(server.id, async () => {
+    const results = await Promise.allSettled([checker.beginUpdate({ steamcmdPath: directory }), checker.beginUpdate({ steamcmdPath: directory })]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1); expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect(maintenance.run).toHaveBeenCalledOnce(); expect(getActiveSteamOperations().has(steamInstallKey(directory!))).toBe(true);
+    release!(); await vi.waitFor(() => expect(checker.updating).toBe(false)); expect(getActiveSteamOperations().has(steamInstallKey(directory!))).toBe(false);
   });
-  it.skipIf(isWindows)("a second update for the SAME install path, suspended inside saveAndResolveSteamCmdExe while the first claims and spawns, is refused with 409 once it resumes", async () => {
-    const serverManager = {
-      getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
-    };
-    const io = { emit: vi.fn() };
-    const app = {
-      get: (key) => (key === "serverManager" ? serverManager : key === "io" ? io : undefined),
-    };
-
-    let getSettingCalls = 0;
-    let releaseSuspended;
-    getSettingMock.mockImplementation(async (key) => {
-      if (key !== "steamcmdPath") return null;
-      getSettingCalls += 1;
-      if (getSettingCalls === 1) {
-        return new Promise((resolve) => {
-          releaseSuspended = () => resolve(steamcmdPath);
-        });
-      }
-      return steamcmdPath;
-    });
-
-    const handler = getSteamUpdateHandler();
-    const buildRequest = () => ({
-      app,
-      body: { steamcmdPath, installPath, branch: "stable" },
-    });
-
-    const responseA = createResponse();
-    const responseB = createResponse();
-
-    const callA = handler(buildRequest(), responseA);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const callB = handler(buildRequest(), responseB);
-    await callB;
-
-    releaseSuspended();
-    await callA;
-
-    expect(responseB.status).not.toHaveBeenCalledWith(409);
-    expect(responseA.status).toHaveBeenCalledWith(409);
-    expect(responseA.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "STEAM_OPERATION_IN_PROGRESS_SERVER" }),
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  });
-
-  it("checks the requested installPath, not a different server returned by the manager's cached state", async () => {
-    const targetDataPath = path.join(root, "target-data");
-    getServersMock.mockResolvedValue([
-      {
-        id: "target",
-        installPath,
-        serverName: "TargetServer",
-        zomboidDataPath: targetDataPath,
-      },
-    ]);
-    const serverManager = {
-      _scanDedicatedServerProcesses: async () => ({
-        running: true,
-        scanFailed: false,
-        matched: [
-          {
-            cmd: `java -servername TargetServer -cachedir "${targetDataPath}" ${installPath}/start-server.sh`,
-          },
-        ],
-      }),
-    };
-    const response = createResponse();
-    const handler = getSteamUpdateHandler();
-
-    await handler(
-      {
-        app: {
-          get: (key) =>
-            key === "serverManager"
-              ? serverManager
-              : key === "io"
-                ? { emit: vi.fn() }
-                : undefined,
-        },
-        body: { steamcmdPath, installPath, branch: "stable" },
-      },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(400);
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "STEAM_UPDATE_SERVER_RUNNING" }),
-    );
-  });
+  clearActiveSteamOperation(steamInstallKey(directory));
 });

@@ -44,14 +44,6 @@ type CorsState = {
   blocked: CorsBlockedOrigin[];
   lastLoadedAt: string | null;
 };
-type PendingUpdateInspection = {
-  pending: boolean;
-  awaitingStartupAck: boolean;
-  phase?: string;
-  transactionId?: string;
-  metadata?: AnyRecord;
-  applyingMarkerPath?: string | null;
-};
 import {
   initDatabase,
   getCurrentServer,
@@ -73,13 +65,8 @@ import { ModChecker, refreshWorkshopChecker } from "./services/modChecker.ts";
 import { Scheduler } from "./services/scheduler.ts";
 import { BackupService } from "./services/backupService.ts";
 import { UpdateChecker } from "./services/updateChecker.ts";
+import { PanelUpdateChecker } from "./services/panelUpdateChecker.ts";
 import {
-  PanelUpdateChecker,
-  restorePreUpdateDataBackup,
-} from "./services/panelUpdateChecker.ts";
-import {
-  acknowledgeUpdateBundle,
-  inspectPendingUpdateBundle,
   PANEL_API_CONTRACT_VERSION as DEFAULT_API_CONTRACT_VERSION,
 } from "./services/updateBundle.ts";
 import { LogTailer } from "./services/logTailer.ts";
@@ -111,37 +98,8 @@ import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
 import { discoverMounts } from "./services/mountDiscovery.ts";
 import { buildPanelHealthPayload } from "./utils/panelHealth.ts";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
-import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
 import { acquireLifecycleLock } from "./services/lifecycleCoordinator.ts";
 
-(function maybeReexecViaSupervisor() {
-  try {
-    if (process.platform !== "win32") return;
-    if (typeof process.pkg === "undefined") return;
-    if (process.env.PANEL_SUPERVISOR_V === "2") return;
-    if (process.env.PANEL_NO_SUPERVISOR === "1") return;
-    const exeDir = path.dirname(process.execPath.replace(/\.new2?$/i, ""));
-    const startBat = path.join(exeDir, "Start.bat");
-    if (!fs.existsSync(startBat)) return;
-    const child = spawn(
-      process.env.ComSpec || "cmd.exe",
-      ["/c", "start", "", startBat],
-      {
-        detached: true,
-        stdio: "ignore",
-        cwd: exeDir,
-        windowsHide: false,
-      },
-    );
-    child.unref();
-    process.exit(0);
-  } catch (err: any) {
-    console.error(
-      "Supervisor bootstrap failed, continuing without it:",
-      err.message,
-    );
-  }
-})();
 
 process.stdout?.on?.("error", (err) => {
   if (err.code !== "EPIPE") throw err;
@@ -167,7 +125,7 @@ process.on("unhandledRejection", (reason) => {
 
 let isShuttingDown = false;
 
-async function gracefulShutdown(signal: string) {
+async function gracefulShutdown(signal: string, exitCode = 0, respawn = false) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
@@ -178,15 +136,17 @@ async function gracefulShutdown(signal: string) {
     panelUpdateChecker.stop();
     closeDatabase();
 
+    io.disconnectSockets(true);
+    httpServer.closeIdleConnections();
     httpServer.close(() => {
       log.info("HTTP server closed");
-      process.exit(0);
+      if (respawn) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: "ignore", cwd: process.cwd(), env: process.env }).unref();
+      process.exit(exitCode);
     });
-
     setTimeout(() => {
-      log.warn("Graceful shutdown timed out, forcing exit");
+      log.error("Panel did not close cleanly; update hand-off cancelled.");
       process.exit(1);
-    }, 10000);
+    }, 10000).unref();
   } catch (error: any) {
     log.error("Error during shutdown:", error);
     process.exit(1);
@@ -195,6 +155,9 @@ async function gracefulShutdown(signal: string) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("message", message => {
+  if (message && typeof message === "object" && "type" in message && message.type === "panel:shutdown") void gracefulShutdown("supervisor");
+});
 
 import { addLogToBuffer } from "./utils/logBuffer.ts";
 import { getDiskFree } from "./utils/diskSpace.ts";
@@ -233,6 +196,7 @@ let panelRequestHandler: ReturnType<typeof createPanelRequestHandler> =
     response.end("Panel is still starting");
   };
 const httpServer = createServer((request, response) => {
+  if (isShuttingDown) { response.statusCode = 503; response.end("Panel is restarting"); return; }
   void panelRequestHandler(request, response).catch((error: unknown) => {
     log.error("Panel request failed:", error);
     if (!response.headersSent) {
@@ -454,6 +418,8 @@ setDockerClient(dockerClient);
 const panelUpdateChecker = new PanelUpdateChecker(io);
 setPanelRuntime({ authService, dockerClient, panelUpdateChecker, io, panelIo: io,
   refreshCorsConfig, getCorsDebugSnapshot, clearCorsBlockedOrigins,
+  getListeningPort: () => activePanelPort,
+  restartPanel: (exitCode: number, respawn = false) => gracefulShutdown("panel restart", exitCode, respawn),
   ensureServerRuntime: (id: string) => startServerRuntime(id, io, dockerClient) });
 
 function resolveSourcePanelVersion(): string {
@@ -501,30 +467,6 @@ const panelWebOptions = {
   httpsDetected,
   inlineScriptCspSources: () => inlineScriptCspSources.join(" "),
 };
-
-function updateBundleJournalPath(): string {
-  return path.join(
-    path.dirname(panelUpdateChecker.getExeBasePath()),
-    "update-bundle.json",
-  );
-}
-
-let _pendingUpdateInspection: PendingUpdateInspection = {
-  pending: false,
-  awaitingStartupAck: false,
-};
-
-function inspectPendingPanelUpdate(): PendingUpdateInspection {
-  const journalPath = updateBundleJournalPath();
-  return inspectPendingUpdateBundle({
-    journalPath,
-    applyingMarkerPath: path.join(
-      path.dirname(journalPath),
-      ".update-applying",
-    ),
-    runningMetadata: _buildMetadata,
-  });
-}
 
 panelRequestHandler = createPanelRequestHandler(panelWebOptions, {
   isAllowedOrigin,
@@ -669,18 +611,6 @@ async function start(): Promise<void> {
   try {
     logBanner(_buildMetadata.panelVersion);
 
-    if (typeof process.pkg !== "undefined") {
-      try {
-  _pendingUpdateInspection = inspectPendingPanelUpdate();
-      } catch (error: any) {
-        log.error(
-          `Update startup validation failed [${error.code || "invalid_bundle"}]: ${error.message}`,
-        );
-        process.exit(76);
-        return;
-      }
-    }
-
     try {
       const { acquireLock } = await import("./utils/pidLock.ts");
       const { getDataPaths } = await import("./utils/paths.ts");
@@ -694,7 +624,7 @@ async function start(): Promise<void> {
         process.exit(78);
       }
     } catch (err: any) {
-      log.warn(`Lock check skipped: ${err.message}`);
+      throw new Error(`Panel lock failed: ${err.message}`);
     }
 
     logSection("Database");
@@ -816,71 +746,6 @@ async function start(): Promise<void> {
           });
         }
         logReady(urls);
-        try {
-          const journalPath = updateBundleJournalPath();
-          if (
-            _pendingUpdateInspection.awaitingStartupAck &&
-            acknowledgeUpdateBundle(journalPath, _buildMetadata, {
-              transactionId: _pendingUpdateInspection.transactionId,
-              expectedMetadata: _pendingUpdateInspection.metadata,
-              applyingMarkerPath: _pendingUpdateInspection.applyingMarkerPath,
-            })
-          ) {
-            log.info("Update bundle startup acknowledged; previous artifacts removed");
-            await setSetting("preUpdateDataBackupPath", null);
-
-
-            if (process.platform !== "win32") {
-              const linuxExeDir = path.dirname(process.execPath);
-              try {
-                const activated =
-                  panelUpdateChecker.activateStagedLinuxLauncherFiles(linuxExeDir);
-                if (activated) {
-                  log.info(
-                    "Linux launcher and service templates updated; re-run install-linux-service.sh --enable to load the new unit.",
-                  );
-                }
-              } catch (activateErr: any) {
-                log.error(
-                  `Could not update Linux launcher/service templates: ${activateErr.message}. ` +
-                    `Run: sudo ${path.join(linuxExeDir, "install-linux-service.sh")} --enable`,
-                );
-              }
-            }
-          }
-        } catch (error: any) {
-          log.error(
-            `Update startup handshake failed [${error.code || "startup_handshake_failed"}]: ${error.message}`,
-          );
-          if (error.code === "version_mismatch") {
-            refreshInlineScriptCspHash();
-            try {
-              const backupPath = await getSetting("preUpdateDataBackupPath");
-              closeDatabase();
-              if (
-                restorePreUpdateDataBackup(
-                  { ...getDataPaths(), dbPath: getDatabaseFilePath() },
-                  backupPath,
-                )
-              ) {
-                log.warn(
-                  `Restored the pre-update database snapshot after a version-mismatch rollback: ${backupPath}`,
-                );
-              } else {
-                log.error(
-                  "Version-mismatch rollback occurred but no pre-update database snapshot was recorded to restore.",
-                );
-              }
-            } catch (restoreErr: any) {
-              log.error(
-                `Could not restore the pre-update database snapshot: ${restoreErr.message}`,
-              );
-            }
-          }
-          process.exitCode = 76;
-          setImmediate(() => process.exit(76));
-          return;
-        }
         await logExposureWarningIfNeeded({ needsSetup, boundPort, localIp });
         await logSetupTokenIfNeeded(needsSetup);
 

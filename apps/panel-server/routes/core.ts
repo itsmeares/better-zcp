@@ -33,7 +33,7 @@ router.get("/panel/update-check", requirePanelAdmin, handlePanelUpdateCheck);
 router.get("/panel/update-status", requirePanelAdmin, handlePanelUpdateStatus);
 router.get("/panel/update-preflight", requirePanelAdmin, handlePanelUpdatePreflight);
 router.get("/panel/update-apply-log", requirePanelAdmin, handlePanelUpdateApplyLog);
-router.post("/panel/update-download", requirePanelAdmin, handlePanelUpdateDownload);
+router.post("/panel/update", requirePanelAdmin, handlePanelUpdateDownload);
 router.post("/panel/restart", requirePanelAdmin, handlePanelRestart);
 
 export default router;

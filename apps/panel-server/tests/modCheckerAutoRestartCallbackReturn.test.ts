@@ -66,4 +66,14 @@ describe("ModChecker.init(): restored auto-restart callback propagates handleMod
 
     expect(result).toEqual({ success: false, error: "RCON disconnected" });
   });
+  it("leaves deferred Workshop updates eligible and only marks a completed restart processed", async () => {
+    const checker = new ModChecker(), run = vi.fn();
+    checker.scheduler = { maintenance: { run } };
+    const updates = [{ workshopId: "123", latestTimestamp: new Date(123456) }];
+    run.mockResolvedValueOnce({ success: false, deferred: true });
+    await checker.triggerModRestart(updates); expect(checker.processedUpdates.has("123")).toBe(false);
+    run.mockResolvedValueOnce({ success: true });
+    await checker.triggerModRestart(updates); expect(checker.processedUpdates.get("123")).toBe(123456);
+  });
+
 });

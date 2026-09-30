@@ -10,7 +10,7 @@ import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
-import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
+import { hasActiveSteamOperation, steamInstallKey } from "../services/activeSteamOperations.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   streamUploadToFile,
@@ -179,16 +179,7 @@ router.post("/settings", async (req, res) => {
       }
       allowed.maxBackups = maxBackups;
     }
-    if (req.body.includeDb !== undefined) {
-      const includeDb = parseBackupBoolean(req.body.includeDb);
-      if (includeDb === undefined) {
-        return res.status(400).json({
-          success: false,
-          error: "includeDb must be a boolean or 0/1",
-        });
-      }
-      allowed.includeDb = includeDb;
-    }
+    if (req.body.waitMinutes !== undefined) allowed.waitMinutes = req.body.waitMinutes;
     if (req.body.forceAfterMinutes !== undefined) {
       const value = req.body.forceAfterMinutes;
       if (value !== null && (!Number.isInteger(value) || value < 15 || value > 1440)) {
@@ -224,17 +215,9 @@ router.post("/create", async (req, res) => {
     const io = req.app.get("io");
     const activeServer = await getCurrentServer();
     if (rejectStaleProfile(req, res, activeServer)) return;
-    const includeDb = req.body?.includeDb === undefined
-      ? false
-      : parseBackupBoolean(req.body.includeDb);
-    if (includeDb === undefined) {
-      return res.status(400).json({ success: false, error: "includeDb must be a boolean or 0/1" });
-    }
-
     const result = await backupService.createBackup({
       io,
       activeServer,
-      includeDb,
     });
 
     if (result.success) {
@@ -341,9 +324,7 @@ router.post("/restore/:name", async (req, res) => {
     }
 
     if (activeServer?.installPath) {
-      const normalizedRestoreTargetPath = path
-        .normalize(activeServer.installPath)
-        .toLowerCase();
+      const normalizedRestoreTargetPath = steamInstallKey(activeServer.installPath);
       if (hasActiveSteamOperation(normalizedRestoreTargetPath)) {
         return res.status(409).json({
           error:

@@ -3,6 +3,7 @@ import path from "path";
 import { ServerManager } from "../services/serverManager.ts";
 import {
   getActiveSteamOperations,
+  steamInstallKey,
   clearActiveSteamOperation,
 } from "../services/activeSteamOperations.ts";
 
@@ -22,7 +23,7 @@ function makeManager() {
   return manager;
 }
 
-const normalizedInstallPath = path.normalize(server.installPath).toLowerCase();
+const normalizedInstallPath = steamInstallKey(server.installPath);
 
 describe("startServer(): refuses to spawn the PZ JVM while SteamCMD is active for this server's install path", () => {
   afterEach(() => {
@@ -56,7 +57,7 @@ describe("startServer(): refuses to spawn the PZ JVM while SteamCMD is active fo
 
   it("is unaffected by an operation tracked for a DIFFERENT install path", async () => {
     const manager = makeManager();
-    const otherPath = path.normalize("/opt/some-other-server").toLowerCase();
+    const otherPath = steamInstallKey("/opt/some-other-server");
     getActiveSteamOperations().set(otherPath, {
       type: "update",
       pid: process.pid,

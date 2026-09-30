@@ -84,7 +84,7 @@ describe("Scheduler.scheduleTask() -- logs and returns the DST warning, doesn't 
   });
 
   it("returns a truthy, non-false object on success (existing `=== false` and truthy checks both still work)", () => {
-    scheduler = new Scheduler(null, null);
+    scheduler = new Scheduler(null, null, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     scheduler.effectiveTimezone = "UTC";
     const result = scheduler.scheduleTask({
       id: "t1",
@@ -98,7 +98,7 @@ describe("Scheduler.scheduleTask() -- logs and returns the DST warning, doesn't 
   });
 
   it("still returns exactly false on an invalid cron expression (unchanged failure shape)", () => {
-    scheduler = new Scheduler(null, null);
+    scheduler = new Scheduler(null, null, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     const result = scheduler.scheduleTask({
       id: "t2",
       name: "Bad task",
@@ -108,7 +108,7 @@ describe("Scheduler.scheduleTask() -- logs and returns the DST warning, doesn't 
   });
 
   it("returns a non-null dstWarning for a sub-hourly task in a DST-observing timezone", () => {
-    scheduler = new Scheduler(null, null);
+    scheduler = new Scheduler(null, null, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     scheduler.effectiveTimezone = "America/New_York";
     const result = scheduler.scheduleTask({
       id: "t3",
@@ -121,7 +121,7 @@ describe("Scheduler.scheduleTask() -- logs and returns the DST warning, doesn't 
   });
 
   it("returns a null dstWarning for the same sub-hourly cadence when the zone is UTC", () => {
-    scheduler = new Scheduler(null, null);
+    scheduler = new Scheduler(null, null, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     scheduler.effectiveTimezone = "UTC";
     const result = scheduler.scheduleTask({
       id: "t4",

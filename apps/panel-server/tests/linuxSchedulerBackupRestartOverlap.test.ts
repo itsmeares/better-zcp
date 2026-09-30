@@ -41,7 +41,7 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
     capturedBackupCallback = null;
     capturedMissedHandler = null;
     logScheduleExecution.mockClear();
-    scheduler = new Scheduler({}, {});
+    scheduler = new Scheduler({}, {}, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     createBackup = vi.fn().mockResolvedValue({
       success: true,
       backup: { name: "test-backup.zip" },
@@ -60,29 +60,16 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
     if (scheduler.backupJob) scheduler.backupJob.stop();
   });
 
-  it("skips the backup (logged, not silent) when a restart is currently in progress", async () => {
-    await scheduler.setupBackupSchedule();
-    expect(capturedBackupCallback).toBeTypeOf("function");
-
-    scheduler.restartInProgress = true;
-    await capturedBackupCallback();
-
-    expect(createBackup).not.toHaveBeenCalled();
-    expect(logScheduleExecution).toHaveBeenCalledWith(
-      null,
-      "Scheduled Backup",
-      "backup",
-      false,
-      expect.stringMatching(/restart was in progress/i),
-      0,
-    );
+  it("logs a deferred result from the common backup flow", async () => {
+    createBackup.mockResolvedValue({ success: false, deferred: true, message: "Restart already in progress" });
+    await scheduler.setupBackupSchedule(); await capturedBackupCallback();
+    expect(logScheduleExecution).toHaveBeenCalledWith(null, "Scheduled Backup", "backup", false, "Restart already in progress", expect.any(Number));
   });
 
   it("positive control: runs the backup normally when no restart is in progress", async () => {
     await scheduler.setupBackupSchedule();
     expect(capturedBackupCallback).toBeTypeOf("function");
 
-    scheduler.restartInProgress = false;
     await capturedBackupCallback();
 
     expect(createBackup).toHaveBeenCalledTimes(1);
@@ -113,7 +100,7 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
 
 describe("Scheduler.getStatus(): surfaces the timezone every cron.schedule() call actually uses", () => {
   it("reports the process's actual resolved timezone, not a hardcoded guess", () => {
-    const scheduler = new Scheduler({}, {});
+    const scheduler = new Scheduler({}, {}, { active: null, cancel: () => false, run: async () => ({ success: true }) });
     const status = scheduler.getStatus();
     expect(status.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
     expect(typeof status.timezone).toBe("string");

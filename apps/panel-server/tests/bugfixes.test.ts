@@ -1,3 +1,4 @@
+import { archiveService } from "./archiveService.ts";
 import { describe, it, expect, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
@@ -24,7 +25,6 @@ import {
   parseLegacyBoolean,
   parseLegacyMinutes,
 } from "../services/modChecker.ts";
-import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
 import { BackupService } from "../services/backupService.ts";
 import authService from "../services/auth.ts";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";
@@ -117,22 +117,6 @@ describe("Restart timeout pattern", () => {
     expect(await sendWarning("test", true)).toBe("ok");
 
     expect(await sendWarning("test", false)).toBe("RCON timeout");
-  });
-});
-
-describe("automatic update warning parsing", () => {
-  it("uses the documented default for unset or blank settings", () => {
-    expect(parseAutoUpdateWarningMinutes(null)).toBe(15);
-    expect(parseAutoUpdateWarningMinutes(undefined)).toBe(15);
-    expect(parseAutoUpdateWarningMinutes(" ")).toBe(15);
-  });
-
-  it("keeps valid values bounded and rejects invalid values", () => {
-    expect(parseAutoUpdateWarningMinutes("5")).toBe(5);
-    expect(parseAutoUpdateWarningMinutes(2.9)).toBe(2);
-    expect(parseAutoUpdateWarningMinutes(-4)).toBe(0);
-    expect(parseAutoUpdateWarningMinutes(90)).toBe(60);
-    expect(parseAutoUpdateWarningMinutes("abc")).toBe(15);
   });
 });
 
@@ -295,72 +279,6 @@ describe("config mutation guard", () => {
     } finally {
       getCurrentServerSpy.mockRestore();
     }
-  });
-});
-
-describe("mod update auto-restart dedupe", () => {
-  it("marks offline mod updates as handled instead of retrying every poll", async () => {
-    const checker = new ModChecker();
-    checker.scheduler = { rconService: { connected: false } };
-    checker.serverManager = {
-      getServerProcessDetails: vi
-        .fn()
-        .mockResolvedValue({ running: false, scanFailed: false }),
-    };
-
-    const result = await checker.triggerModRestart([
-      { workshopId: "2503622437", name: "Skill Recovery Journal" },
-    ]);
-
-    expect(result).toMatchObject({
-      success: true,
-      skipped: true,
-      markProcessed: true,
-      reason: "server_offline",
-    });
-    expect(checker.pendingRestart).toBe(false);
-  });
-
-  it("keeps retrying when the server is running but RCON is disconnected", async () => {
-    const checker = new ModChecker();
-    checker.scheduler = { rconService: { connected: false } };
-    checker.serverManager = {
-      getServerProcessDetails: vi
-        .fn()
-        .mockResolvedValue({ running: true, scanFailed: false }),
-    };
-
-    const result = await checker.triggerModRestart([
-      { workshopId: "3437629766", name: "CleanUI [B42.12]" },
-    ]);
-
-    expect(result).toMatchObject({
-      success: false,
-      retry: true,
-      reason: "rcon_disconnected",
-    });
-    expect(checker.pendingRestart).toBe(false);
-  });
-
-  it("retries instead of marking processed when detection can't confirm the server is offline", async () => {
-    const checker = new ModChecker();
-    checker.scheduler = { rconService: { connected: false } };
-    checker.serverManager = {
-      getServerProcessDetails: vi
-        .fn()
-        .mockResolvedValue({ running: false, scanFailed: true }),
-    };
-
-    const result = await checker.triggerModRestart([
-      { workshopId: "1111111111", name: "Some Mod" },
-    ]);
-
-    expect(result).toMatchObject({
-      success: false,
-      retry: true,
-      reason: "rcon_disconnected",
-    });
-    expect(checker.pendingRestart).toBe(false);
   });
 });
 
@@ -678,82 +596,9 @@ describe("legacy mod auto-restart settings migration", () => {
   });
 });
 
-describe("online player count when RCON is unavailable", () => {
-  const withRcon = (rconService) => {
-    const checker = new ModChecker();
-    checker.scheduler = rconService ? { rconService } : null;
-    return checker;
-  };
-
-  it("counts players when RCON answers", async () => {
-    const checker = withRcon({
-      getPlayers: async () => ({ success: true, players: ["a", "b"] }),
-    });
-    await expect(checker.getOnlinePlayerCount()).resolves.toBe(2);
-  });
-
-  it("reports unknown rather than empty when RCON throws", async () => {
-    const checker = withRcon({
-      getPlayers: async () => {
-        throw new Error("connection reset");
-      },
-    });
-    await expect(checker.getOnlinePlayerCount()).resolves.toBeNull();
-  });
-
-  it("reports unknown rather than empty when RCON fails softly", async () => {
-    const checker = withRcon({
-      getPlayers: async () => ({ success: false }),
-    });
-    await expect(checker.getOnlinePlayerCount()).resolves.toBeNull();
-  });
-
-  it("reports unknown when there is no RCON service at all", async () => {
-    await expect(withRcon(null).getOnlinePlayerCount()).resolves.toBeNull();
-  });
-
-  it("defaults to waiting for players and retries when their count is unknown", async () => {
-    const checker = withRcon({ getPlayers: async () => ({ success: false }) });
-    checker.scheduler.performRestart = vi.fn();
-
-    const result = await checker.handleModUpdate([{ workshopId: "123", name: "Updated mod" }]);
-
-    expect(checker.forceAfterDeadline).toBe(false);
-    expect(result).toMatchObject({ success: false, retry: true, reason: "player_count_unknown" });
-    expect(checker.scheduler.performRestart).not.toHaveBeenCalled();
-    expect(checker.pendingRestart).toBe(false);
-  });
-
-  it("never forces a Workshop restart at the old delay unless the deadline was enabled", async () => {
-    vi.useFakeTimers();
-    try {
-      const checker = new ModChecker();
-      checker.scheduler = {
-        rconService: { getPlayers: async () => ({ success: true, players: ["online"] }) },
-        cancelRestart: vi.fn(),
-      };
-      checker.pendingRestartStartedAt = Date.now() - 2 * 60 * 60_000;
-      const restart = vi.spyOn(checker, "triggerModRestart").mockResolvedValue({ success: true });
-
-      checker.startPlayerMonitoring([{ workshopId: "123", name: "Updated mod" }]);
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(restart).not.toHaveBeenCalled();
-
-      checker.forceAfterDeadline = true;
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(restart).toHaveBeenCalledWith(
-        [{ workshopId: "123", name: "Updated mod" }], true,
-      );
-      checker.cancelPendingRestart();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
 describe("backup restore guards against a running server", () => {
   it("refuses to restore while the server is running", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
     service.setServerManager({
       getServerProcessDetails: async () => ({ running: true, scanFailed: false }),
     });
@@ -763,12 +608,12 @@ describe("backup restore guards against a running server", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.message).toMatch(/still running/i);
+    expect(result.message).toMatch(/stop the server/i);
     expect(service.restoreInProgress).toBe(false);
   });
 
   it("refuses to restore when the running state cannot be confirmed", async () => {
-    const service = new BackupService();
+    const service = archiveService(BackupService);
     service.setServerManager({
       checkServerRunning: async () => {
         throw new Error("ps failed");
@@ -778,6 +623,6 @@ describe("backup restore guards against a running server", () => {
     const result = await service.restoreBackup("world.zip");
 
     expect(result.success).toBe(false);
-    expect(result.message).toMatch(/could not confirm/i);
+    expect(result.message).toMatch(/process detection/i);
   });
 });

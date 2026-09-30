@@ -684,6 +684,7 @@ export interface RestartWarningSettings {
 }
 
 export interface SchedulerStatus {
+  maintenance: { kind: string; label: string; phase: string; startedAt: string } | null;
   activeTasks: number;
   autoRestartEnabled: boolean;
   timezone?: string;
@@ -694,6 +695,7 @@ export interface SchedulerStatus {
 }
 
 export const schedulerApi = {
+  cancelMaintenance: () => apiPost("/scheduler/maintenance/cancel"),
   getStatus: () =>
     apiRoute("GET", "/scheduler/status") as Promise<SchedulerStatus>,
   getTasks: () => apiRoute("GET", "/scheduler/tasks"),
@@ -1311,8 +1313,9 @@ export const serversApi = {
     steamcmdPath: string,
     installPath: string,
     branch: string = "stable",
+    serverId: string | number | null = getSelectedServerId(),
   ) =>
-    apiPost("/server/steam-update", {
+    apiPost(apiUrl("/server/steam-update", serverId === null ? null : String(serverId)).slice(4), {
       steamcmdPath,
       installPath,
       branch,
@@ -1322,8 +1325,9 @@ export const serversApi = {
     steamcmdPath: string,
     installPath: string,
     branch: string = "stable",
+    serverId: string | number | null = getSelectedServerId(),
   ) =>
-    apiPost("/server/steam-update", {
+    apiPost(apiUrl("/server/steam-update", serverId === null ? null : String(serverId)).slice(4), {
       steamcmdPath,
       installPath,
       branch,
@@ -1903,7 +1907,7 @@ export interface BackupSettings {
   enabled: boolean;
   schedule: string;
   maxBackups: number;
-  includeDb: boolean;
+  waitMinutes: number;
   forceAfterMinutes: number | null;
   forceWarningMinutes: number;
 }
@@ -1964,7 +1968,6 @@ export const backupApi = {
     apiRoute("POST", "/backup/settings", settings),
 
   createBackup: (options?: {
-    includeDb?: boolean;
     expectedServerId?: string | number | null;
   }): Promise<{
     success: boolean;
@@ -2165,24 +2168,14 @@ export interface UpdateStatus {
   lastCheck: string;
 }
 
-export interface AutoUpdateResult {
-  status: "success" | "failed";
-  at: string;
-  dismissed: boolean;
-  reason?: string;
-  params?: Record<string, string | number> | null;
-  phase?: "not-started" | "before-stop" | "updating";
-  serverUp?: boolean | null;
-  appliedVersion?: string | null;
-}
-
 export interface UpdateCheckerStatus {
   updateAvailable: UpdateStatus | null;
   gameVersion: string | null;
   lastCheck: string | null;
   intervalMinutes: number;
   isChecking: boolean;
-  lastAutoUpdateResult: AutoUpdateResult | null;
+  updating: boolean;
+  lastUpdateResult: { success: boolean; message?: string; at: string } | null;
 }
 
 export interface PanelUpdateAsset {
@@ -2211,24 +2204,13 @@ export interface PanelUpdateStatus {
 }
 
 export interface PanelUpdateApplyResult {
+  message?: string;
   status: "success" | "failed";
   appliedVersion?: string;
   pendingVersion?: string;
   currentVersion?: string;
   at: string;
-  stagedStillPresent?: boolean;
-  helperLog?: string | null;
-  likelyCause?:
-    | "helper_blocked"
-    | "av_quarantine"
-    | "rename_locked"
-    | "permission"
-    | "no_helper_log"
-    | "rollback_failed"
-    | "unknown";
-  rollbackRetryLikely?: boolean;
-  canRetryApply?: boolean;
-  panelFolder?: string;
+
 }
 
 export interface PanelUpdateMessage {
@@ -2290,8 +2272,7 @@ export const updateApi = {
   ): Promise<{ success: boolean; intervalMinutes: number }> =>
     apiPost("/server/update-check/interval", { minutes }),
 
-  dismissAutoUpdateResult: (): Promise<UpdateCheckerStatus> =>
-    apiPost("/server/update-check/auto-update-result/dismiss"),
+  install: (): Promise<{ success: boolean; message: string }> => apiPost("/server/steam-update"),
 };
 
 export const mapApi = {
@@ -2315,8 +2296,8 @@ export const panelUpdateApi = {
   getStatus: (): Promise<PanelUpdateStatus> => apiGet("/panel/update-status"),
   preflight: (): Promise<PanelUpdatePreflight> =>
     apiGet("/panel/update-preflight"),
-  download: (): Promise<PanelUpdateActionResult> =>
-    apiPost("/panel/update-download", {}),
+  install: (): Promise<PanelUpdateActionResult> =>
+    apiPost("/panel/update", {}),
   getApplyLog: (): Promise<{ log: string | null; logPath: string }> =>
     apiGet("/panel/update-apply-log"),
 };

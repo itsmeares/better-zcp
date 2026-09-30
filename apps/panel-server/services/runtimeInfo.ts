@@ -1,12 +1,14 @@
 import path from "path";
 
+export const PANEL_SUPERVISOR_VERSION = "3";
+
 export function getRestartAssessment({
   platform = process.platform,
   packaged = typeof (process as NodeJS.Process & { pkg?: unknown }).pkg !== "undefined",
   environment = process.env,
   exeDir = path.dirname(process.execPath),
   launcherProtected =
-    environment.PANEL_SUPERVISOR_V === "2" &&
+    environment.PANEL_SUPERVISOR_V === PANEL_SUPERVISOR_VERSION &&
     environment.PANEL_PRESERVE_GAME_SERVERS === "1",
 }: {
   platform?: string;
