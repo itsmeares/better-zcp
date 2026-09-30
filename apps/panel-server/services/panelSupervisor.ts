@@ -155,9 +155,13 @@ export async function bootNativePanel(): Promise<void> {
     const runner = path.join(install, `.panel-runner-${crypto.randomUUID()}${process.platform === "win32" ? ".exe" : ""}`);
     fs.copyFileSync(process.execPath, runner, fs.constants.COPYFILE_EXCL);
     if (process.platform !== "win32") fs.chmodSync(runner, 0o755);
-    const args = ["--panel-supervisor", ...process.argv.slice(2)];
+    const args = ["--panel-supervisor"];
     if (process.platform === "win32") {
-      const child = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `start "" "${runner}" ${args.map(arg => `"${arg.replace(/"/g, '""')}"`).join(" ")}`], { cwd: install, stdio: "ignore", detached: true, windowsVerbatimArguments: true });
+      const logs = path.join(install, "logs"); fs.mkdirSync(logs, { recursive: true });
+      const output = fs.openSync(path.join(logs, "panel-supervisor.log"), "a", 0o600);
+      let child: ChildProcess;
+      try { child = spawn(runner, args, { cwd: install, stdio: ["ignore", output, output], detached: true, windowsHide: false }); }
+      finally { fs.closeSync(output); }
       child.on("error", err => { console.error(err.message); process.exitCode = 1; });
       child.once("spawn", () => { child.unref(); process.exit(0); });
     } else {
@@ -170,7 +174,7 @@ export async function bootNativePanel(): Promise<void> {
     return;
   }
   const binary = path.join(install, process.platform === "win32" ? "ZomboidControlPanel.exe" : "ZomboidControlPanel");
-  try { process.exitCode = await runPanelSupervisor({ binary, args: process.argv.slice(2).filter(arg => arg !== "--panel-supervisor"), dataDirectory: getDataPaths().dataDir }); }
+  try { process.exitCode = await runPanelSupervisor({ binary, dataDirectory: getDataPaths().dataDir }); }
   finally {
     if (process.platform !== "win32") fs.rmSync(process.execPath, { force: true });
   }

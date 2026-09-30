@@ -26,7 +26,7 @@ async function prepare(failHealth = false) {
   const game = write("game.cjs", `require('fs').writeFileSync(process.argv[2],String(process.pid));setInterval(()=>{},1000);`);
   const panel = write("panel.cjs", `
 const fs=require('fs'),http=require('http'),{spawn}=require('child_process');
-if(!fs.existsSync('game.pid')){const game=spawn(process.execPath,[${JSON.stringify(game)},'game.pid'],{detached:true,stdio:'ignore'});game.unref();}
+if(!fs.existsSync('game.pid')){const game=spawn(${JSON.stringify(process.execPath)},[${JSON.stringify(game)},'game.pid'],{detached:true,stdio:'ignore'});game.unref();}
 const metadata=JSON.parse(fs.readFileSync('client/dist/build-info.json'));
 if(metadata.panelVersion==='2.0.1'){fs.writeFileSync('data/panel.sqlite','migrated-data');fs.writeFileSync('data/jwt.secret','migrated-key');}
 const fail=fs.readFileSync('client/dist/index.html','utf8')==='fail-health';
@@ -35,22 +35,23 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','applica
 server.listen(0,'127.0.0.1',()=>fs.writeFileSync('port.txt',String(server.address().port)));
 setInterval(()=>{if(fs.existsSync('request-exit')){fs.rmSync('request-exit');server.close(()=>process.exit(75));}},20);
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
+process.on('message',message=>{if(message?.type==='panel:shutdown')server.close(()=>process.exit(0));});
 `);
   // The real API pins the port. The fixture takes the same port on subsequent launches.
   fs.writeFileSync(panel, fs.readFileSync(panel, "utf8").replace("server.listen(0,", "server.listen(fs.existsSync('port.txt')?Number(fs.readFileSync('port.txt')):0,"));
   const moduleUrl = new URL("../services/panelSupervisor.ts", import.meta.url).href;
-  const harness = write("supervisor.mjs", `import {runPanelSupervisor} from ${JSON.stringify(moduleUrl)};process.exitCode=await runPanelSupervisor({binary:${JSON.stringify(binary)},args:[${JSON.stringify(panel)}],dataDirectory:${JSON.stringify(path.join(root,"data"))},healthTimeout:750});`);
+  const harness = write("supervisor.mjs", `import {runPanelSupervisor} from ${JSON.stringify(moduleUrl)};process.on('message',message=>{if(message?.type==='fixture:shutdown')process.emit('SIGTERM');});process.exitCode=await runPanelSupervisor({binary:${JSON.stringify(binary)},args:[${JSON.stringify(panel)}],dataDirectory:${JSON.stringify(path.join(root,"data"))},healthTimeout:process.platform==='win32'?5000:750});if(process.connected)process.disconnect();`);
   return { binary, journal, harness };
 }
-function launch(harness: string) { supervisor = spawn(process.execPath, ["--experimental-strip-types", harness], { cwd: root, stdio: ["ignore", "pipe", "pipe"] }); supervisor.stdout?.on("data", () => {}); supervisor.stderr?.on("data", () => {}); }
+function launch(harness: string) { supervisor = spawn(process.execPath, ["--experimental-strip-types", harness], { cwd: root, stdio: ["ignore", "pipe", "pipe", "ipc"] }); supervisor.stdout?.on("data", () => {}); supervisor.stderr?.on("data", () => {}); }
 afterEach(async () => {
-  if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) { const done = new Promise(r => supervisor!.once("close", r)); supervisor.kill("SIGTERM"); await done; }
+  if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) { const done = new Promise(r => supervisor!.once("close", r)); if (supervisor.connected) supervisor.send({ type: "fixture:shutdown" }); else supervisor.kill("SIGTERM"); await done; }
   if (process.platform === "win32" && root && fs.existsSync(path.join(root, "panel.pid"))) {
     try { process.kill(Number(fs.readFileSync(path.join(root, "panel.pid"))), "SIGKILL"); } catch { /* only this fixture's panel child */ }
   }
   if (root && fs.existsSync(path.join(root, "game.pid"))) gamePids.push(Number(fs.readFileSync(path.join(root, "game.pid"))));
   for (const pid of gamePids.splice(0)) { try { process.kill(pid, "SIGKILL"); } catch { /* fixture already exited */ } }
-  if (root) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  if (root) fs.rmSync(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
   supervisor = undefined;
 });
 

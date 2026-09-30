@@ -1,3 +1,4 @@
+import { readRegularFile } from "../utils/regularFile.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -281,18 +282,7 @@ export class PanelUpdateChecker {
   }
   readMostRecentApplyLog() {
     const file = path.join(path.dirname(this.getExeBasePath()), "panel-update-result.json");
-    let descriptor: number | undefined;
-    try {
-      const stat = fs.lstatSync(file);
-      if (!stat.isFile() || stat.size > 65536) throw new Error("Update result is not a bounded regular file.");
-      descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-      const opened = fs.fstatSync(descriptor);
-      if (!opened.isFile() || opened.ino !== stat.ino || opened.dev !== stat.dev) throw new Error("Update result changed while opening.");
-      const buffer = Buffer.alloc(65537);
-      const count = fs.readSync(descriptor, buffer, 0, buffer.length, 0);
-      if (count > 65536) throw new Error("Update result is too large.");
-      return buffer.subarray(0, count).toString("utf8");
-    } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return null; throw e; }
-    finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
+    try { return readRegularFile(file, 65536); }
+    catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return null; throw e; }
   }
 }

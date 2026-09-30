@@ -1,3 +1,4 @@
+import { openRegularFile, readRegularFile } from "../utils/regularFile.ts";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -34,7 +35,7 @@ export function hashUpdatePath(file: string): string {
       for (const name of fs.readdirSync(current).sort()) walk(path.join(current, name), `${relative}/${name}`);
     } else if (stat.isFile()) {
       if (relative) hash.update(`${relative}\0`);
-      const fd = fs.openSync(current, "r");
+      const fd = openRegularFile(current);
       try {
         const buffer = Buffer.allocUnsafe(64 * 1024);
         let count: number;
@@ -61,8 +62,7 @@ function writeJournal(file: string, journal: UpdateBundleJournal) {
 export function readUpdateBundleJournalIfPresent(file: string): UpdateBundleJournal | null {
   let raw: string;
   try {
-    if (!fs.lstatSync(file).isFile()) throw error("invalid_bundle", "Update journal is not a regular file.");
-    raw = fs.readFileSync(file, "utf8");
+    raw = readRegularFile(file, 65536);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw e;
