@@ -1,131 +1,55 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getDataPaths } from "./paths.ts";
-import { readUiSecretFile, writeUiSecretFile } from "./uiSecretFile.ts";
+import { writeFileAtomic } from "./fileWriteQueue.ts";
 
-interface Logger {
-  warn?: (message: string) => unknown;
+type ServerSecretRecord = {
+  id: string;
+  rconPassword?: string;
+  [key: string]: any;
+};
+function secretPath(id: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error("Invalid server ID");
+  return path.join(getDataPaths().dataDir, "server-secrets", `${id}.secret`);
 }
 
-interface ServerRecord {
-  id?: string | number;
-  rconPassword?: unknown;
-  [key: string]: unknown;
-}
-
-export interface DatabaseData {
-  servers?: ServerRecord[];
-  settings?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-function secretsDir(): string {
-  return path.join(getDataPaths().dataDir, "server-secrets");
-}
-
-function serverSecretPath(serverId: string | number): string {
-  const safeId = String(serverId).replace(/[^a-zA-Z0-9_-]/g, "_");
-  return path.join(secretsDir(), `${safeId}.secret`);
-}
-
-function ensureSecretsDir(): void {
-  const dir = secretsDir();
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+export function withRconSecret<T extends ServerSecretRecord>(server: T): T {
   try {
-    fs.chmodSync(dir, 0o700);
-  } catch {
-    /* best-effort: Windows / network shares */
-  }
-}
-
-function readServerSecret(
-  serverId: string | number,
-  log?: Logger | null,
-): string | null {
-  const filePath = serverSecretPath(serverId);
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    const value = fs.readFileSync(filePath, "utf8").trim();
-    return value || null;
+    return {
+      ...server,
+      rconPassword: fs.readFileSync(secretPath(server.id), "utf8"),
+    };
   } catch (error) {
-    log?.warn?.(
-      `Could not read the RCON password file for server ${serverId} ` +
-        `(${filePath}): ${error instanceof Error ? error.message : String(error)}. Treating it as unset — re-enter ` +
-        "it in the server's settings.",
-    );
-    return null;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return { ...server, rconPassword: "" };
   }
 }
 
-function writeServerSecret(serverId: string | number, value: unknown): void {
-  const filePath = serverSecretPath(serverId);
-  if (value == null || value === "") {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      /* already absent */
-    }
-    return;
+export function withoutRconSecret<T extends ServerSecretRecord>(
+  server: T,
+): Omit<T, "rconPassword"> {
+  const { rconPassword, ...record } = server;
+  if (rconPassword === undefined) return record;
+  if (!rconPassword) {
+    deleteServerSecret(server.id);
+    return record;
   }
+  const file = secretPath(server.id);
   try {
-    if (fs.readFileSync(filePath, "utf8") === String(value)) return;
-  } catch {
-    /* doesn't exist yet or unreadable — fall through and write it */
+    if (fs.readFileSync(file, "utf8") === rconPassword) return record;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  ensureSecretsDir();
-  fs.writeFileSync(filePath, String(value), { encoding: "utf8", mode: 0o600 });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  writeFileAtomic(file, rconPassword, { encoding: "utf8", mode: 0o600 });
+  if (process.platform !== "win32") fs.chmodSync(file, 0o600);
+  return record;
+}
+
+export function deleteServerSecret(id: string | number): void {
   try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    /* best-effort: Windows / network shares */
+    fs.unlinkSync(secretPath(String(id)));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-}
-
-export function deleteServerSecret(serverId: string | number): void {
-  try {
-    fs.unlinkSync(serverSecretPath(serverId));
-  } catch {
-    /* already absent, fine */
-  }
-}
-
-export function rehydrateRconSecrets(
-  data: DatabaseData,
-  log?: Logger | null,
-): DatabaseData {
-  for (const server of data.servers || []) {
-    if (!server.rconPassword && server.id !== undefined) {
-      const fromFile = readServerSecret(server.id, log);
-      if (fromFile) server.rconPassword = fromFile;
-    }
-  }
-  if (!data.settings) data.settings = {};
-  if (!data.settings.rconPassword) {
-    const fromFile = readUiSecretFile("rconPassword", log);
-    if (fromFile) data.settings.rconPassword = fromFile;
-  }
-  return data;
-}
-
-export function redactRconSecretsForWrite(data: DatabaseData): DatabaseData {
-  const redactedServers = (data.servers || []).map((server) => {
-    if (server.rconPassword !== undefined && server.id !== undefined) {
-      writeServerSecret(server.id, server.rconPassword);
-      const { rconPassword: _rconPassword, ...rest } = server;
-      return rest;
-    }
-    return server;
-  });
-
-  let redactedSettings = data.settings;
-  if (data.settings && data.settings.rconPassword !== undefined) {
-    writeUiSecretFile(
-      "rconPassword",
-      data.settings.rconPassword as string | null | undefined,
-    );
-    const { rconPassword: _rconPassword, ...rest } = data.settings;
-    redactedSettings = rest;
-  }
-
-  return { ...data, servers: redactedServers, settings: redactedSettings };
 }

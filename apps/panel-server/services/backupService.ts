@@ -8,14 +8,14 @@ import { createLogger } from "../utils/logger.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("Backup");
 import {
-  getActiveServer,
+  getCurrentServer,
   updateServer,
   getSetting,
   setSetting,
   logServerEvent,
   getLatestScheduleExecutionByCommand,
-  flushWrites,
   getDatabaseFilePath,
+  exportDatabase,
 } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
@@ -300,7 +300,7 @@ export class BackupService {
     try {
       const activeServer =
         activeServerOverride === undefined
-          ? await getActiveServer()
+          ? await getCurrentServer()
           : activeServerOverride;
 
       const serverDataPath = activeServer?.zomboidDataPath;
@@ -363,7 +363,7 @@ export class BackupService {
     try {
       const activeServer =
         activeServerOverride === undefined
-          ? await getActiveServer()
+          ? await getCurrentServer()
           : activeServerOverride;
       let basePath;
 
@@ -479,7 +479,7 @@ export class BackupService {
     }
 
     const activeServer = options.activeServer === undefined
-      ? await getActiveServer()
+      ? await getCurrentServer()
       : options.activeServer;
     const lifecycleLock = options.isPreRestore || options.isPreWipe
       ? null
@@ -627,7 +627,7 @@ export class BackupService {
 
     const activeServer =
       options.activeServer === undefined
-        ? await getActiveServer()
+        ? await getCurrentServer()
         : options.activeServer;
     const savesPath = await this.getSavesPath(activeServer);
     const backupsPath = await this.getBackupsPath(activeServer);
@@ -702,12 +702,13 @@ export class BackupService {
     }
     totalFiles += portableFiles.length + (activeServer ? 2 : 1);
 
-    let dbPathToInclude = null;
+    let dbPathToInclude: string | null = null;
     if (options.includeDb) {
-      await flushWrites();
+
       const dbPath = getDatabaseFilePath();
       if (fs.existsSync(dbPath)) {
-        dbPathToInclude = dbPath;
+        dbPathToInclude = `${tempBackupPath}.sqlite`;
+        exportDatabase(dbPathToInclude);
         totalFiles++;
       }
     }
@@ -746,6 +747,7 @@ export class BackupService {
       });
 
       output.on("close", async () => {
+        if (dbPathToInclude) fs.rmSync(dbPathToInclude, { force: true });
         emitProgress("finalizing", 95, "Finalizing backup...");
 
         try {
@@ -822,6 +824,7 @@ export class BackupService {
       });
 
       const cleanupTemp = () => {
+        if (dbPathToInclude) fs.rmSync(dbPathToInclude, { force: true });
         fs.rm(tempBackupPath, { force: true }, (cleanupErr) => {
           if (cleanupErr) {
             log.warn(
@@ -890,7 +893,7 @@ export class BackupService {
           if (snapshotResult.skipped) skippedFiles.push("panel-server-snapshot.json");
 
           if (dbPathToInclude) {
-            const databaseName = path.basename(dbPathToInclude);
+            const databaseName = path.basename(getDatabaseFilePath());
             const dbResult = await waitForArchiveEntry(archive, () =>
               archive.file(dbPathToInclude, { name: databaseName }),
             );
@@ -1026,7 +1029,7 @@ export class BackupService {
     try {
       const settings = await this.getSettings();
       const activeServer = activeServerOverride === undefined
-        ? await getActiveServer()
+        ? await getCurrentServer()
         : activeServerOverride;
       const backups = await this.listBackups(activeServer);
       const ownPrefix = activeServer?.serverName ? `${activeServer.serverName}_` : null;
@@ -1061,7 +1064,7 @@ export class BackupService {
     }
     try {
       const activeServer = activeServerOverride === undefined
-        ? await getActiveServer()
+        ? await getCurrentServer()
         : activeServerOverride;
       const backups = await this.listBackups(activeServer);
       const cutoffDate = new Date();
@@ -1111,7 +1114,7 @@ export class BackupService {
 
   async getStatus(): Promise<Record<string, unknown>> {
     const settings = await this.getSettings();
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     const backups = await this.listBackups(activeServer);
     const savesPath = await this.getSavesPath(activeServer);
     const backupsPath = await this.getBackupsPath(activeServer);
@@ -1185,7 +1188,7 @@ export class BackupService {
 
     try {
       const activeServer = options.activeServer === undefined
-        ? await getActiveServer()
+        ? await getCurrentServer()
         : options.activeServer;
       if (
         activeServer?.id != null &&
@@ -1522,7 +1525,7 @@ export class BackupService {
             .map((key) => [key, restoredProfile[key]]));
           await updateServer(activeServer.id, updates);
           profileUpdated = true;
-          await flushWrites();
+
           await this.serverManager?.reloadConfig?.(activeServer.id);
           await this.rconService?.reloadConfig?.();
         }
@@ -1533,7 +1536,7 @@ export class BackupService {
               .filter((key) => Object.hasOwn(activeServer, key))
               .map((key) => [key, activeServer[key]]));
             await updateServer(activeServer.id, previous);
-            await flushWrites();
+
           } catch (rollbackError: unknown) {
             log.error(`Could not roll back panel profile after restore failure: ${errorMessage(rollbackError)}`);
           }

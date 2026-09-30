@@ -7,11 +7,11 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
 }));
 
 const { default: router } = await import("../routes/server.ts");
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -37,7 +37,7 @@ beforeEach(() => {
     path.join(dataPath, "Saves", "Multiplayer", "fresh-server", "map", "0_0.bin"),
     "chunk",
   );
-  getActiveServer.mockResolvedValue({
+  getCurrentServer.mockResolvedValue({
     serverName: "fresh-server",
     zomboidDataPath: dataPath,
   });

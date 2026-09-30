@@ -6,7 +6,7 @@ import path from "path";
 
 let activeServer;
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => activeServer),
+  getCurrentServer: vi.fn(async () => activeServer),
 }));
 
 const runManagedLifecycle = vi.fn();

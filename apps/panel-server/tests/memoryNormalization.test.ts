@@ -9,8 +9,8 @@ describe("normalizeMemoryGb", () => {
     },
   );
 
-  it("keeps valid GB and legacy MB values", () => {
+  it("keeps valid GB and rejects values above the supported limit", () => {
     expect(normalizeMemoryGb("8", 4)).toBe(8);
-    expect(normalizeMemoryGb(4096, 4)).toBe(4);
+    expect(normalizeMemoryGb(4096, 8)).toBe(8);
   });
 });

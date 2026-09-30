@@ -5,7 +5,7 @@ const createServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getServers: vi.fn(),
   getServer: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   createServer,
   updateServer: vi.fn(),
   deleteServer: vi.fn(),

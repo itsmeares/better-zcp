@@ -9,10 +9,11 @@ vi.mock("../database/init.ts", () => ({
   setSetting: async (key, value) => {
     settings.set(key, value);
   },
-  getDb: async () => db,
-  commitNow: async () => {},
+  getAdmin: async () => structuredClone(db.data.users[0] ?? null),
+  createAdmin: async user => { db.data.users.push(structuredClone(user)); },
+  saveAdmin: async user => { db.data.users[0] = structuredClone(user); },
   getTrackedMods: vi.fn(async () => []),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 vi.mock("../utils/paths.ts", () => ({

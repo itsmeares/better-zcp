@@ -3,9 +3,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -19,7 +19,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
 
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
   });
 
   function baseServer(overrides = {}) {
@@ -41,7 +41,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     const newDataPath = path.join(root, "ZomboidData_new");
 
     const server = baseServer({ installPath, zomboidDataPath: oldDataPath });
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     await refreshLaunchTargetBeforeStart(server);
     const batPath = path.join(installPath, "StartServer_TestServer.bat");
@@ -50,7 +50,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     );
 
     const updatedServer = { ...server, zomboidDataPath: newDataPath };
-    getActiveServer.mockResolvedValue(updatedServer);
+    getCurrentServer.mockResolvedValue(updatedServer);
 
     const result = await refreshLaunchTargetBeforeStart(updatedServer);
 
@@ -73,7 +73,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     );
 
     const server = baseServer({ installPath, zomboidDataPath });
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     await refreshLaunchTargetBeforeStart(server);
 
@@ -97,7 +97,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     );
 
     const server = baseServer({ installPath, zomboidDataPath });
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     const result = await refreshLaunchTargetBeforeStart(server, {
       managedHandled: true,
@@ -119,7 +119,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
       installPath,
       startCommand: "custom-launcher.sh",
     });
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     await refreshLaunchTargetBeforeStart(server);
 
@@ -130,7 +130,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
 
   it("skips script regen when installPath is missing, and does not throw", async () => {
     const server = baseServer({});
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     await expect(refreshLaunchTargetBeforeStart(server)).resolves.toEqual({
       scriptBackupWarnings: [],
@@ -143,7 +143,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     fs.writeFileSync(notADir, "x", "utf8");
 
     const server = baseServer({ installPath: notADir });
-    getActiveServer.mockResolvedValue(server);
+    getCurrentServer.mockResolvedValue(server);
 
     await expect(refreshLaunchTargetBeforeStart(server)).resolves.not.toThrow();
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vite-plus/test";
 const getServers = vi.fn();
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const getServer = vi.fn();
 const createServer = vi.fn();
 const updateServer = vi.fn();
@@ -12,7 +12,7 @@ const testRconConnection = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   getServers,
-  getActiveServer,
+  getCurrentServer,
   getServer,
   createServer,
   updateServer,
@@ -86,7 +86,7 @@ const FAKE_SERVER_ROW = {
 
 beforeEach(() => {
   getServers.mockReset().mockResolvedValue([FAKE_SERVER_ROW]);
-  getActiveServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
+  getCurrentServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
   getServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
   createServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
   updateServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
@@ -96,9 +96,9 @@ beforeEach(() => {
 });
 
 describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts)", () => {
-  it("GET / (per-item) and GET /active return identical key sets for the same server", async () => {
+  it("GET / (per-item) and GET /:id return identical key sets for the same server", async () => {
     const list = await invokeJson(serversRouter, "/", "get", { app: fakeApp() });
-    const active = await invokeJson(serversRouter, "/active", "get", { app: fakeApp() });
+    const active = await invokeJson(serversRouter, "/:id", "get", { app: fakeApp(), params: {id:"1"} });
 
     const listKeys = Object.keys(list.servers[0]).sort();
     const activeKeys = Object.keys(active.server).sort();
@@ -145,14 +145,7 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts
           body: { name: "Test Server" },
         }).then((p) => p.server),
     },
-    {
-      label: "POST /:id/activate",
-      invoke: () =>
-        invokeJson(serversRouter, "/:id/activate", "post", {
-          app: fakeApp(),
-          params: { id: "1" },
-        }).then((p) => p.server),
-    },
+
   ];
 
   it.each(OTHER_SERVER_PRODUCERS)(
@@ -195,7 +188,7 @@ describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/rout
         skippedFiles: [],
       })),
     };
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockResolvedValue({});
     const app = fakeApp({ backupService });
 
     const list = await invokeJson(backupRouter, "/list", "get", { app });

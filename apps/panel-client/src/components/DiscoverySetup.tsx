@@ -1,3 +1,4 @@
+import { selectServer as selectProfile } from "@/lib/serverSelection"
 import { useEffect, useState } from 'react'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -71,7 +72,7 @@ export function DiscoverySetup({
         name: displayName || undefined,
       })
       const server = result.server
-      await serversApi.activate(server.id)
+      await selectProfile(server.id)
       onCreated?.(server)
       toast({ title: 'Server added' })
       onOpenChange(false)

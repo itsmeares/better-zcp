@@ -1,3 +1,5 @@
+import { getServer } from "../database/init.ts";
+import { runForServer } from "../utils/serverScope.ts";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
@@ -27,21 +29,66 @@ function loadRouteModule(
 }
 
 const routeModules: RouteModule[] = [
-  { base: "/api/auth", load: loadRouteModule(() => import("../routes/auth.ts")) },
-  { base: "/api/rcon", load: loadRouteModule(() => import("../routes/rcon.ts")) },
-  { base: "/api/server", load: loadRouteModule(() => import("../routes/server.ts")) },
-  { base: "/api/servers", load: loadRouteModule(() => import("../routes/servers.ts")) },
-  { base: "/api/players", load: loadRouteModule(() => import("../routes/players.ts")) },
-  { base: "/api/mods", load: loadRouteModule(() => import("../routes/mods.ts")) },
-  { base: "/api/server-files", load: loadRouteModule(() => import("../routes/serverFiles.ts")) },
-  { base: "/api/debug", load: loadRouteModule(() => import("../routes/debug.ts")) },
-  { base: "/api/backup", load: loadRouteModule(() => import("../routes/backup.ts")) },
-  { base: "/api/map", load: loadRouteModule(() => import("../routes/mapProxy.ts")) },
-  { base: "/api/config", load: loadRouteModule(() => import("../routes/config.ts")) },
-  { base: "/api/docker", load: loadRouteModule(() => import("../routes/docker.ts")) },
-  { base: "/api/scheduler", load: loadRouteModule(() => import("../routes/scheduler.ts")) },
-  { base: "/api/system", load: loadRouteModule(() => import("../routes/system.ts")) },
-  { base: "/api/panel-bridge", load: loadRouteModule(() => import("../routes/panelBridge.ts")) },
+  {
+    base: "/api/auth",
+    load: loadRouteModule(() => import("../routes/auth.ts")),
+  },
+  {
+    base: "/api/rcon",
+    load: loadRouteModule(() => import("../routes/rcon.ts")),
+  },
+  {
+    base: "/api/server",
+    load: loadRouteModule(() => import("../routes/server.ts")),
+  },
+  {
+    base: "/api/servers",
+    load: loadRouteModule(() => import("../routes/servers.ts")),
+  },
+  {
+    base: "/api/players",
+    load: loadRouteModule(() => import("../routes/players.ts")),
+  },
+  {
+    base: "/api/mods",
+    load: loadRouteModule(() => import("../routes/mods.ts")),
+  },
+  {
+    base: "/api/server-files",
+    load: loadRouteModule(() => import("../routes/serverFiles.ts")),
+  },
+  {
+    base: "/api/debug",
+    load: loadRouteModule(() => import("../routes/debug.ts")),
+  },
+  {
+    base: "/api/backup",
+    load: loadRouteModule(() => import("../routes/backup.ts")),
+  },
+  {
+    base: "/api/map",
+    load: loadRouteModule(() => import("../routes/mapProxy.ts")),
+  },
+  {
+    base: "/api/config",
+    load: loadRouteModule(() => import("../routes/config.ts")),
+  },
+  {
+    base: "/api/docker",
+    load: loadRouteModule(() => import("../routes/docker.ts")),
+  },
+  {
+    base: "/api/scheduler",
+    load: loadRouteModule(() => import("../routes/scheduler.ts")),
+  },
+  {
+    base: "/api/system",
+    load: loadRouteModule(() => import("../routes/system.ts")),
+  },
+  {
+    base: "/api/panel-bridge",
+    load: loadRouteModule(() => import("../routes/panelBridge.ts")),
+  },
   { base: "/api", load: loadRouteModule(() => import("../routes/core.ts")) },
 ];
 
@@ -81,19 +128,30 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return cookies;
 }
 
-function serializeCookie(name: string, value: unknown, options: any = {}): string {
-  let cookie = encodeURIComponent(name) + "=" + encodeURIComponent(String(value ?? ""));
+function serializeCookie(
+  name: string,
+  value: unknown,
+  options: any = {},
+): string {
+  let cookie =
+    encodeURIComponent(name) + "=" + encodeURIComponent(String(value ?? ""));
   if (typeof options.maxAge === "number" && Number.isFinite(options.maxAge)) {
     cookie += "; Max-Age=" + Math.max(0, Math.floor(options.maxAge / 1000));
   }
-  if (typeof options.domain === "string") cookie += "; Domain=" + options.domain;
+  if (typeof options.domain === "string")
+    cookie += "; Domain=" + options.domain;
   if (typeof options.path === "string") cookie += "; Path=" + options.path;
-  if (options.expires instanceof Date) cookie += "; Expires=" + options.expires.toUTCString();
+  if (options.expires instanceof Date)
+    cookie += "; Expires=" + options.expires.toUTCString();
   if (options.httpOnly) cookie += "; HttpOnly";
   if (options.secure) cookie += "; Secure";
   if (options.sameSite) {
-    const sameSite = options.sameSite === true ? "Strict" : String(options.sameSite);
-    cookie += "; SameSite=" + sameSite[0].toUpperCase() + sameSite.slice(1).toLowerCase();
+    const sameSite =
+      options.sameSite === true ? "Strict" : String(options.sameSite);
+    cookie +=
+      "; SameSite=" +
+      sameSite[0].toUpperCase() +
+      sameSite.slice(1).toLowerCase();
   }
   return cookie;
 }
@@ -128,7 +186,11 @@ function createResponseAdapter(): {
     const value = headers.get(name);
     if (value === null) return undefined;
     if (name.toLowerCase() === "set-cookie") {
-      return (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() || value;
+      return (
+        (
+          headers as Headers & { getSetCookie?: () => string[] }
+        ).getSetCookie?.() || value
+      );
     }
     return value;
   };
@@ -136,23 +198,30 @@ function createResponseAdapter(): {
   const commit = (body: BodyInit | null = null) => {
     if (committed) return;
     if (body !== null && !headers.has("content-length")) {
-      const length = typeof body === "string"
-        ? Buffer.byteLength(body)
-        : body instanceof Uint8Array ? body.byteLength : undefined;
+      const length =
+        typeof body === "string"
+          ? Buffer.byteLength(body)
+          : body instanceof Uint8Array
+            ? body.byteLength
+            : undefined;
       if (length !== undefined) headers.set("content-length", String(length));
     }
     committed = true;
-    resolveReady(new globalThis.Response(body, { status: statusCode, headers }));
+    resolveReady(
+      new globalThis.Response(body, { status: statusCode, headers }),
+    );
     if (!stream) emitFinished();
   };
   const commitStream = () => {
     if (stream) return stream;
     stream = new PassThrough();
     committed = true;
-    resolveReady(new globalThis.Response(Readable.toWeb(stream) as unknown as BodyInit, {
-      status: statusCode,
-      headers,
-    }));
+    resolveReady(
+      new globalThis.Response(Readable.toWeb(stream) as unknown as BodyInit, {
+        status: statusCode,
+        headers,
+      }),
+    );
     stream.on("finish", () => events.emit("finish"));
     return stream;
   };
@@ -175,26 +244,37 @@ function createResponseAdapter(): {
     return response;
   };
   const json = (value: unknown) => {
-    if (!headers.has("content-type")) headers.set("content-type", "application/json; charset=utf-8");
+    if (!headers.has("content-type"))
+      headers.set("content-type", "application/json; charset=utf-8");
     return end(JSON.stringify(value));
   };
   const send = (value?: unknown) => {
-    if (value !== null && typeof value === "object" && !Buffer.isBuffer(value) && !(value instanceof Uint8Array)) {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Buffer.isBuffer(value) &&
+      !(value instanceof Uint8Array)
+    ) {
       return json(value);
     }
     return end(value);
   };
   const set = (field: string | Record<string, unknown>, value?: unknown) => {
     if (typeof field === "string") setHeader(field, value);
-    else for (const [name, item] of Object.entries(field)) setHeader(name, item);
+    else
+      for (const [name, item] of Object.entries(field)) setHeader(name, item);
     return response;
   };
   const type = (value: string) => {
-    const contentType = value.includes("/") ? value : ({
-      html: "text/html",
-      json: "application/json",
-      text: "text/plain",
-    } as Record<string, string>)[value] || value;
+    const contentType = value.includes("/")
+      ? value
+      : (
+          {
+            html: "text/html",
+            json: "application/json",
+            text: "text/plain",
+          } as Record<string, string>
+        )[value] || value;
     headers.set("content-type", contentType);
     return response;
   };
@@ -202,11 +282,12 @@ function createResponseAdapter(): {
     headers.append("set-cookie", serializeCookie(name, value, options));
     return response;
   };
-  const clearCookie = (name: string, options?: any) => cookie(name, "", {
-    ...options,
-    expires: new Date(1),
-    maxAge: 0,
-  });
+  const clearCookie = (name: string, options?: any) =>
+    cookie(name, "", {
+      ...options,
+      expires: new Date(1),
+      maxAge: 0,
+    });
   const redirect = (url: string) => {
     statusCode = 302;
     headers.set("location", url);
@@ -216,37 +297,59 @@ function createResponseAdapter(): {
     if (!committed) rejectReady(error);
     else stream?.destroy(error as Error);
   };
-  const sendFile = (filePath: string, optionsOrCallback?: any, callback?: (error?: Error) => void) => {
-    const callbackFn = typeof optionsOrCallback === "function" ? optionsOrCallback : callback;
+  const sendFile = (
+    filePath: string,
+    optionsOrCallback?: any,
+    callback?: (error?: Error) => void,
+  ) => {
+    const callbackFn =
+      typeof optionsOrCallback === "function" ? optionsOrCallback : callback;
     if (!headers.has("content-type")) {
-      headers.set("content-type", ({
-        ".css": "text/css; charset=utf-8",
-        ".html": "text/html; charset=utf-8",
-        ".json": "application/json; charset=utf-8",
-        ".js": "text/javascript; charset=utf-8",
-        ".log": "text/plain; charset=utf-8",
-        ".png": "image/png",
-        ".txt": "text/plain; charset=utf-8",
-        ".zip": "application/zip",
-      } as Record<string, string>)[path.extname(filePath).toLowerCase()] || "application/octet-stream");
+      headers.set(
+        "content-type",
+        (
+          {
+            ".css": "text/css; charset=utf-8",
+            ".html": "text/html; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".js": "text/javascript; charset=utf-8",
+            ".log": "text/plain; charset=utf-8",
+            ".png": "image/png",
+            ".txt": "text/plain; charset=utf-8",
+            ".zip": "application/zip",
+          } as Record<string, string>
+        )[path.extname(filePath).toLowerCase()] || "application/octet-stream",
+      );
     }
-    void fs.promises.open(filePath, "r").then((file) => {
-      const fileStream = file.createReadStream();
-      fileStream.on("error", (error) => {
-        callbackFn?.(error);
-        if (!committed) fail(error);
-        else stream?.destroy(error);
+    void fs.promises
+      .open(filePath, "r")
+      .then((file) => {
+        const fileStream = file.createReadStream();
+        fileStream.on("error", (error) => {
+          callbackFn?.(error);
+          if (!committed) fail(error);
+          else stream?.destroy(error);
+        });
+        fileStream.on("end", () => callbackFn?.());
+        fileStream.pipe(commitStream());
+      })
+      .catch((error: unknown) => {
+        callbackFn?.(error as Error);
+        fail(error);
       });
-      fileStream.on("end", () => callbackFn?.());
-      fileStream.pipe(commitStream());
-    }).catch((error: unknown) => {
-      callbackFn?.(error as Error);
-      fail(error);
-    });
   };
-  const download = (filePath: string, filename?: string, callback?: (error?: Error) => void) => {
-    const safeFilename = path.basename(filename || path.basename(filePath)).replace(/[\r\n"]/g, "_");
-    headers.set("content-disposition", "attachment; filename=\"" + safeFilename + "\"");
+  const download = (
+    filePath: string,
+    filename?: string,
+    callback?: (error?: Error) => void,
+  ) => {
+    const safeFilename = path
+      .basename(filename || path.basename(filePath))
+      .replace(/[\r\n"]/g, "_");
+    headers.set(
+      "content-disposition",
+      'attachment; filename="' + safeFilename + '"',
+    );
     sendFile(filePath, callback);
   };
 
@@ -318,9 +421,12 @@ function queryObject(url: URL): Record<string, string | string[]> {
   const result: Record<string, string | string[]> = {};
   for (const [key, value] of url.searchParams) {
     const previous = result[key];
-    result[key] = previous === undefined
-      ? value
-      : Array.isArray(previous) ? [...previous, value] : [previous, value];
+    result[key] =
+      previous === undefined
+        ? value
+        : Array.isArray(previous)
+          ? [...previous, value]
+          : [previous, value];
   }
   return result;
 }
@@ -335,7 +441,8 @@ async function createApiRequest(
   request.headers.forEach((value, name) => {
     headers[name.toLowerCase()] = value;
   });
-  const remoteAddress = request.headers.get("x-panel-remote-address") || undefined;
+  const remoteAddress =
+    request.headers.get("x-panel-remote-address") || undefined;
   const clientIp = request.headers.get("x-panel-client-ip") || remoteAddress;
   const protocol = url.protocol.replace(":", "") || "http";
   const pathname = url.pathname.slice(base.length) || "/";
@@ -343,9 +450,10 @@ async function createApiRequest(
   if (!headers.authorization && typeof query.token === "string") {
     headers.authorization = "Bearer " + query.token;
   }
-  const source = request.body && !request.bodyUsed
-    ? Readable.fromWeb(request.body as any)
-    : Readable.from([]);
+  const source =
+    request.body && !request.bodyUsed
+      ? Readable.fromWeb(request.body as any)
+      : Readable.from([]);
   const runtime = (() => {
     try {
       return getPanelRuntime();
@@ -369,7 +477,8 @@ async function createApiRequest(
     socket: { remoteAddress, encrypted: protocol === "https" },
     app: {
       get(name: string) {
-        if (name === "trust proxy") return request.headers.get("x-panel-trust-proxy") === "1";
+        if (name === "trust proxy")
+          return request.headers.get("x-panel-trust-proxy") === "1";
         return runtime[name];
       },
     },
@@ -388,11 +497,13 @@ async function authenticateApiRequest(
   request: globalThis.Request,
   pathname: string,
 ): Promise<{ user: any } | globalThis.Response | null> {
-  if (PUBLIC_API_PATHS.has(pathname) ||
+  if (
+    PUBLIC_API_PATHS.has(pathname) ||
     pathname.startsWith("/api/map/tiles/") ||
     pathname.startsWith("/api/map/toptiles/") ||
     pathname.startsWith("/api/mods/thumbnail/") ||
-    pathname === "/api/debug/client-errors") {
+    pathname === "/api/debug/client-errors"
+  ) {
     return null;
   }
   const token = new URL(request.url).searchParams.get("token");
@@ -413,18 +524,23 @@ async function authenticateApiRequest(
 }
 
 function errorResponse(error: unknown): globalThis.Response {
-  const details = error && typeof error === "object"
-    ? error as { status?: unknown; message?: unknown; code?: unknown }
-    : {};
+  const details =
+    error && typeof error === "object"
+      ? (error as { status?: unknown; message?: unknown; code?: unknown })
+      : {};
   const status = typeof details.status === "number" ? details.status : 500;
-  const message = typeof details.message === "string" ? details.message : String(error);
+  const message =
+    typeof details.message === "string" ? details.message : String(error);
   const code = isRegisteredErrorCode(details.code)
     ? { code: details.code }
     : {};
-  return globalThis.Response.json({
-    error: sanitizeError(message),
-    ...code,
-  }, { status });
+  return globalThis.Response.json(
+    {
+      error: sanitizeError(message),
+      ...code,
+    },
+    { status },
+  );
 }
 
 async function readBodyWithLimit(
@@ -438,7 +554,10 @@ async function readBodyWithLimit(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
+      if (done)
+        return Buffer.concat(
+          chunks.map((chunk) => Buffer.from(chunk)),
+        ).toString("utf8");
       size += value.byteLength;
       if (size > limit) {
         await reader.cancel();
@@ -456,57 +575,155 @@ export async function handleApiRequest(
   incomingRequest?: IncomingMessage,
 ): Promise<globalThis.Response | null> {
   const url = new URL(request.url);
+  const profilePath = url.pathname.match(
+    /^\/api\/servers\/([A-Za-z0-9_-]+)\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|panel-bridge)(\/.*)?$/,
+  );
+  if (profilePath)
+    url.pathname = `/api/${profilePath[2]}${profilePath[3] || ""}`;
+  const resourceId = url.pathname.match(
+    /^\/api\/servers\/([a-f0-9]{8}-[a-f0-9-]{27})(?:\/|$)/i,
+  )?.[1];
+  const serverId = profilePath?.[1] || resourceId;
   const pathname = url.pathname.replace(/\/+$/, "") || "/";
-  const module = routeModules.find(({ base }) => pathname === base || pathname.startsWith(base + "/"));
+  const module = routeModules.find(
+    ({ base }) => pathname === base || pathname.startsWith(base + "/"),
+  );
   if (!module) return null;
 
   const authentication = await authenticateApiRequest(request, pathname);
   if (authentication instanceof globalThis.Response) return authentication;
 
-  const responseAdapter = createResponseAdapter();
-  try {
-    const contentType = request.headers.get("content-type") || "";
-    const length = Number(request.headers.get("content-length") || 0);
-    const limit = pathname === "/api/debug/client-errors" ? 16 * 1024 : 1024 * 1024;
-    if (length > limit) {
-      incomingRequest?.resume();
-      return globalThis.Response.json({ error: "Request body is too large" }, { status: 413 });
-    }
-    let bodyText: string | undefined;
-    if (request.method !== "GET" && request.method !== "HEAD" && contentType.includes("json")) {
-      const limitedBody = await readBodyWithLimit(request, limit);
-      if (limitedBody === null) {
-        incomingRequest?.resume();
-        return globalThis.Response.json({ error: "Request body is too large" }, { status: 413 });
-      }
-      bodyText = limitedBody;
-    }
-    const apiRequest = await createApiRequest(
-      request,
-      url,
-      module.base,
-      incomingRequest,
+  const hostOperation =
+    /^\/api\/server\/(install|quick-setup|steamcmd(?:\/|$)|branches$|network-interfaces$|list-directory$)/.test(
+      pathname,
     );
-    if (bodyText !== undefined) {
-      try {
-        apiRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
-      } catch {
-        return globalThis.Response.json({ error: "Invalid JSON body" }, { status: 400 });
-      }
-    }
-    if (authentication && "user" in authentication) apiRequest.user = authentication.user;
-    const router = await module.load();
-    void Promise.resolve(router(apiRequest, responseAdapter.response, (error) => {
-      if (error) responseAdapter.fail(error);
-      else if (!responseAdapter.isCommitted()) {
-        responseAdapter.response.status(404).json({ error: "API endpoint not found" });
-      }
-    })).catch((error: unknown) => {
-      if (!responseAdapter.isCommitted()) responseAdapter.fail(error);
-      else responseAdapter.response.destroy(error as Error);
-    });
-    return await responseAdapter.ready;
-  } catch (error) {
-    return errorResponse(error);
+  if (!serverId && pathname.startsWith("/api/server/") && !hostOperation)
+    return globalThis.Response.json(
+      { error: "This operation requires an explicit server ID" },
+      { status: 400 },
+    );
+  if (
+    !serverId &&
+    /^\/api\/(rcon|players|mods|server-files|backup|scheduler|panel-bridge)(\/|$)/.test(
+      pathname,
+    ) &&
+    !pathname.startsWith("/api/mods/thumbnail/")
+  ) {
+    return globalThis.Response.json(
+      { error: "This operation requires an explicit server ID" },
+      { status: 400 },
+    );
   }
+  const nestedTarget = pathname.match(
+    /^\/api\/panel-bridge\/scan-server\/([^/]+)$/,
+  )?.[1];
+  if (
+    serverId &&
+    [
+      nestedTarget,
+      url.searchParams.get("serverId"),
+      url.searchParams.get("expectedServerId"),
+    ].some((target) => target != null && target !== serverId)
+  ) {
+    return globalThis.Response.json(
+      { error: "Request target does not match the server in the URL" },
+      { status: 409 },
+    );
+  }
+  if (serverId && !(await getServer(serverId))) {
+    return globalThis.Response.json(
+      { error: "Server not found" },
+      { status: 404 },
+    );
+  }
+  if (serverId) {
+    try {
+      await getPanelRuntime().ensureServerRuntime?.(serverId);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  const dispatch = async () => {
+    const responseAdapter = createResponseAdapter();
+    try {
+      const contentType = request.headers.get("content-type") || "";
+      const length = Number(request.headers.get("content-length") || 0);
+      const limit =
+        pathname === "/api/debug/client-errors" ? 16 * 1024 : 1024 * 1024;
+      if (length > limit) {
+        incomingRequest?.resume();
+        return globalThis.Response.json(
+          { error: "Request body is too large" },
+          { status: 413 },
+        );
+      }
+      let bodyText: string | undefined;
+      if (
+        request.method !== "GET" &&
+        request.method !== "HEAD" &&
+        contentType.includes("json")
+      ) {
+        const limitedBody = await readBodyWithLimit(request, limit);
+        if (limitedBody === null) {
+          incomingRequest?.resume();
+          return globalThis.Response.json(
+            { error: "Request body is too large" },
+            { status: 413 },
+          );
+        }
+        bodyText = limitedBody;
+      }
+      const apiRequest = await createApiRequest(
+        request,
+        url,
+        module.base,
+        incomingRequest,
+      );
+      if (bodyText !== undefined) {
+        try {
+          apiRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
+        } catch {
+          return globalThis.Response.json(
+            { error: "Invalid JSON body" },
+            { status: 400 },
+          );
+        }
+      }
+      if (serverId && apiRequest.body && typeof apiRequest.body === "object") {
+        const movingTask =
+          request.method === "PUT" &&
+          /^\/api\/scheduler\/tasks\/\d+$/.test(pathname);
+        for (const field of movingTask
+          ? ["expectedServerId"]
+          : ["serverId", "expectedServerId"]) {
+          const target = apiRequest.body[field];
+          if (target != null && String(target) !== serverId)
+            return globalThis.Response.json(
+              { error: "Request target does not match the server in the URL" },
+              { status: 409 },
+            );
+        }
+      }
+      if (authentication && "user" in authentication)
+        apiRequest.user = authentication.user;
+      const router = await module.load();
+      void Promise.resolve(
+        router(apiRequest, responseAdapter.response, (error) => {
+          if (error) responseAdapter.fail(error);
+          else if (!responseAdapter.isCommitted()) {
+            responseAdapter.response
+              .status(404)
+              .json({ error: "API endpoint not found" });
+          }
+        }),
+      ).catch((error: unknown) => {
+        if (!responseAdapter.isCommitted()) responseAdapter.fail(error);
+        else responseAdapter.response.destroy(error as Error);
+      });
+      return await responseAdapter.ready;
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+  return serverId ? runForServer(serverId, dispatch) : dispatch();
 }

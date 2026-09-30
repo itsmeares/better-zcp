@@ -289,9 +289,7 @@ needs internet).
 - docker-compose.install.yml - Docker Compose installer (published panel image)
 - docs/install/            - Install guides for every platform (see Where To Go Next, above)
 - client/dist/             - Web interface copy for manual upgrades and legacy installs
-- data/db.sqlite           - Default SQLite database (created on first run)
-- data/db.json             - Legacy JSON database, used only with PANEL_DATABASE_DRIVER=json
-- data/db.example.json     - Legacy JSON reference structure (safe to delete)
+- data/panel.sqlite        - Panel database (created on first run)
 - data/README.txt          - Upgrade-safety notes for the data/ folder
 - logs/                    - Application logs
 - pz-mod/                  - PanelBridge server-side Lua (drop into Install/media/lua/server)
@@ -313,20 +311,14 @@ server-side drop-in, NOT a Workshop mod — there is no client component.
 
 ## Upgrading
 - The panel auto-update feature handles upgrades safely — prefer it.
-- For MANUAL upgrades, stop the panel before extracting. The archive ships
-  only data/db.example.json, but keep data/db.sqlite, data/db.json, and
-  data/backups/ untouched. See data/README.txt for safe extraction flags.
-- Existing upstream or pre-2.0 installs can start in place with
-  PANEL_DATABASE_DRIVER=json (Linux: PANEL_DATABASE_DRIVER=json ./start.sh;
-  Windows Command Prompt: set PANEL_DATABASE_DRIVER=json, then Start.bat) to
-  keep using data/db.json, or can be migrated to the default SQLite database
-  from a source checkout with:
-  pnpm --filter @better-zcp/panel-server db:import -- --source /path/to/data/db.json --target /path/to/data/db.sqlite
-  Run the command once without --apply, review the report, then repeat with
-  --apply. Keep the JSON file and backups until the new panel is verified.
-- Database backups use the active driver: data/backups/db-*.sqlite for SQLite
-  or data/backups/db-*.json for JSON compatibility mode. The panel keeps the
-  newest five and attempts recovery from them if the active database is bad.
+- Stop the panel before extracting a manual upgrade. Keep data/ untouched.
+- This rebuilt panel starts with data/panel.sqlite. Older db.json and db.sqlite
+  files are left intact, without importing their panel settings. Create the
+  admin account and register existing game servers again. Game saves, player
+  databases and server configs stay in their existing locations.
+- SQLite snapshots are stored in data/backups/panel-*.sqlite. The newest five
+  are kept. Recovery uses a verified backup and preserves the damaged file.
+
 `;
 
   fs.writeFileSync("./release/README.txt", readme);
@@ -1061,71 +1053,24 @@ async function main() {
 
   fs.mkdirSync("./release/data", { recursive: true });
 
-  const exampleDbSrc = "./apps/panel-server/fixtures/db.example.json";
-  if (fs.existsSync(exampleDbSrc)) {
-    fs.copyFileSync(exampleDbSrc, "./release/data/db.example.json");
-  } else {
-    const defaultDb = {
-      settings: {
-        serverPath: "",
-        serverExe: "",
-        rconPassword: "",
-        rconPort: 27015,
-        adminPassword: "",
-      },
-      players: [],
-      scheduledTasks: [],
-      servers: [],
-      discord: {
-        enabled: false,
-        token: "",
-        guildId: "",
-        channelId: "",
-        adminRoleId: "",
-      },
-    };
-    fs.writeFileSync(
-      "./release/data/db.example.json",
-      JSON.stringify(defaultDb, null, 2),
-    );
-  }
-
   const dataReadme = `data/ — Panel runtime database
 =================================
 
-This folder holds the panel's runtime state:
+panel.sqlite     Admin account, server profiles, settings, scheduled tasks,
+                 mod tracking and operation history. Created on first run.
+server-secrets/  Per-profile RCON credentials. Keep with the database.
+backups/         Verified SQLite snapshots every six hours; newest five kept.
+                 Damaged databases are preserved when a backup is restored.
 
-  db.sqlite        Created automatically on first run (the default driver).
-                   Contains your admin account, server configurations,
-                   scheduled tasks, mod tracking data, and all settings.
+Stop the panel before upgrading. Keep the entire data/ folder, including
+secret files and backups. Release archives contain no seeded panel database.
 
-  db.json          Legacy JSON database. It is used only when the panel is
-                   started with PANEL_DATABASE_DRIVER=json. SQLite startup
-                   never overwrites or silently imports this file.
+Older db.sqlite and db.json files stay on disk. This rebuilt panel uses a
+fresh panel.sqlite; create the admin account and register existing servers.
+Project Zomboid saves, player data and config files are not reset.
 
-  backups/         Auto-rotating snapshots of the active database (every 6h,
-                   last 5 kept). SQLite uses db-*.sqlite; JSON compatibility
-                   mode uses db-*.json. The panel attempts recovery from a
-                   recent backup if the active database becomes corrupt.
-
-  db.example.json  Legacy JSON reference structure only. Safe to delete.
-
-UPGRADING THE PANEL
--------------------
-Stop the panel before upgrading. The release archive contains only the example
-JSON file, but never overwrite your existing \`data/db.sqlite\`,
-\`data/db.json\`, or \`data/backups/\` folder.
-
-For an upstream or pre-2.0 install, either start with
-\`PANEL_DATABASE_DRIVER=json\` to keep the existing JSON database, or migrate
-it to SQLite from a source checkout with the \`db:import\` command in the
-main README. Keep the original JSON file and backups until the migration has
-been verified.
-
-Recommended safe-upgrade commands:
-
-  Linux:   tar xzf release.tar.gz --exclude='data/db.sqlite' --exclude='data/db.json' --exclude='data/backups'
-  Windows: extract everything EXCEPT the data/ folder, or back up data/ first.
+Linux: tar xzf release.tar.gz --exclude='data/*'
+Windows: extract everything except data/, or back up data/ first.
 `;
   fs.writeFileSync("./release/data/README.txt", dataReadme);
 

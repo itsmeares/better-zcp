@@ -1,3 +1,4 @@
+import { currentServerId } from "../utils/serverScope.ts";
 import { spawn, exec, execFile } from "child_process";
 import path from "path";
 import fs from "fs";
@@ -8,7 +9,7 @@ import {
   logServerEvent,
   getSetting,
   setSetting,
-  getActiveServer,
+  getCurrentServer,
   getServer,
   getServers,
 } from "../database/init.ts";
@@ -324,316 +325,7 @@ export function classifyServerProcess(
   return "unknown";
 }
 
-export class ServerManager {
-  serverProcess: any;
-  serverPath: string;
-  serverBat: string;
-  savePath: string;
-  serverName: string | null;
-  startCommand: string;
-  rconHost: any;
-  rconPort: any;
-  isRunning: boolean;
-  startTime: Date | null;
-  configLoaded: boolean;
-  launchMode: string;
-  lifecycleProvider: string;
-  _serverRecord: AnyRecord | null;
-  _lifecycleFactory: any;
-  _serverId: string | null;
-  publicIp: string | null;
-  gamePort: number | null;
-  fetchingIp: boolean;
-  _killTimeoutMs: number;
-  _starting = false;
-  _stopping = false;
-  _scanGeneration = 0;
-  _launchLogFd: any = null;
-
-  constructor({ lifecycleFactory = createLinuxServiceLifecycle }: { lifecycleFactory?: any } = {}) {
-    this.serverProcess = null;
-    this.serverPath = process.env.PZ_SERVER_PATH || "";
-    this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
-    this.savePath = process.env.PZ_SAVE_PATH || "";
-    this.serverName = null;
-    this.startCommand = "";
-    this.rconHost = null;
-    this.rconPort = null;
-    this.isRunning = false;
-    this.startTime = null;
-    this.configLoaded = false;
-    this.launchMode = "managed";
-    this.lifecycleProvider = "direct";
-    this._serverRecord = null;
-    this._lifecycleFactory = lifecycleFactory;
-    this._serverId = null;
-    this.publicIp = null;
-    this.gamePort = null;
-    this.fetchingIp = false;
-    this._killTimeoutMs = KILL_EXEC_TIMEOUT_MS;
-    this._scanGeneration = 0;
-  }
-
-  async reloadConfig(serverId: string | null = null) {
-    const previousId = this._serverId;
-    this.serverPath = process.env.PZ_SERVER_PATH || "";
-    this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
-    this.savePath = process.env.PZ_SAVE_PATH || "";
-    this.serverName = null;
-    this.startCommand = "";
-    this.rconHost = null;
-    this.rconPort = null;
-    this.launchMode = "managed";
-    this.lifecycleProvider = "direct";
-    this._serverRecord = null;
-    this.configLoaded = false;
-    await this.loadConfig(serverId);
-    if (previousId !== this._serverId) {
-      this.serverProcess = null;
-      this.isRunning = false;
-      this.startTime = null;
-      this.gamePort = null;
-    }
-  }
-
-  async loadConfig(serverId: string | null = null) {
-    if (this.configLoaded) return;
-    this._serverId = serverId;
-    try {
-      const activeServer = serverId
-        ? await getServer(serverId)
-        : await getActiveServer();
-      if (activeServer) {
-        this._serverId = String(activeServer.id);
-        this._serverRecord = activeServer;
-        this.lifecycleProvider = activeServer.lifecycleProvider || "direct";
-        let serverDir = activeServer.serverPath || activeServer.installPath;
-
-        const launchMode = resolveLaunchMode(activeServer);
-        this.launchMode = launchMode.mode;
-        if (launchMode.mode === "custom") {
-          const batchFileName = path.basename(launchMode.launcherPath);
-          serverDir = path.dirname(launchMode.launcherPath);
-          this.serverBat = batchFileName;
-          log.debug(`Using custom launcher: ${batchFileName}`);
-        }
-
-        if (serverDir) {
-          this.serverPath = serverDir;
-          log.debug(`Loaded serverPath: ${serverDir}`);
-        }
-
-        if (activeServer.serverName) {
-          this.serverName = activeServer.serverName;
-          if (!this.serverBat || this.serverBat === getDefaultStartupScript()) {
-            if (isWindows) {
-              const customBat = `StartServer_${activeServer.serverName}.bat`;
-              const customBatPath = path.join(this.serverPath, customBat);
-              if (fs.existsSync(customBatPath)) {
-                this.serverBat = customBat;
-              } else if (activeServer.useNoSteam) {
-                this.serverBat = "StartServer64_nosteam.bat";
-              } else {
-                this.serverBat = "StartServer64.bat";
-              }
-            } else {
-              const customSh = `start-server_${activeServer.serverName}.sh`;
-              const customShPath = path.join(this.serverPath, customSh);
-              if (fs.existsSync(customShPath)) {
-                this.serverBat = customSh;
-              } else if (activeServer.useNoSteam) {
-                this.serverBat = "start-server.sh";
-              } else {
-                this.serverBat = "start-server.sh";
-              }
-            }
-          }
-        }
-        if (activeServer.zomboidDataPath) {
-          this.savePath = activeServer.zomboidDataPath;
-        }
-        if (activeServer.startCommand) {
-          this.startCommand = activeServer.startCommand;
-          log.debug(`Using custom start command: ${this.startCommand}`);
-        }
-        this.rconHost = activeServer.rconHost || this.rconHost;
-        this.rconPort = activeServer.rconPort || this.rconPort;
-        this.configLoaded = true;
-        log.debug(`Loaded config from active server: ${activeServer.name}`);
-        return;
-      }
-
-      if (!serverId) {
-        const dbServerPath = await getSetting("serverPath");
-        const dbServerName = await getSetting("serverName");
-        const dbZomboidPath = await getSetting("zomboidDataPath");
-
-        if (dbServerPath) {
-          this.serverPath = dbServerPath;
-          log.debug(`Loaded serverPath from database: ${dbServerPath}`);
-        }
-        if (dbServerName) {
-          const safeServerName = path.basename(dbServerName);
-          if (safeServerName === dbServerName && safeServerName) {
-            this.serverName = dbServerName;
-            if (isWindows) {
-              this.serverBat = `StartServer_${dbServerName}.bat`;
-            } else {
-              this.serverBat = `start-server_${dbServerName}.sh`;
-            }
-          } else {
-            log.warn(
-              `Ignoring legacy settings.serverName "${dbServerName}" -- contains path-unsafe characters. Re-save the server name in Settings to clear this.`,
-            );
-          }
-        }
-        if (dbZomboidPath) {
-          this.savePath = dbZomboidPath;
-        }
-        this.rconHost = (await getSetting("rconHost")) || this.rconHost;
-        this.rconPort = (await getSetting("rconPort")) || this.rconPort;
-      } else {
-        log.warn(`No server config found for server ${serverId}`);
-      }
-      this.configLoaded = true;
-    } catch (error: any) {
-      log.debug(`Could not load server config from database: ${error.message}`);
-    }
-  }
-
-  async checkServerRunning() {
-    const details = await this.getServerProcessDetails();
-    return details.running;
-  }
-
-  isJvmExecutableBusy() {
-    if (isWindows) return false;
-
-    const javaPath = findJvmExecutable(path.resolve(this.serverPath || ""));
-    if (!javaPath) return false;
-
-    try {
-      const fd = fs.openSync(javaPath, "r+");
-      fs.closeSync(fd);
-      return false;
-    } catch (error: any) {
-      if (error?.code === "ETXTBSY") return true;
-      log.debug(
-        `isJvmExecutableBusy: could not probe ${javaPath} (${error?.code || error?.message}), not treating as busy`,
-      );
-      return false;
-    }
-  }
-
-  _getOwnershipDescriptor() {
-    return {
-      serverName: this.serverName,
-      savePath: this.savePath,
-      serverPath: this.serverPath,
-    };
-  }
-
-  async _getOwnershipPeers() {
-    const servers = await getServers();
-    return (servers || [])
-      .filter((server: AnyRecord) => String(server.id) !== this._serverId)
-      .map(serverProcessDescriptor);
-  }
-
-  async getServerProcessDetails() {
-    await this.loadConfig(this._serverId);
-
-    if (this.usesManagedServiceLifecycle()) {
-      try {
-        const lifecycle = this._getManagedLifecycle();
-        const status = await lifecycle.status();
-        if (!status.scanFailed) this.isRunning = status.running;
-        return {
-          running: status.running,
-          matched: [],
-          owned: [],
-          scanFailed: Boolean(status.scanFailed),
-          provider: this.lifecycleProvider,
-          serviceName: lifecycle.serviceName,
-          ...(status.error ? { error: status.error } : {}),
-        };
-      } catch (error: any) {
-        log.warn(
-          `Managed lifecycle status failed for "${this.serverName}": ${error.message}`,
-        );
-        return {
-          running: false,
-          matched: [],
-          owned: [],
-          scanFailed: true,
-          provider: this.lifecycleProvider,
-          error: error.message,
-        };
-      }
-    }
-
-    const fastPath = await this._tryPidFileFastPath();
-    if (fastPath) return fastPath;
-
-    const scanPromise = this._scanDedicatedServerProcesses();
-    const scanGeneration = this._scanGeneration;
-    const scan = await scanPromise;
-    const descriptor = this._getOwnershipDescriptor();
-    let peers: AnyRecord[];
-    try {
-      peers = await this._getOwnershipPeers();
-    } catch (error: any) {
-      log.warn(`Could not verify configured server ownership: ${error.message}`);
-      return { running: false, matched: [], owned: [], scanFailed: true };
-    }
-
-    const owned = [];
-    const unattributable = [];
-    for (const candidate of scan.matched) {
-      const owner = classifyServerProcess(candidate.cmd, descriptor, peers);
-      if (owner === "owned") owned.push(candidate);
-      else if (owner === "unknown") unattributable.push(candidate);
-    }
-
-    const resolved = owned;
-    if (scan.matched.length !== resolved.length) {
-      log.debug(
-        `getServerProcessDetails: ${scan.matched.length} PZ server process(es) on this host, ${resolved.length} belong to "${this.serverName}"`,
-      );
-    }
-
-    if (
-      !scan.scanFailed &&
-      owned.length === 0 &&
-      ((scan.ambiguous?.length ?? 0) > 0 || unattributable.length > 0)
-    ) {
-      log.warn(
-        `getServerProcessDetails: found ${(scan.ambiguous?.length ?? 0) + unattributable.length} unattributed server process(es) while none could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
-      );
-      return {
-        running: false,
-        matched: [],
-        owned: [],
-        scanFailed: true,
-      };
-    }
-
-    if (!scan.scanFailed && this._scanGeneration === scanGeneration) {
-      this.isRunning = resolved.length > 0;
-    }
-    return {
-      running: resolved.length > 0,
-      matched: resolved.slice(0, 3).map((entry) => ({
-        ...(entry.pid ? { pid: String(entry.pid) } : {}),
-        cmd: String(entry.cmd || "").slice(0, 240),
-      })),
-      owned: resolved,
-      scanFailed: Boolean(scan.scanFailed),
-    };
-  }
-
-  async _scanDedicatedServerProcesses(): Promise<ProcessDetails> {
-    const scanGeneration = ++this._scanGeneration;
+export function scanDedicatedServerProcesses(onTimeout?: () => void): Promise<ProcessDetails> {
     return new Promise<ProcessDetails>((resolve) => {
       log.debug(
         `getServerProcessDetails: starting detection (platform=${process.platform})`,
@@ -645,7 +337,7 @@ export class ServerManager {
       };
 
       const timeout = setTimeout(() => {
-        if (this._scanGeneration === scanGeneration) this._scanGeneration++;
+        onTimeout?.();
         log.warn(
           "getServerProcessDetails: process detection timed out, cannot determine server state",
         );
@@ -828,6 +520,296 @@ export class ServerManager {
           },
         );
       }
+    });
+}
+
+export class ServerManager {
+  serverProcess: any;
+  serverPath: string;
+  serverBat: string;
+  savePath: string;
+  serverName: string | null;
+  startCommand: string;
+  rconHost: any;
+  rconPort: any;
+  isRunning: boolean;
+  startTime: Date | null;
+  configLoaded: boolean;
+  launchMode: string;
+  lifecycleProvider: string;
+  _serverRecord: AnyRecord | null;
+  _lifecycleFactory: any;
+  _serverId: string | null;
+  publicIp: string | null;
+  gamePort: number | null;
+  fetchingIp: boolean;
+  _killTimeoutMs: number;
+  _starting = false;
+  _stopping = false;
+  _scanGeneration = 0;
+  _launchLogFd: any = null;
+
+  constructor({ lifecycleFactory = createLinuxServiceLifecycle, serverId = currentServerId() ?? null }: { lifecycleFactory?: any; serverId?: string | null } = {}) {
+    this.serverProcess = null;
+    this.serverPath = process.env.PZ_SERVER_PATH || "";
+    this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
+    this.savePath = process.env.PZ_SAVE_PATH || "";
+    this.serverName = null;
+    this.startCommand = "";
+    this.rconHost = null;
+    this.rconPort = null;
+    this.isRunning = false;
+    this.startTime = null;
+    this.configLoaded = false;
+    this.launchMode = "managed";
+    this.lifecycleProvider = "direct";
+    this._serverRecord = null;
+    this._lifecycleFactory = lifecycleFactory;
+    this._serverId = serverId;
+    this.publicIp = null;
+    this.gamePort = null;
+    this.fetchingIp = false;
+    this._killTimeoutMs = KILL_EXEC_TIMEOUT_MS;
+    this._scanGeneration = 0;
+  }
+
+  async reloadConfig(serverId: string | null = null) {
+    if (serverId && this._serverId && serverId !== this._serverId) throw new Error("Cannot retarget a server manager");
+    const previousId = this._serverId;
+    this.serverPath = process.env.PZ_SERVER_PATH || "";
+    this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
+    this.savePath = process.env.PZ_SAVE_PATH || "";
+    this.serverName = null;
+    this.startCommand = "";
+    this.rconHost = null;
+    this.rconPort = null;
+    this.launchMode = "managed";
+    this.lifecycleProvider = "direct";
+    this._serverRecord = null;
+    this.configLoaded = false;
+    await this.loadConfig(serverId);
+    if (previousId !== this._serverId) {
+      this.serverProcess = null;
+      this.isRunning = false;
+      this.startTime = null;
+      this.gamePort = null;
+    }
+  }
+
+  async loadConfig(serverId: string | null = null) {
+    if (this.configLoaded && (!serverId || serverId === this._serverId)) return;
+    const targetId = serverId ?? this._serverId ?? currentServerId();
+    if (!targetId) throw new Error("Server manager requires an explicit server ID");
+    if (this._serverId && this._serverId !== targetId) throw new Error("Cannot retarget a server manager");
+    if (this.configLoaded) return;
+    this._serverId = targetId;
+    serverId = targetId;
+    try {
+      const activeServer = serverId
+        ? await getServer(serverId)
+        : await getCurrentServer();
+      if (activeServer) {
+        this._serverId = String(activeServer.id);
+        this._serverRecord = activeServer;
+        this.lifecycleProvider = activeServer.lifecycleProvider || "direct";
+        let serverDir = activeServer.serverPath || activeServer.installPath;
+
+        const launchMode = resolveLaunchMode(activeServer);
+        this.launchMode = launchMode.mode;
+        if (launchMode.mode === "custom") {
+          const batchFileName = path.basename(launchMode.launcherPath);
+          serverDir = path.dirname(launchMode.launcherPath);
+          this.serverBat = batchFileName;
+          log.debug(`Using custom launcher: ${batchFileName}`);
+        }
+
+        if (serverDir) {
+          this.serverPath = serverDir;
+          log.debug(`Loaded serverPath: ${serverDir}`);
+        }
+
+        if (activeServer.serverName) {
+          this.serverName = activeServer.serverName;
+          if (!this.serverBat || this.serverBat === getDefaultStartupScript()) {
+            if (isWindows) {
+              const customBat = `StartServer_${activeServer.serverName}.bat`;
+              const customBatPath = path.join(this.serverPath, customBat);
+              if (fs.existsSync(customBatPath)) {
+                this.serverBat = customBat;
+              } else if (activeServer.useNoSteam) {
+                this.serverBat = "StartServer64_nosteam.bat";
+              } else {
+                this.serverBat = "StartServer64.bat";
+              }
+            } else {
+              const customSh = `start-server_${activeServer.serverName}.sh`;
+              const customShPath = path.join(this.serverPath, customSh);
+              if (fs.existsSync(customShPath)) {
+                this.serverBat = customSh;
+              } else if (activeServer.useNoSteam) {
+                this.serverBat = "start-server.sh";
+              } else {
+                this.serverBat = "start-server.sh";
+              }
+            }
+          }
+        }
+        if (activeServer.zomboidDataPath) {
+          this.savePath = activeServer.zomboidDataPath;
+        }
+        if (activeServer.startCommand) {
+          this.startCommand = activeServer.startCommand;
+          log.debug(`Using custom start command: ${this.startCommand}`);
+        }
+        this.rconHost = activeServer.rconHost || this.rconHost;
+        this.rconPort = activeServer.rconPort || this.rconPort;
+        this.configLoaded = true;
+        log.debug(`Loaded config from active server: ${activeServer.name}`);
+        return;
+      }
+
+      throw new Error(`Server ${serverId} not found`);
+    } catch (error: any) {
+      log.debug(`Could not load server config from database: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async checkServerRunning() {
+    const details = await this.getServerProcessDetails();
+    return details.running;
+  }
+
+  isJvmExecutableBusy() {
+    if (isWindows) return false;
+
+    const javaPath = findJvmExecutable(path.resolve(this.serverPath || ""));
+    if (!javaPath) return false;
+
+    try {
+      const fd = fs.openSync(javaPath, "r+");
+      fs.closeSync(fd);
+      return false;
+    } catch (error: any) {
+      if (error?.code === "ETXTBSY") return true;
+      log.debug(
+        `isJvmExecutableBusy: could not probe ${javaPath} (${error?.code || error?.message}), not treating as busy`,
+      );
+      return false;
+    }
+  }
+
+  _getOwnershipDescriptor() {
+    return {
+      serverName: this.serverName,
+      savePath: this.savePath,
+      serverPath: this.serverPath,
+    };
+  }
+
+  async _getOwnershipPeers() {
+    const servers = await getServers();
+    return (servers || [])
+      .filter((server: AnyRecord) => String(server.id) !== this._serverId)
+      .map(serverProcessDescriptor);
+  }
+
+  async getServerProcessDetails() {
+    await this.loadConfig(this._serverId);
+
+    if (this.usesManagedServiceLifecycle()) {
+      try {
+        const lifecycle = this._getManagedLifecycle();
+        const status = await lifecycle.status();
+        if (!status.scanFailed) this.isRunning = status.running;
+        return {
+          running: status.running,
+          matched: [],
+          owned: [],
+          scanFailed: Boolean(status.scanFailed),
+          provider: this.lifecycleProvider,
+          serviceName: lifecycle.serviceName,
+          ...(status.error ? { error: status.error } : {}),
+        };
+      } catch (error: any) {
+        log.warn(
+          `Managed lifecycle status failed for "${this.serverName}": ${error.message}`,
+        );
+        return {
+          running: false,
+          matched: [],
+          owned: [],
+          scanFailed: true,
+          provider: this.lifecycleProvider,
+          error: error.message,
+        };
+      }
+    }
+
+    const fastPath = await this._tryPidFileFastPath();
+    if (fastPath) return fastPath;
+
+    const scanPromise = this._scanDedicatedServerProcesses();
+    const scanGeneration = this._scanGeneration;
+    const scan = await scanPromise;
+    const descriptor = this._getOwnershipDescriptor();
+    let peers: AnyRecord[];
+    try {
+      peers = await this._getOwnershipPeers();
+    } catch (error: any) {
+      log.warn(`Could not verify configured server ownership: ${error.message}`);
+      return { running: false, matched: [], owned: [], scanFailed: true };
+    }
+
+    const owned = [];
+    const unattributable = [];
+    for (const candidate of scan.matched) {
+      const owner = classifyServerProcess(candidate.cmd, descriptor, peers);
+      if (owner === "owned") owned.push(candidate);
+      else if (owner === "unknown") unattributable.push(candidate);
+    }
+
+    const resolved = owned;
+    if (scan.matched.length !== resolved.length) {
+      log.debug(
+        `getServerProcessDetails: ${scan.matched.length} PZ server process(es) on this host, ${resolved.length} belong to "${this.serverName}"`,
+      );
+    }
+
+    if (
+      !scan.scanFailed &&
+      owned.length === 0 &&
+      ((scan.ambiguous?.length ?? 0) > 0 || unattributable.length > 0)
+    ) {
+      log.warn(
+        `getServerProcessDetails: found ${(scan.ambiguous?.length ?? 0) + unattributable.length} unattributed server process(es) while none could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
+      );
+      return {
+        running: false,
+        matched: [],
+        owned: [],
+        scanFailed: true,
+      };
+    }
+
+    if (!scan.scanFailed && this._scanGeneration === scanGeneration) {
+      this.isRunning = resolved.length > 0;
+    }
+    return {
+      running: resolved.length > 0,
+      matched: resolved.slice(0, 3).map((entry) => ({
+        ...(entry.pid ? { pid: String(entry.pid) } : {}),
+        cmd: String(entry.cmd || "").slice(0, 240),
+      })),
+      owned: resolved,
+      scanFailed: Boolean(scan.scanFailed),
+    };
+  }
+
+  async _scanDedicatedServerProcesses(): Promise<ProcessDetails> {
+    const generation = ++this._scanGeneration;
+    return scanDedicatedServerProcesses(() => {
+      if (this._scanGeneration === generation) this._scanGeneration++;
     });
   }
 

@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", () => ({
     return null;
   }),
   setSetting: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
 }));
 
 vi.mock("../services/managedContainer.ts", () => ({
@@ -146,7 +146,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
     const normalized = path.normalize(installPath).toLowerCase();
     const markerFile = path.join(os.tmpdir(), `marker-${Date.now()}-auto-a.txt`);
     const steamcmdPath = makeFakeSteamcmd({ markerFile });
-    vi.mocked(dbModule.getActiveServer).mockResolvedValueOnce({ id: "s1", installPath });
+    vi.mocked(dbModule.getCurrentServer).mockResolvedValueOnce({ id: "s1", installPath });
     vi.mocked(dbModule.getSetting).mockImplementation(async (key) => {
       if (key === "serverAutoUpdate") return true;
       if (key === "steamcmdPath") return steamcmdPath;
@@ -183,7 +183,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
     const installPath = path.join(os.tmpdir(), "pz-install-guard-auto-b");
     const normalized = path.normalize(installPath).toLowerCase();
     const steamcmdPath = makeFakeSteamcmd({ markerFile: path.join(os.tmpdir(), `marker-${Date.now()}-auto-b.txt`) });
-    vi.mocked(dbModule.getActiveServer).mockResolvedValueOnce({ id: "s1", installPath });
+    vi.mocked(dbModule.getCurrentServer).mockResolvedValueOnce({ id: "s1", installPath });
     vi.mocked(dbModule.getSetting).mockImplementation(async (key) => {
       if (key === "serverAutoUpdate") return true;
       if (key === "steamcmdPath") return steamcmdPath;
@@ -216,7 +216,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
     const normalized = path.normalize(installPath).toLowerCase();
     const markerFile = path.join(os.tmpdir(), `marker-${Date.now()}-auto-c.txt`);
     const steamcmdPath = makeFakeSteamcmd({ markerFile, exitCode: 1 });
-    vi.mocked(dbModule.getActiveServer).mockResolvedValueOnce({ id: "s1", installPath });
+    vi.mocked(dbModule.getCurrentServer).mockResolvedValueOnce({ id: "s1", installPath });
     vi.mocked(dbModule.getSetting).mockImplementation(async (key) => {
       if (key === "serverAutoUpdate") return true;
       if (key === "steamcmdPath") return steamcmdPath;

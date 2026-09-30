@@ -9,7 +9,7 @@ const isLinux = process.platform !== "win32";
 const getServers = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServer: vi.fn(async () => null),
   getServers,
   getSetting: vi.fn(async () => null),

@@ -8,7 +8,7 @@ const getSetting = vi.fn(async (key) =>
 );
 const setSetting = vi.fn();
 const addTrackedMod = vi.fn();
-const getActiveServer = vi.fn(async () => null);
+const getCurrentServer = vi.fn(async () => null);
 const isModIgnored = vi.fn(async () => false);
 const markModsChecked = vi.fn();
 
@@ -19,7 +19,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting,
   setSetting,
   addTrackedMod,
-  getActiveServer,
+  getCurrentServer,
   isModIgnored,
   markModsChecked,
 }));
@@ -30,7 +30,7 @@ describe("ModChecker.init(): restored auto-restart callback propagates handleMod
   beforeEach(() => {
     getSetting.mockClear();
     getTrackedMods.mockClear();
-    getActiveServer.mockClear();
+    getCurrentServer.mockClear();
   });
 
   it("returns handleModUpdate's result instead of resolving undefined", async () => {

@@ -4,14 +4,13 @@
   "version": "2.0.0-rc5",
   "license": "AGPL-3.0-only",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "type": "module",
   "main": "index.ts",
   "scripts": {
     "dev": "nodemon --ext ts,js,json --exec \"node --experimental-strip-types\" index.ts",
     "start": "node --experimental-strip-types index.ts",
-    "db:import": "node --experimental-strip-types scripts/import-legacy-db.ts",
     "test": "vp test run",
     "test:watch": "vp test",
     "lint": "eslint . --max-warnings=0",
@@ -21,7 +20,6 @@
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.2",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.6.0",
     "socket.io": "^4.8.3",

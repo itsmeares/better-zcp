@@ -5,11 +5,11 @@ import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -63,7 +63,7 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
       iniPath,
       "Mods=AlphaMod;3519629457;BetaMod\nWorkshopItems=1111111111;3519629457\n",
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",

@@ -11,7 +11,7 @@ const peer = { ...active, id: "b", name: "World B", dockerContainerName: "zomboi
 const getServers = vi.fn(async () => [active, peer]);
 const getSetting = vi.fn(async (key) => key === "serverAutoUpdate" ? true : key === "steamcmdPath" ? "/tmp/unused-steamcmd" : null);
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => active),
+  getCurrentServer: vi.fn(async () => active),
   getServer: vi.fn(async (id) => id === "a" ? active : peer),
   getServers: (...args) => getServers(...args),
   getSetting: (...args) => getSetting(...args),

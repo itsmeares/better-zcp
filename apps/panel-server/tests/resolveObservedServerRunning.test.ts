@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 
-const getActiveServer = vi.fn();
-vi.mock("../database/init.ts", () => ({ getActiveServer }));
+const getCurrentServer = vi.fn();
+vi.mock("../database/init.ts", () => ({ getCurrentServer }));
 
 const fakeBridge = { isModConnected: vi.fn(() => false) };
-vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: fakeBridge }) }));
 
 const resolveDockerHostSignal = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
@@ -18,13 +18,13 @@ function fakeServerManager(details) {
 
 describe("resolveObservedServerRunning", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     fakeBridge.isModConnected.mockReset().mockReturnValue(false);
     resolveDockerHostSignal.mockReset();
   });
 
   it("reports UNKNOWN (null), not a confident offline, when the scan itself failed and nothing else confirms it", async () => {
-    getActiveServer.mockResolvedValue({ id: "s1" });
+    getCurrentServer.mockResolvedValue({ id: "s1" });
     const serverManager = fakeServerManager({
       running: false,
       scanFailed: true,
@@ -37,7 +37,7 @@ describe("resolveObservedServerRunning", () => {
   });
 
   it("still reports OFFLINE (false) when every signal genuinely agrees the server is down", async () => {
-    getActiveServer.mockResolvedValue({ id: "s1" });
+    getCurrentServer.mockResolvedValue({ id: "s1" });
     const serverManager = fakeServerManager({
       running: false,
       scanFailed: false,
@@ -50,7 +50,7 @@ describe("resolveObservedServerRunning", () => {
   });
 
   it("reports RUNNING for a docker-managed server whose local scan can't see it but the container is up", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "s1",
       provider: "docker-managed",
       dockerContainerName: "pz",

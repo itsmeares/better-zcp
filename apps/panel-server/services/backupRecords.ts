@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSetting, setSetting } from "../database/init.ts";
-
-const SETTINGS_KEY = "backupRecords";
-const MAX_RECORDS = 500;
-let mutationChain: Promise<void> = Promise.resolve();
+import { saveBackupRecord, readBackupRecords, deleteBackupRecord } from "../database/init.ts";
 
 export interface BackupRecord {
   id: string;
@@ -32,25 +28,6 @@ interface AddBackupRecordInput {
   snapshot?: unknown;
 }
 
-function mutateRecords(mutator: (records: BackupRecord[]) => void): Promise<void> {
-  const operation = mutationChain.then(async () => {
-    const records = await readRecords();
-    mutator(records);
-    await saveRecords(records);
-  });
-  mutationChain = operation.then(() => undefined, () => undefined);
-  return operation;
-}
-
-async function readRecords(): Promise<BackupRecord[]> {
-  const stored = (await getSetting(SETTINGS_KEY)) as unknown;
-  return Array.isArray(stored) ? (stored as BackupRecord[]) : [];
-}
-
-async function saveRecords(records: BackupRecord[]): Promise<void> {
-  await setSetting(SETTINGS_KEY, records.slice(0, MAX_RECORDS));
-}
-
 export async function addBackupRecord({
   backup,
   server,
@@ -65,9 +42,7 @@ export async function addBackupRecord({
     serverName: server?.serverName || "server",
     snapshot: snapshot || null,
   };
-  await mutateRecords((records) => {
-    records.unshift(record);
-  });
+  await saveBackupRecord(record);
   return record;
 }
 
@@ -78,7 +53,7 @@ export async function listBackupRecords({
   serverId?: string | number | null;
   limit?: number;
 } = {}): Promise<BackupRecord[]> {
-  let records = await readRecords();
+  let records = await readBackupRecords() as BackupRecord[];
   if (serverId != null) {
     records = records.filter(
       (record) => String(record.serverId) === String(serverId),
@@ -93,8 +68,5 @@ export async function listBackupRecords({
 }
 
 export async function removeBackupRecord(fileName: string): Promise<void> {
-  await mutateRecords((records) => {
-    const retained = records.filter((record) => record.fileName !== fileName);
-    records.splice(0, records.length, ...retained);
-  });
+  await deleteBackupRecord(fileName);
 }

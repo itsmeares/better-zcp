@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const { getActiveServer } = vi.hoisted(() => ({
-  getActiveServer: vi.fn(),
+const { getCurrentServer } = vi.hoisted(() => ({
+  getCurrentServer: vi.fn(),
 }));
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
 }));
 
@@ -39,8 +39,8 @@ function createRequest(method, path, running = false) {
 
 describe("local config mutation safety", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
-    getActiveServer.mockResolvedValue({});
+    getCurrentServer.mockReset();
+    getCurrentServer.mockResolvedValue({});
   });
 
   it("recognizes file config mutations but not metadata routes", () => {

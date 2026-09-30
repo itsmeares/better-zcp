@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+import { createServer } from "../database/init.ts";
+const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
+import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -103,12 +106,10 @@ describe("support bundle: curl availability (World Map's runtime dependency)", (
 });
 
 describe("support bundle: db write health", () => {
-  it("surfaces db.json's circuit breaker state read-only, closed by default", async () => {
+  it("reports SQLite integrity without exporting panel data", async () => {
     const result = buildDbWriteHealth();
     expect(result).not.toHaveProperty("_error");
-    expect(result).toHaveProperty("open");
-    expect(result).toHaveProperty("failCount");
-    expect(result).toHaveProperty("cooldownEndsAt");
+    expect(result).toEqual({ok: true, error: null});
   });
 });
 

@@ -5,9 +5,9 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
@@ -75,7 +75,7 @@ beforeEach(() => {
   configDir = fs.mkdtempSync(path.join(os.tmpdir(), "ini-roundtrip-"));
   iniPath = path.join(configDir, `${SERVER_NAME}.ini`);
   fs.writeFileSync(iniPath, FIXTURE);
-  getActiveServer.mockReset().mockResolvedValue({
+  getCurrentServer.mockReset().mockResolvedValue({
     serverConfigPath: configDir,
     serverName: SERVER_NAME,
   });

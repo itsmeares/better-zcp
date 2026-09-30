@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState, useEffect, ReactNode } from 'react'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -39,7 +39,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [typedValue, setTypedValue] = useState('')
   const resolveRef = useRef<((value: boolean) => void) | null>(null)
 
+  useEffect(() => () => { resolveRef.current?.(false); resolveRef.current = null }, [])
+
   const confirm = useCallback<ConfirmFn>((opts) => {
+    resolveRef.current?.(false)
     return new Promise<boolean>((resolve) => {
       resolveRef.current = resolve
       setOptions(opts)

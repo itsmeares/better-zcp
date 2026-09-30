@@ -142,12 +142,10 @@ describe('ServerManager profile switching', () => {
     });
     manager.loadConfig = async () => { manager._serverId = 'profile-b'; manager.configLoaded = true; };
 
-    await manager.reloadConfig('profile-b');
-
-    expect(manager.serverProcess).toBeNull();
-    expect(manager.isRunning).toBe(false);
-    expect(manager.startTime).toBeNull();
-    expect(manager.gamePort).toBeNull();
+    await expect(manager.reloadConfig('profile-b')).rejects.toThrow('Cannot retarget');
+    expect(manager._serverId).toBe('profile-a');
+    expect(manager.serverProcess?.pid).toBe(4242);
+    expect(manager.isRunning).toBe(true);
   });
 });
 
@@ -173,6 +171,7 @@ describe('ServerManager status state', () => {
 
   it('refuses to restart when post-quit process detection cannot confirm the old server stopped', async () => {
     const manager = new ServerManager();
+    manager.loadConfig = async () => {};
     manager.sleep = async () => {};
     manager.getServerProcessDetails = async () => ({
       running: false,

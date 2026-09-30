@@ -1,3 +1,4 @@
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import { Router } from "../http/apiRouter.ts";
 import os from "os";
@@ -22,19 +23,19 @@ import {
   getCommandHistory,
   getBridgeLogs,
   getPlayerLogs,
-  getDb,
-  getActiveServer,
+  getServerEvents,
+  getScheduleHistory,
+  getCurrentServer,
   getServers,
   getScheduledTasks,
   getTrackedMods,
   getAllSettings,
-  getCircuitBreakerStatus,
+  getDatabaseHealth,
   getDatabaseFilePath,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { checkSandboxBraceBalance } from "./serverFiles.ts";
-import panelBridgeService from "../services/panelBridge.ts";
 import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
@@ -66,7 +67,7 @@ import {
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 import { Transform } from "stream";
-import { addLogToBuffer, logBuffer } from "../utils/logBuffer.ts";
+import { addLogToBuffer, getLogBuffer } from "../utils/logBuffer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,7 +78,7 @@ type AnyRecord = Record<string, any>;
 
 const MAX_BUFFER_SIZE = 500;
 
-export { addLogToBuffer, logBuffer };
+export { addLogToBuffer, getLogBuffer };
 
 router.get("/ram", async (req, res) => {
   try {
@@ -144,8 +145,8 @@ router.get("/logs", async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 200, 1, 2000);
     res.json({
-      logs: logBuffer.slice(-limit),
-      total: logBuffer.length,
+      logs: getLogBuffer().slice(-limit),
+      total: getLogBuffer().length,
     });
   } catch (error: any) {
     log.error(`Failed to get logs: ${error.message}`);
@@ -527,8 +528,7 @@ async function buildPanelConfig(activeServer: any) {
     settings = { _error: e.message };
   }
   try {
-    const db = await getDb();
-    servers = db?.data?.servers || [];
+    servers = await getServers();
   } catch (e: any) {
     servers = [{ _error: e.message }];
   }
@@ -1019,9 +1019,8 @@ async function buildRecentEvents() {
   let bridgeLogs: any[] = [];
 
   try {
-    const db = await getDb();
-    serverEvents = (db?.data?.server_events || []).slice(0, 50);
-    scheduleHistory = (db?.data?.schedule_history || []).slice(0, 50);
+    serverEvents = await getServerEvents(50);
+    scheduleHistory = await getScheduleHistory(50);
   } catch (e: any) {
     serverEvents = [{ _error: e.message }];
   }
@@ -1071,7 +1070,7 @@ async function buildDbStats() {
 
 function buildBridgeStatus() {
   try {
-    const status: AnyRecord = panelBridgeService?.getStatus?.() || {};
+    const status: AnyRecord = getPanelRuntime().panelBridge?.getStatus?.() || {};
     if (!status) return { available: false };
 
     const enriched = { ...status };
@@ -1170,7 +1169,7 @@ async function buildWorldMapDiagnostics() {
 
 function buildDbWriteHealth() {
   try {
-    return getCircuitBreakerStatus();
+    return getDatabaseHealth();
   } catch (e: any) {
     return { _error: e.message };
   }
@@ -1298,7 +1297,7 @@ function buildBundleReadme() {
     "14. `sandbox-options-diagnostics.json` — PZ/PanelBridge versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
     "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
-    "18. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
+    "18. `db-write-health.json` — SQLite integrity and storage errors. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
     "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
     "## Then the raw logs",
     "",
@@ -1367,8 +1366,8 @@ async function buildBundleDiagnostics(
     wrap("db-write-health.json", async () => buildDbWriteHealth()),
     wrap("backups-summary.json", () => buildBackupsSummary(req)),
     wrap("in-memory-log-buffer.json", async () => ({
-      total: logBuffer.length,
-      entries: logBuffer.slice(-MAX_BUFFER_SIZE),
+      total: getLogBuffer().length,
+      entries: getLogBuffer().slice(-MAX_BUFFER_SIZE),
     })),
   ]);
 
@@ -1407,7 +1406,7 @@ async function buildBundleDiagnostics(
 
 async function getSupportBundleEntries() {
   const paths = getDataPaths();
-  const activeServer = await getActiveServer().catch(() => null);
+  const activeServer = await getCurrentServer().catch(() => null);
   const settings: AnyRecord = await getAllSettings().catch(() => ({}));
 
   const installRoot = await resolveSearchRoot(activeServer?.installPath || "");
@@ -1754,7 +1753,7 @@ router.get("/logs/download/:filename", async (req, res) => {
 router.post("/logs/clear", async (req, res) => {
   try {
     log.info("POST /logs/clear");
-    logBuffer.length = 0;
+    getLogBuffer().length = 0;
     res.json({ success: true, message: "Log buffer cleared" });
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -2651,7 +2650,7 @@ router.get("/diagnostics", async (req, res) => {
       dbStats,
     ] = await Promise.all([
       withTimeout(
-        getActiveServer().catch(() => null),
+        getCurrentServer().catch(() => null),
         FS_TIMEOUT_MS,
         null,
       ),
@@ -3901,7 +3900,7 @@ router.get("/diagnostics", async (req, res) => {
 
     try {
       {
-        const bridgeStatus = panelBridgeService?.getStatus?.() || null;
+        const bridgeStatus = getPanelRuntime().panelBridge?.getStatus?.() || null;
         if (!bridgeStatus?.configured) {
           checks.push(
             diagSkip(
@@ -4721,7 +4720,7 @@ router.get("/worldmap", async (req, res) => {
   try {
     const [activeServer] = await Promise.all([
       withTimeout(
-        getActiveServer().catch(() => null),
+        getCurrentServer().catch(() => null),
         FS_TIMEOUT_MS,
         null,
       ),
@@ -4896,9 +4895,9 @@ router.get("/worldmap", async (req, res) => {
       );
     }
 
-    const bridgeStatus = panelBridgeService?.getStatus?.() || null;
+    const bridgeStatus = getPanelRuntime().panelBridge?.getStatus?.() || null;
     const bridgeRunning = !!bridgeStatus?.isRunning;
-    const modConnected = panelBridgeService?.isModConnected?.() === true;
+    const modConnected = getPanelRuntime().panelBridge?.isModConnected?.() === true;
     const statusAge = bridgeStatus?.statusFile?.age ?? null;
 
     if (!bridgeStatus || !bridgeStatus.configured) {
@@ -5219,7 +5218,7 @@ router.post("/clear-stale-locks", async (req, res) => {
       });
     }
 
-    const activeServer = await getActiveServer().catch(() => null);
+    const activeServer = await getCurrentServer().catch(() => null);
     if (!activeServer) {
       return res
         .status(400)
@@ -5574,8 +5573,7 @@ router.get("/activity", async (req, res) => {
     }
 
     if (source === "all" || source === "server") {
-      const db = await getDb();
-      const serverEvents = (db.data.server_events || []).slice(0, limit);
+      const serverEvents = await getServerEvents(limit);
       for (const evt of serverEvents) {
         entries.push({
           id: evt.id,

@@ -9,7 +9,7 @@ vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ dataDir: tmpDir }),
 }));
 
-const { readUiSecretFile, writeUiSecretFile, loadUiSecret } = await import(
+const { readUiSecretFile, writeUiSecretFile } = await import(
   "../utils/uiSecretFile.ts"
 );
 
@@ -43,72 +43,9 @@ describe("readUiSecretFile / writeUiSecretFile", () => {
     expect(readUiSecretFile("testToken")).toBeNull();
   });
 
-  it("does NOT crash on an unreadable file (a directory at the path) — proportionate, not fail-loud like jwt.secret", () => {
+  it("rejects an unreadable file so saving settings cannot discard an existing credential", () => {
     const filePath = path.join(tmpDir, "testToken.secret");
     fs.mkdirSync(filePath);
-    const log = { warn: vi.fn() };
-    expect(readUiSecretFile("testToken", log)).toBeNull();
-    expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("not configured"),
-    );
-  });
-});
-
-describe("loadUiSecret — migration from a legacy db.json value", () => {
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-uisecret-migrate-"));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("no file, no legacy value -> returns null, writes nothing", async () => {
-    const result = await loadUiSecret("testToken", {
-      legacyValue: null,
-    });
-    expect(result).toBeNull();
-    expect(
-      fs.existsSync(path.join(tmpDir, "testToken.secret")),
-    ).toBe(false);
-  });
-
-  it("no file, a legacy value exists -> migrates verbatim and clears the legacy value", async () => {
-    const clearLegacy = vi.fn().mockResolvedValue(undefined);
-    const result = await loadUiSecret("testToken", {
-      legacyValue: "legacy-token-from-db-json",
-      clearLegacy,
-    });
-    expect(result).toBe("legacy-token-from-db-json");
-    expect(readUiSecretFile("testToken")).toBe(
-      "legacy-token-from-db-json",
-    );
-    expect(clearLegacy).toHaveBeenCalledTimes(1);
-  });
-
-  it("file already exists -> loads it and ignores any legacy value passed in (steady-state restart)", async () => {
-    writeUiSecretFile("testToken", "current-file-value");
-    const clearLegacy = vi.fn();
-    const result = await loadUiSecret("testToken", {
-      legacyValue: "stale-legacy-value",
-      clearLegacy,
-    });
-    expect(result).toBe("current-file-value");
-    expect(clearLegacy).not.toHaveBeenCalled();
-  });
-
-  it("a migration-write failure (directory at the path) falls back to the legacy value for this run instead of crashing or losing it", async () => {
-    const filePath = path.join(tmpDir, "testToken.secret");
-    fs.mkdirSync(filePath);
-    const clearLegacy = vi.fn();
-    const log = { warn: vi.fn() };
-    const result = await loadUiSecret("testToken", {
-      legacyValue: "legacy-value",
-      clearLegacy,
-      log,
-    });
-    expect(result).toBe("legacy-value");
-    expect(clearLegacy).not.toHaveBeenCalled();
-    expect(log.warn).toHaveBeenCalled();
+    expect(() => readUiSecretFile("testToken")).toThrow();
   });
 });

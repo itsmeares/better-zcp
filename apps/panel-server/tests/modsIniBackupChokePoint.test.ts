@@ -5,7 +5,7 @@ import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getSetting: vi.fn(async () => null),
   getTrackedMods: vi.fn(async () => []),
   addTrackedMod: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock("../database/init.ts", () => ({
   removeIgnoredModPair: vi.fn(),
 }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -80,7 +80,7 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
       path.join(configPath, "TestServer.ini"),
       "Mods=ExistingMod\nWorkshopItems=1111111111\nMap=Muldraugh, KY\n",
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
@@ -178,7 +178,7 @@ describe("mods.js ini writes: a failed backup warns but never blocks the edit", 
       path.join(configPath, "TestServer.ini"),
       "Mods=ExistingMod\nWorkshopItems=1111111111\nMap=Muldraugh, KY\n",
     );
-    getActiveServer.mockReset().mockResolvedValue({
+    getCurrentServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",

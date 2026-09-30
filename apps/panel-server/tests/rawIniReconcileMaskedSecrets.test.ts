@@ -7,9 +7,9 @@ import { maskSecretValue } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
@@ -78,7 +78,7 @@ beforeEach(() => {
   iniPath = path.join(configDir, `${SERVER_NAME}.ini`);
   backupDir = path.join(configDir, "backups");
   fs.writeFileSync(iniPath, baseIni());
-  getActiveServer.mockReset().mockResolvedValue({
+  getCurrentServer.mockReset().mockResolvedValue({
     serverConfigPath: configDir,
     serverName: SERVER_NAME,
   });

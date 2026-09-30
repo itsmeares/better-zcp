@@ -30,25 +30,9 @@ describe("loadOrCreateJwtSecret", () => {
     expect(fs.readFileSync(getJwtSecretPath(), "utf8")).toBe(result.secret);
   });
 
-  it("existing install: a legacy db.json value with no file yet migrates VERBATIM, not a fresh key", async () => {
-    const legacy = "legacy-secret-from-db-json-abc123";
-    const result = await loadOrCreateJwtSecret({ legacyValue: legacy });
-    expect(result.source).toBe("migrated");
-    expect(result.secret).toBe(legacy);
-    expect(fs.readFileSync(getJwtSecretPath(), "utf8")).toBe(legacy);
-  });
 
-  it("a token signed before migration still verifies after it — same bytes, not a rotation", async () => {
-    const jwt = (await import("jsonwebtoken")).default;
-    const legacy = "legacy-secret-that-already-signed-real-tokens";
-    const tokenSignedBeforeMigration = jwt.sign({ userId: "u1" }, legacy);
 
-    const result = await loadOrCreateJwtSecret({ legacyValue: legacy });
 
-    expect(() =>
-      jwt.verify(tokenSignedBeforeMigration, result.secret),
-    ).not.toThrow();
-  });
 
   it("file already exists: loads it as-is and ignores any legacy value passed in (steady-state restart)", async () => {
     fs.writeFileSync(getJwtSecretPath(), "existing-file-secret", {

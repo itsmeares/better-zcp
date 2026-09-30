@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+const it = scopedTests("1");
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -12,7 +14,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   getServers: vi.fn(),
 }));
 
@@ -56,6 +58,22 @@ describe("POST /api/server/delete-files safety guards", () => {
   const buildRequest = (body) => ({
     app: { get: () => serverManager },
     body: { path: installDir, ...body },
+  });
+
+  it("refuses a different profile's installation even if it has valid PZ markers", async () => {
+    getServers.mockResolvedValue([{ id: "other", installPath: installDir }]);
+    const response = createResponse();
+    await getDeleteFilesHandler()(buildRequest({ confirm: true }), response);
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(fs.existsSync(installDir)).toBe(true);
+  });
+
+  it("checks all profiles sharing an installation without changing the request's owner", async () => {
+    getServers.mockResolvedValue([{ id: "other", installPath: installDir }, { id: 1, installPath: installDir }]);
+    const response = createResponse();
+    await getDeleteFilesHandler()(buildRequest({ confirm: true }), response);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(fs.existsSync(installDir)).toBe(false);
   });
 
   it("refuses without confirm: true", async () => {
@@ -210,10 +228,10 @@ describe("POST /api/server/delete-files safety guards", () => {
       expect(fs.existsSync(installDir)).toBe(true);
     });
 
-    it("still deletes when a DIFFERENT configured server's installPath happens to also match, not just the first one", async () => {
+    it("finds the owning profile later in the configured list", async () => {
       getServers.mockResolvedValue([
-        { id: 1, installPath: path.join(os.tmpdir(), "some-other-server") },
-        { id: 2, installPath: installDir },
+        { id: 2, installPath: path.join(os.tmpdir(), "some-other-server") },
+        { id: 1, installPath: installDir },
       ]);
       const handler = getDeleteFilesHandler();
       const response = createResponse();

@@ -7,7 +7,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
 }));
 
 const { invalidateMapFolderScanMock } = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ vi.mock("../utils/mapFolderScan.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/server.ts");
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 
 const SERVER_NAME = "servertest";
 
@@ -46,7 +46,7 @@ beforeEach(() => {
   saveDir = path.join(savePath, "Saves", "Multiplayer", SERVER_NAME);
   fs.mkdirSync(path.join(saveDir, "map"), { recursive: true });
   fs.writeFileSync(path.join(saveDir, "map", "0_0.bin"), "chunk");
-  getActiveServer.mockResolvedValue({
+  getCurrentServer.mockResolvedValue({
     name: SERVER_NAME,
     serverName: SERVER_NAME,
     installPath: root,

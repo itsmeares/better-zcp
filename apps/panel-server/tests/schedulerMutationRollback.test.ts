@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { setPanelRuntime, setServerRuntime } from "../utils/panelRuntime.ts";
+import { scopedTests } from "./helpers/serverScope.ts";
+const it = scopedTests("server-a");
+import { beforeEach, describe, expect, vi } from "vite-plus/test";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 const getScheduledTasks = vi.fn();
@@ -10,7 +13,7 @@ vi.mock("../database/init.ts", () => ({
   updateScheduledTask,
   deleteScheduledTask,
   getServer: vi.fn(async () => ({ id: "server-b" })),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getRoleByName: mockGetRoleByName,
 }));
 
@@ -68,6 +71,8 @@ describe("scheduled-task update rollback", () => {
       .mockResolvedValueOnce(previousTask);
 
     const scheduleTask = vi.fn().mockReturnValue(false);
+    setPanelRuntime({});
+    setServerRuntime("server-b", {scheduler: {scheduleTask, cancelTask: vi.fn()}});
     const response = createResponse();
     await getUpdateHandler()(
       {
@@ -79,7 +84,7 @@ describe("scheduled-task update rollback", () => {
           serverId: "server-b",
         },
         user: { role: "admin" },
-        app: { get: () => ({ scheduleTask, cancelTask: vi.fn() }) },
+        app: { get: key => key === "ensureServerRuntime" ? vi.fn() : ({ scheduleTask, cancelTask: vi.fn() }) },
       },
       response,
     );

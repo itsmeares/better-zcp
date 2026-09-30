@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", async () => {
   const actual = await vi.importActual("../database/init.ts");
-  return { ...actual, getRoleByName: mockGetRoleByName, getActiveServer };
+  return { ...actual, getRoleByName: mockGetRoleByName, getCurrentServer };
 });
 
 const { default: router } = await import("../routes/debug.ts");
@@ -57,7 +57,7 @@ function postClearStaleLocks(serverManager) {
 }
 
 beforeEach(() => {
-  getActiveServer.mockReset().mockResolvedValue(null);
+  getCurrentServer.mockReset().mockResolvedValue(null);
 });
 
 describe("debug.js POST /clear-stale-locks: an undetermined server state must refuse, not be read as 'stopped'", () => {
@@ -68,7 +68,7 @@ describe("debug.js POST /clear-stale-locks: an undetermined server state must re
     });
 
     expect(res.getStatusCode()).toBe(503);
-    expect(getActiveServer).not.toHaveBeenCalled();
+    expect(getCurrentServer).not.toHaveBeenCalled();
   });
 
   it("refuses (503) rather than falling back to the unrelated isRunning flag when the running-check itself throws", async () => {
@@ -83,7 +83,7 @@ describe("debug.js POST /clear-stale-locks: an undetermined server state must re
     });
 
     expect(res.getStatusCode()).toBe(503);
-    expect(getActiveServer).not.toHaveBeenCalled();
+    expect(getCurrentServer).not.toHaveBeenCalled();
   });
 
   it("still refuses (409) on a confirmed-running server", async () => {
@@ -93,7 +93,7 @@ describe("debug.js POST /clear-stale-locks: an undetermined server state must re
     });
 
     expect(res.getStatusCode()).toBe(409);
-    expect(getActiveServer).not.toHaveBeenCalled();
+    expect(getCurrentServer).not.toHaveBeenCalled();
   });
 
   it("proceeds past the running-check when the scan confirms the server is stopped", async () => {
@@ -102,7 +102,7 @@ describe("debug.js POST /clear-stale-locks: an undetermined server state must re
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
     });
 
-    expect(getActiveServer).toHaveBeenCalled();
+    expect(getCurrentServer).toHaveBeenCalled();
     expect(res.getStatusCode()).toBe(400);
   });
 });

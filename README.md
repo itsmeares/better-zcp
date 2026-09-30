@@ -237,34 +237,14 @@ If you installed a brand-new server with the Setup Wizard, steps 2 and 3 are alr
 
 ### Database storage
 
-New installations store panel data in `data/db.sqlite`. The panel creates it
-automatically and uses SQLite through Drizzle.
+Panel accounts, profiles, and history are stored in `data/panel.sqlite` using
+Node's SQLite driver. Each server keeps its own configuration, schedules,
+and history. Server selection is local to the browser URL.
 
-An older `data/db.json` is never changed or silently replaced. To move one to
-the new format, first preview the import, then run it with `--apply` only after
-checking the report. Stop the panel before importing so it cannot write the
-legacy file while the importer is reading it:
-
-```bash
-pnpm --filter @better-zcp/panel-server db:import -- \
-  --source /path/to/data/db.json \
-  --target /path/to/data/db.sqlite
-pnpm --filter @better-zcp/panel-server db:import -- \
-  --source /path/to/data/db.json \
-  --target /path/to/data/db.sqlite \
-  --apply
-```
-
-The source file stays untouched. Passwords and tokens are moved to the
-panel's separate secret files during an applied import.
-
-If you are upgrading an existing upstream or pre-2.0 installation, you can
-keep using its JSON database temporarily by starting the panel with
-`PANEL_DATABASE_DRIVER=json` (`PANEL_DATABASE_DRIVER=json ./start.sh` on Linux,
-or `set PANEL_DATABASE_DRIVER=json` before `Start.bat` in Windows Command
-Prompt). Otherwise, migrate it to SQLite before the first start with the
-default driver. Keep `data/db.json` and `data/backups/` until you have opened
-the new panel and verified the server configuration.
+This rebuild starts with a fresh panel database. Older `db.json` and
+`db.sqlite` files stay on disk; they are not imported or deleted. Register
+existing servers again using their installation and Zomboid data paths.
+This does not reset their saves, game accounts, or configuration files.
 
 ### PanelBridge (Optional)
 

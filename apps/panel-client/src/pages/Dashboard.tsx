@@ -923,12 +923,12 @@ export default function Dashboard() {
     }
     socket.on('server:status', onStatus)
     socket.on('players:update', onPlayers)
-    socket.on('activeServerChanged', onActiveServer)
+    socket.on('servers:changed', onActiveServer)
     socket.on('panelBridge:modStatus', onBridgeMod)
     return () => {
       socket.off('server:status', onStatus)
       socket.off('players:update', onPlayers)
-      socket.off('activeServerChanged', onActiveServer)
+      socket.off('servers:changed', onActiveServer)
       socket.off('panelBridge:modStatus', onBridgeMod)
     }
   }, [

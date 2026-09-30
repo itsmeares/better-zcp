@@ -1,3 +1,4 @@
+import { currentServerId } from "../utils/serverScope.ts";
 export const LIFECYCLE_IN_PROGRESS_CODE = "SERVER_LIFECYCLE_IN_PROGRESS";
 
 interface LifecycleToken {
@@ -11,14 +12,15 @@ export interface LifecycleLock {
   release: () => void;
 }
 
-let activeLock: LifecycleToken | null = null;
+const locks = new Map<string, LifecycleToken>();
 let nextLockId = 0;
 
 export function acquireLifecycleLock(
   operation: unknown = "lifecycle",
   serverName: unknown = null,
 ): LifecycleLock | null {
-  if (activeLock) return null;
+  const serverId = currentServerId() ?? "panel";
+  if (locks.has(serverId)) return null;
 
   const token: LifecycleToken = {
     id: ++nextLockId,
@@ -28,7 +30,7 @@ export function acquireLifecycleLock(
         ? serverName.trim()
         : null,
   };
-  activeLock = token;
+  locks.set(serverId, token);
   let released = false;
 
   return {
@@ -36,7 +38,7 @@ export function acquireLifecycleLock(
     release() {
       if (released) return;
       released = true;
-      if (activeLock === token) activeLock = null;
+      if (locks.get(serverId) === token) locks.delete(serverId);
     },
   };
 }
@@ -45,7 +47,7 @@ export function lifecycleInProgressResponse(): {
   error: string;
   code: string;
 } {
-  const holder = activeLock;
+  const holder = locks.get(currentServerId() ?? "panel");
   const error =
     holder?.operation && holder?.serverName
       ? `A '${holder.operation}' operation for '${holder.serverName}' is already in progress`
@@ -56,22 +58,14 @@ export function lifecycleInProgressResponse(): {
 }
 
 export function isLifecycleLocked(): boolean {
-  return activeLock !== null;
+  return locks.has(currentServerId() ?? "panel");
 }
 
 export function isLifecycleLockedForServer(server: unknown): boolean {
-  if (!activeLock || !server || typeof server !== "object") return false;
-  const record = server as Record<string, unknown>;
-  if (record.id === undefined || record.id === null || record.id === "") {
-    return false;
-  }
-  const identifiers = [record.id, record.name, record.serverName]
-    .filter((value) => value !== undefined && value !== null && value !== "")
-    .map((value) => String(value).trim())
-    .filter(Boolean);
-  return identifiers.includes(activeLock.serverName || "");
+  if (!server || typeof server !== "object") return false;
+  return locks.has(String((server as { id?: unknown }).id));
 }
 
 export function getActiveLifecycleOperation(): string | null {
-  return activeLock?.operation ?? null;
+  return locks.get(currentServerId() ?? "panel")?.operation ?? null;
 }

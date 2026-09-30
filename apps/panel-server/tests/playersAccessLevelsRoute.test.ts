@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const listServerRoleNames = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer,
+  getCurrentServer,
   logPlayerAction: vi.fn(),
   getPlayerLogs: vi.fn(),
   getPlayerNotes: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
-vi.mock("../services/panelBridge.ts", () => ({ isRunning: false }));
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: { isRunning: false } }) }));
 
 const { default: router } = await import("../routes/players.ts");
 
@@ -45,12 +45,12 @@ function createRequest(body = {}, rconService = {}) {
 
 describe("GET /players/access-levels", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     listServerRoleNames.mockReset();
   });
 
   it("returns the live role table's names plus 'none' when the server's db is available", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
@@ -71,7 +71,7 @@ describe("GET /players/access-levels", () => {
   });
 
   it("falls back to the static list when the server's db is unavailable, without erroring", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "server-1",
       serverName: "NeverStartedServer",
       zomboidDataPath: "/zomboid",
@@ -96,12 +96,12 @@ describe("GET /players/access-levels", () => {
 
 describe("POST /players/access-level: validation gate matches what GET /access-levels just offered", () => {
   beforeEach(() => {
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     listServerRoleNames.mockReset();
   });
 
   it("accepts a custom role the live table has but the static list does not", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
@@ -120,7 +120,7 @@ describe("POST /players/access-level: validation gate matches what GET /access-l
   });
 
   it("still rejects a level that is neither in the live table nor the static fallback", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",

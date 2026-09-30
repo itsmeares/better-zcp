@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/serverSelection"
 import type { ReactNode } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { copyText } from '@/lib/utils'
@@ -101,7 +102,7 @@ export function WorkshopThumb({
         src={
           demo
             ? `${import.meta.env.BASE_URL}spiffo.png`
-            : `/api/mods/thumbnail/${wsId}`
+            : apiUrl(`/mods/thumbnail/${wsId}`)
         }
         alt=""
         loading="lazy"

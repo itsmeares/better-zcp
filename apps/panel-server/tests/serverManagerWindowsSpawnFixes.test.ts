@@ -26,7 +26,7 @@ vi.mock("child_process", async (importOriginal) => {
 });
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),

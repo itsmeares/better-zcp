@@ -1,5 +1,5 @@
 import { createLogger } from "../utils/logger.ts";
-import { getActiveServer, logServerEvent } from "../database/init.ts";
+import { getCurrentServer, logServerEvent } from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ensureBundledGameContainer, isBundledGameProfile, runManagedLifecycle } from "./managedContainer.ts";
@@ -81,7 +81,7 @@ export async function startServerAction(
   runtime: ServerLifecycleRuntime,
   _data: Record<string, any> = {},
 ) {
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "start",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -229,7 +229,7 @@ export async function stopServerAction(
   runtime: ServerLifecycleRuntime,
   _data: Record<string, any> = {},
 ) {
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "stop",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -353,7 +353,7 @@ export async function forceStopServerAction(
   runtime: ServerLifecycleRuntime,
   _data: Record<string, any> = {},
 ) {
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "force-stop",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -415,7 +415,7 @@ export async function restartServerAction(
   runtime: ServerLifecycleRuntime,
   data: Record<string, any> = {},
 ) {
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "restart",
     activeServerForLock?.name || activeServerForLock?.serverName || null,

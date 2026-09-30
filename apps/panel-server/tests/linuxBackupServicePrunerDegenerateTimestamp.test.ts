@@ -8,7 +8,7 @@ const logServerEvent = vi.fn(async () => {});
 const settingsStore = new Map();
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getSetting: vi.fn(async (key) => settingsStore.get(key) ?? null),
   setSetting: vi.fn(async () => {}),
   logServerEvent,

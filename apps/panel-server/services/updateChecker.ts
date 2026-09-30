@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Updates");
-import { getSetting, setSetting, getActiveServer, getServers } from "../database/init.ts";
+import { getSetting, setSetting, getCurrentServer, getServers } from "../database/init.ts";
 import { getDockerClient, isBundledGameProfile, resolveDockerHostSignal, resolveManagedContainer, runManagedLifecycle } from "./managedContainer.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import {
@@ -201,7 +201,7 @@ export class UpdateChecker {
   async getGameVersion(): Promise<string | null> {
     let consolePath = null;
     try {
-      const activeServer = await getActiveServer();
+      const activeServer = await getCurrentServer();
       const dataPath =
         activeServer?.zomboidDataPath || (await getSetting("zomboidDataPath"));
       if (!dataPath) return null;
@@ -551,7 +551,7 @@ export class UpdateChecker {
     const warningMinutes = parseAutoUpdateWarningMinutes(
       await getSetting("serverAutoUpdateWarningMinutes"),
     );
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (!activeServer?.installPath) {
       log.warn("Auto-update skipped: the active server has no install path");
       return;
@@ -608,7 +608,7 @@ export class UpdateChecker {
         log.info("Automatic server update cancelled because the setting was disabled");
         return;
       }
-      const activeServer = await getActiveServer();
+      const activeServer = await getCurrentServer();
       if (!activeServer) {
         fail("NOT_CONFIGURED", "No active server is configured");
       }

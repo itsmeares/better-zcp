@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 const listBackupRecords = vi.fn();
 
-vi.mock("../database/init.ts", () => ({ getActiveServer: vi.fn() }));
+vi.mock("../database/init.ts", () => ({ getCurrentServer: vi.fn() }));
 vi.mock("../services/backupRecords.ts", () => ({ listBackupRecords }));
 
 const { default: router } = await import("../routes/backup.ts");

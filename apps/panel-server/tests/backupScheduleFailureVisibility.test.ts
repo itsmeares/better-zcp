@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+import { createServer } from "../database/init.ts";
+const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
+import { afterEach, describe, expect } from "vite-plus/test";
 
 const { logScheduleExecution, setSetting } = await import("../database/init.ts");
 const { BackupService } = await import("../services/backupService.ts");

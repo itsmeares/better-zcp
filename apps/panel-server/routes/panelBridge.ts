@@ -1,16 +1,15 @@
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { Router } from "../http/apiRouter.ts";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
-import bridge from "../services/panelBridge.ts";
 import {
-  getActiveServer,
+  getCurrentServer,
   getServer,
   getServers,
+  getSetting,
   setSetting,
-  getDb,
-  commitNow,
   logBridgeCommand,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
@@ -71,12 +70,12 @@ function isValidBridgePath(inputPath: any) {
 }
 
 router.get("/status", async (req, res) => {
-  const status = bridge.getStatus() as AnyRecord;
+  const status = getPanelRuntime().panelBridge.getStatus() as AnyRecord;
 
   let detectedPaths: AnyRecord | null = null;
   let localInstall: AnyRecord | null = null;
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (activeServer) {
       detectedPaths = {
         serverName: activeServer.serverName || activeServer.name,
@@ -96,7 +95,7 @@ router.get("/status", async (req, res) => {
 
   res.json({
     ...status,
-    modConnected: bridge.isModConnected(),
+    modConnected: getPanelRuntime().panelBridge.isModConnected(),
     detectedPaths,
     localInstall,
   });
@@ -118,7 +117,7 @@ router.post("/auto-configure", async (req, res) => {
         });
       }
     } else {
-      targetServer = await getActiveServer();
+      targetServer = await getCurrentServer();
       if (!targetServer) {
         return res.status(400).json({
           error:
@@ -256,12 +255,12 @@ router.post("/auto-configure", async (req, res) => {
       });
     }
 
-    if (bridge.isRunning) {
-      bridge.stop();
+    if (getPanelRuntime().panelBridge.isRunning) {
+      getPanelRuntime().panelBridge.stop();
     }
 
-    bridge.configure(foundPath.path, true);
-    bridge.start();
+    getPanelRuntime().panelBridge.configure(foundPath.path, true);
+    getPanelRuntime().panelBridge.start();
 
     let modInstalled = false;
     let modUpdated = false;
@@ -534,11 +533,11 @@ router.post("/auto-detect", async (req, res) => {
   }
 
   try {
-    if (bridge.isRunning) {
-      bridge.stop();
+    if (getPanelRuntime().panelBridge.isRunning) {
+      getPanelRuntime().panelBridge.stop();
     }
-    const bridgePath = bridge.autoDetect(serverName, zomboidUserFolder);
-    bridge.start();
+    const bridgePath = getPanelRuntime().panelBridge.autoDetect(serverName, zomboidUserFolder);
+    getPanelRuntime().panelBridge.start();
     res.json({
       success: true,
       message: "Bridge auto-configured and started",
@@ -567,11 +566,11 @@ router.post("/configure", async (req, res) => {
   }
 
   try {
-    if (bridge.isRunning) {
-      bridge.stop();
+    if (getPanelRuntime().panelBridge.isRunning) {
+      getPanelRuntime().panelBridge.stop();
     }
-    const bridgePath = bridge.configure(zomboidSavePath);
-    bridge.start();
+    const bridgePath = getPanelRuntime().panelBridge.configure(zomboidSavePath);
+    getPanelRuntime().panelBridge.start();
     await setSetting("panelBridge", { bridgePath });
     res.json({
       success: true,
@@ -611,11 +610,11 @@ router.post("/configure-direct", async (req, res) => {
   }
 
   try {
-    if (bridge.isRunning) {
-      bridge.stop();
+    if (getPanelRuntime().panelBridge.isRunning) {
+      getPanelRuntime().panelBridge.stop();
     }
-    const configuredPath = bridge.configure(resolved, true);
-    bridge.start();
+    const configuredPath = getPanelRuntime().panelBridge.configure(resolved, true);
+    getPanelRuntime().panelBridge.start();
     await setSetting("panelBridge", { bridgePath: configuredPath });
     res.json({
       success: true,
@@ -629,7 +628,7 @@ router.post("/configure-direct", async (req, res) => {
 
 router.post("/start", (req, res) => {
   try {
-    bridge.start();
+    getPanelRuntime().panelBridge.start();
     res.json({ success: true, message: "Bridge started" });
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -638,7 +637,7 @@ router.post("/start", (req, res) => {
 
 router.post("/stop", (req, res) => {
   try {
-    bridge.stop();
+    getPanelRuntime().panelBridge.stop();
     res.json({ success: true, message: "Bridge stopped" });
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -647,7 +646,7 @@ router.post("/stop", (req, res) => {
 
 router.get("/scan-paths", async (req, res) => {
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     const foundBridges: AnyRecord[] = [];
     const scannedDirs: string[] = [];
 
@@ -746,8 +745,8 @@ router.get("/scan-paths", async (req, res) => {
       searchDirs.add(path.dirname(activeServer.zomboidDataPath));
     }
 
-    if (bridge.bridgePath) {
-      const parts = bridge.bridgePath.split(path.sep);
+    if (getPanelRuntime().panelBridge.bridgePath) {
+      const parts = getPanelRuntime().panelBridge.bridgePath.split(path.sep);
       const panelbridgeIdx = parts.indexOf("panelbridge");
       if (panelbridgeIdx > 0) {
         searchDirs.add(parts.slice(0, panelbridgeIdx).join(path.sep));
@@ -764,9 +763,9 @@ router.get("/scan-paths", async (req, res) => {
     res.json({
       foundBridges,
       scannedDirs: [...new Set(scannedDirs)],
-      currentPath: bridge.bridgePath,
-      isRunning: bridge.isRunning,
-      modConnected: bridge.isModConnected(),
+      currentPath: getPanelRuntime().panelBridge.bridgePath,
+      isRunning: getPanelRuntime().panelBridge.isRunning,
+      modConnected: getPanelRuntime().panelBridge.isModConnected(),
     });
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -775,16 +774,16 @@ router.get("/scan-paths", async (req, res) => {
 
 router.post("/refresh", (req, res) => {
   try {
-    if (bridge.isRunning) {
-      bridge.stop();
+    if (getPanelRuntime().panelBridge.isRunning) {
+      getPanelRuntime().panelBridge.stop();
     }
 
-    if (bridge.bridgePath) {
-      bridge.start();
+    if (getPanelRuntime().panelBridge.bridgePath) {
+      getPanelRuntime().panelBridge.start();
       res.json({
         success: true,
         message: "Bridge refreshed",
-        bridgePath: bridge.bridgePath,
+        bridgePath: getPanelRuntime().panelBridge.bridgePath,
       });
     } else {
       res.json({
@@ -798,7 +797,7 @@ router.post("/refresh", (req, res) => {
 });
 
 router.get("/ping", async (req, res) => {
-  if (!bridge.bridgePath) {
+  if (!getPanelRuntime().panelBridge.bridgePath) {
     return res.status(400).json({
       error: "Bridge not configured",
       code: ErrorCode.BRIDGE_NOT_CONFIGURED,
@@ -806,7 +805,7 @@ router.get("/ping", async (req, res) => {
   }
 
   try {
-    const result = await bridge.ping();
+    const result = await getPanelRuntime().panelBridge.ping();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -840,14 +839,14 @@ router.post("/command", async (req, res) => {
     });
   }
 
-  if (!bridge.bridgePath) {
+  if (!getPanelRuntime().panelBridge.bridgePath) {
     return res.status(400).json({
       error: "Bridge not configured",
       code: ErrorCode.BRIDGE_NOT_CONFIGURED,
     });
   }
 
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -859,7 +858,7 @@ router.post("/command", async (req, res) => {
     log.info(
       `POST /command: action=${action} args=${JSON.stringify(args || {}).substring(0, 200)}`,
     );
-    const result = await bridge.sendCommand(action, args || {});
+    const result = await getPanelRuntime().panelBridge.sendCommand(action, args || {});
     const durationMs = Date.now() - startTime;
     log.debug(`POST /command: action=${action} completed in ${durationMs}ms`);
     logBridgeCommand(action, args, result, true, durationMs).catch(() => {});
@@ -905,13 +904,13 @@ router.post("/command", async (req, res) => {
 });
 
 router.get("/server-info", async (req, res) => {
-  if (!bridge.bridgePath) {
+  if (!getPanelRuntime().panelBridge.bridgePath) {
     return res.status(400).json({
       error: "Bridge not configured",
       code: ErrorCode.BRIDGE_NOT_CONFIGURED,
     });
   }
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -919,7 +918,7 @@ router.get("/server-info", async (req, res) => {
   }
 
   try {
-    const result = await bridge.getServerInfo();
+    const result = await getPanelRuntime().panelBridge.getServerInfo();
     if (result?.data?.players && !Array.isArray(result.data.players)) {
       result.data.players = Object.values(result.data.players);
     }
@@ -930,14 +929,14 @@ router.get("/server-info", async (req, res) => {
 });
 
 router.get("/world/stats", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
   try {
-    const result = await bridge.getWorldStats();
+    const result = await getPanelRuntime().panelBridge.getWorldStats();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -945,14 +944,14 @@ router.get("/world/stats", async (req, res) => {
 });
 
 router.post("/world/save", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
   try {
-    const result = await bridge.saveWorld();
+    const result = await getPanelRuntime().panelBridge.saveWorld();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -960,14 +959,14 @@ router.post("/world/save", async (req, res) => {
 });
 
 router.get("/players", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
   try {
-    const result = await bridge.getAllPlayerDetails();
+    const result = await getPanelRuntime().panelBridge.getAllPlayerDetails();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -975,7 +974,7 @@ router.get("/players", async (req, res) => {
 });
 
 router.get("/players/:username", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -989,7 +988,7 @@ router.get("/players/:username", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.getPlayerDetails(username);
+    const result = await getPanelRuntime().panelBridge.getPlayerDetails(username);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({
@@ -1000,7 +999,7 @@ router.get("/players/:username", async (req, res) => {
 });
 
 router.post("/players/:username/teleport", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -1043,7 +1042,7 @@ router.post("/players/:username/teleport", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.teleportPlayer(username, x, y, z);
+    const result = await getPanelRuntime().panelBridge.teleportPlayer(username, x, y, z);
     res.json(result);
   } catch (error: any) {
     const diagnosticFields =
@@ -1057,7 +1056,7 @@ router.post("/players/:username/teleport", async (req, res) => {
 });
 
 router.post("/message", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -1071,7 +1070,7 @@ router.post("/message", async (req, res) => {
       });
   }
   try {
-    const result = await bridge.sendCommand("sendToServerChat", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("sendToServerChat", {
       message,
       isAlert: true,
     });
@@ -1082,14 +1081,14 @@ router.post("/message", async (req, res) => {
 });
 
 router.get("/sandbox", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
   try {
-    const result = await bridge.getSandboxOptions();
+    const result = await getPanelRuntime().panelBridge.getSandboxOptions();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1130,7 +1129,7 @@ router.get("/mod-path", async (req, res) => {
 
   let suggestedInstallPath = null;
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (activeServer?.installPath) {
       suggestedInstallPath = path.join(
         activeServer.installPath,
@@ -1153,7 +1152,7 @@ router.get("/mod-path", async (req, res) => {
 
 router.post("/install-local", async (req, res) => {
   try {
-    const server = await getActiveServer();
+    const server = await getCurrentServer();
     if (!server) {
       return res.status(400).json({
           success: false,
@@ -1203,7 +1202,7 @@ router.post("/install-mod-auto", async (req, res) => {
         });
       }
     } else {
-      targetServer = await getActiveServer();
+      targetServer = await getCurrentServer();
       if (!targetServer) {
         return res.status(400).json({
           error: "No active server configured.",
@@ -1408,14 +1407,14 @@ async function persistUtilities(power: any, water: any, on: any) {
 }
 
 router.get("/utilities/status", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
   try {
-    const result = await bridge.sendCommand("getUtilitiesStatus", {});
+    const result = await getPanelRuntime().panelBridge.sendCommand("getUtilitiesStatus", {});
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1423,7 +1422,7 @@ router.get("/utilities/status", async (req, res) => {
 });
 
 router.post("/utilities/restore", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -1434,7 +1433,7 @@ router.post("/utilities/restore", async (req, res) => {
     `Restoring utilities - power: ${power !== false}, water: ${water !== false}`,
   );
   try {
-    const result = await bridge.sendCommand("restoreUtilities", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("restoreUtilities", {
       power: power !== false,
       water: water !== false,
     });
@@ -1453,7 +1452,7 @@ router.post("/utilities/restore", async (req, res) => {
 });
 
 router.post("/utilities/shutoff", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
         error: "Bridge not running. Start it first.",
         code: ErrorCode.BRIDGE_NOT_RUNNING,
@@ -1464,7 +1463,7 @@ router.post("/utilities/shutoff", async (req, res) => {
     `Shutting off utilities - power: ${power !== false}, water: ${water !== false}`,
   );
   try {
-    const result = await bridge.sendCommand("shutOffUtilities", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("shutOffUtilities", {
       power: power !== false,
       water: water !== false,
     });
@@ -1483,7 +1482,7 @@ router.post("/utilities/shutoff", async (req, res) => {
 });
 
 router.post("/players/:username/give-item", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1513,7 +1512,7 @@ router.post("/players/:username/give-item", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.sendCommand("giveItem", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("giveItem", {
       username,
       itemType,
       count,
@@ -1525,7 +1524,7 @@ router.post("/players/:username/give-item", async (req, res) => {
 });
 
 router.post("/players/:username/heal", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1539,7 +1538,7 @@ router.post("/players/:username/heal", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.sendCommand("healPlayer", { username });
+    const result = await getPanelRuntime().panelBridge.sendCommand("healPlayer", { username });
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1547,7 +1546,7 @@ router.post("/players/:username/heal", async (req, res) => {
 });
 
 router.post("/players/:username/kill", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1561,7 +1560,7 @@ router.post("/players/:username/kill", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.sendCommand("killPlayer", { username });
+    const result = await getPanelRuntime().panelBridge.sendCommand("killPlayer", { username });
     res.json(result);
   } catch (error: any) {
     const diagnosticFields =
@@ -1573,7 +1572,7 @@ router.post("/players/:username/kill", async (req, res) => {
 });
 
 router.post("/players/:username/godmode", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1591,7 +1590,7 @@ router.post("/players/:username/godmode", async (req, res) => {
     return res.status(400).json({ error: "enabled must be a boolean" });
   }
   try {
-    const result = await bridge.sendCommand("setGodMode", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("setGodMode", {
       username,
       enabled: enabled === true,
     });
@@ -1602,7 +1601,7 @@ router.post("/players/:username/godmode", async (req, res) => {
 });
 
 router.post("/players/:username/invisible", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1620,7 +1619,7 @@ router.post("/players/:username/invisible", async (req, res) => {
     return res.status(400).json({ error: "enabled must be a boolean" });
   }
   try {
-    const result = await bridge.sendCommand("setInvisible", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("setInvisible", {
       username,
       enabled: enabled === true,
     });
@@ -1631,7 +1630,7 @@ router.post("/players/:username/invisible", async (req, res) => {
 });
 
 router.get("/debug/log", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1645,7 +1644,7 @@ router.get("/debug/log", async (req, res) => {
     ? requestedLevel
     : "DEBUG";
   try {
-    const result = await bridge.sendCommand("getDebugLog", { limit, minLevel });
+    const result = await getPanelRuntime().panelBridge.sendCommand("getDebugLog", { limit, minLevel });
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1653,14 +1652,14 @@ router.get("/debug/log", async (req, res) => {
 });
 
 router.get("/debug/stats", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
   try {
-    const result = await bridge.sendCommand("getStats", {});
+    const result = await getPanelRuntime().panelBridge.sendCommand("getStats", {});
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1668,7 +1667,7 @@ router.get("/debug/stats", async (req, res) => {
 });
 
 router.post("/debug/mode", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1679,7 +1678,7 @@ router.post("/debug/mode", async (req, res) => {
     return res.status(400).json({ error: "enabled must be a boolean" });
   }
   try {
-    const result = await bridge.sendCommand("setDebugMode", {
+    const result = await getPanelRuntime().panelBridge.sendCommand("setDebugMode", {
       enabled: enabled === true,
     });
     res.json(result);
@@ -1689,7 +1688,7 @@ router.post("/debug/mode", async (req, res) => {
 });
 
 router.get("/debug/api", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
@@ -1715,7 +1714,7 @@ router.get("/debug/api", async (req, res) => {
     });
   }
   try {
-    const result = await bridge.sendCommand("checkAPI", { object, method });
+    const result = await getPanelRuntime().panelBridge.sendCommand("checkAPI", { object, method });
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1723,14 +1722,14 @@ router.get("/debug/api", async (req, res) => {
 });
 
 router.get("/debug/handlers", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
   try {
-    const result = await bridge.sendCommand("getAvailableHandlers", {});
+    const result = await getPanelRuntime().panelBridge.sendCommand("getAvailableHandlers", {});
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1738,14 +1737,14 @@ router.get("/debug/handlers", async (req, res) => {
 });
 
 router.post("/debug/clear-errors", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
   try {
-    const result = await bridge.clearErrors();
+    const result = await getPanelRuntime().panelBridge.clearErrors();
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1754,8 +1753,7 @@ router.post("/debug/clear-errors", async (req, res) => {
 
 router.get("/catalog/items", async (req, res) => {
   try {
-    const db = await getDb();
-    const catalog = db.data.itemCatalog || null;
+    const catalog = await getSetting("itemCatalog");
     if (!catalog) {
       return res.json({ items: [], count: 0, scannedAt: null });
     }
@@ -1766,7 +1764,7 @@ router.get("/catalog/items", async (req, res) => {
 });
 
 router.post("/catalog/scan-items", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running — server must be online to scan items",
       code: ErrorCode.PANELBRIDGE_SCAN_ITEMS_NOT_RUNNING,
@@ -1774,7 +1772,7 @@ router.post("/catalog/scan-items", async (req, res) => {
   }
   try {
     log.info("Scanning item catalog via PanelBridge...");
-    const result = await bridge.sendCommand("getItemCatalog", {});
+    const result = await getPanelRuntime().panelBridge.sendCommand("getItemCatalog", {});
     if (!result || !result.success) {
       return res
         .status(500)
@@ -1785,9 +1783,7 @@ router.post("/catalog/scan-items", async (req, res) => {
       count: result.data?.count || 0,
       scannedAt: new Date().toISOString(),
     };
-    const db = await getDb();
-    db.data.itemCatalog = catalog;
-    await commitNow();
+    await setSetting("itemCatalog", catalog);
     log.info(`Item catalog cached: ${catalog.count} items`);
     res.json(catalog);
   } catch (error: any) {
@@ -1797,14 +1793,14 @@ router.post("/catalog/scan-items", async (req, res) => {
 });
 
 router.post("/catalog/debug-item-script", async (req, res) => {
-  if (!bridge.isRunning) {
+  if (!getPanelRuntime().panelBridge.isRunning) {
     return res.status(400).json({
       error: "Bridge not running",
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
   try {
-    const result = await bridge.sendCommand("debugItemScript", {});
+    const result = await getPanelRuntime().panelBridge.sendCommand("debugItemScript", {});
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });

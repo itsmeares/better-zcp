@@ -1,6 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { runForServer } from "../utils/serverScope.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getServers = vi.fn(async () => [] as any[]);
@@ -9,7 +10,7 @@ vi.mock("../database/init.ts", () => ({
   getServers: (...args: unknown[]) => getServers(...args),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => undefined),
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   logServerEvent: vi.fn(async () => undefined),
 }));
 
@@ -77,7 +78,7 @@ describe("SteamCMD route lifecycle guards", () => {
     if (routePath === "/quick-setup") {
       fs.writeFileSync(path.join(installPath, "StartServer64.bat"), "");
     }
-    const lock = acquireLifecycleLock("restore", "server-1");
+    const lock = runForServer("server-1", () => acquireLifecycleLock("restore", "server-1"));
     const response = createResponse();
 
     await getPostHandler(routePath)({ app, body }, response);

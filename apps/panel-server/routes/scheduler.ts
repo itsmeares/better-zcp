@@ -1,3 +1,5 @@
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
+import { requireServerId, runForServer } from "../utils/serverScope.ts";
 import { Router } from '../http/apiRouter.ts';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.ts';
@@ -11,7 +13,6 @@ import {
   deleteScheduledTask,
   getScheduleHistory,
   clearScheduleHistory,
-  getActiveServer,
   getServer
 } from '../database/init.ts';
 import {
@@ -189,16 +190,8 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Tasks cannot run more frequently than every 5 minutes', code: ErrorCode.SCHEDULER_CRON_TOO_FREQUENT });
     }
 
-    let resolvedServerId = serverId ?? null;
-    if (resolvedServerId) {
-      const target = await getServer(resolvedServerId);
-      if (!target) {
-        return res.status(400).json({ error: 'Target server not found', code: ErrorCode.SCHEDULER_TARGET_SERVER_NOT_FOUND });
-      }
-    } else {
-      const active = await getActiveServer();
-      resolvedServerId = active ? active.id : null;
-    }
+    if (serverId != null && String(serverId) !== requireServerId()) return res.status(400).json({ error: 'Task target must match the server in the URL' });
+    const resolvedServerId = requireServerId();
 
     const result = await createScheduledTask(name, cronExpression, command, resolvedServerId);
     const task = {
@@ -297,6 +290,13 @@ router.put('/tasks/:id', async (req, res) => {
       return res.status(400).json({ error: 'Edit the unsupported command before enabling this task', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
 
+    const originalServerId = requireServerId();
+    const targetServerId = serverId == null ? originalServerId : String(serverId);
+    const moving = targetServerId !== originalServerId;
+    if (moving) await req.app.get('ensureServerRuntime')(targetServerId);
+    const targetScheduler = moving
+      ? runForServer(targetServerId, () => getPanelRuntime().scheduler)
+      : scheduler;
     const updated = await updateScheduledTask(taskId, name, cronExpression, command, normalizedEnabled, serverId);
     if (!updated) {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
@@ -305,30 +305,32 @@ router.put('/tasks/:id', async (req, res) => {
     let dstWarning = null;
     if (updated.enabled) {
       try {
-        const scheduled = scheduler.scheduleTask({
+        const scheduled = runForServer(targetServerId, () => targetScheduler.scheduleTask({
           id: taskId,
           name: updated.name,
           cron_expression: updated.cron_expression,
           command: updated.command,
           server_id: updated.server_id,
           enabled: 1
-        });
+        }));
         if (scheduled === false) {
           throw new Error("Scheduler rejected the updated task");
         }
         dstWarning = scheduled?.dstWarning || null;
+        if (moving) scheduler.cancelTask(taskId);
       } catch (schedErr) {
         log.error(`Failed to reschedule task ${taskId}, reverting DB: ${errorMessage(schedErr)}`);
         if (previousTask) {
           try {
-            await updateScheduledTask(
+            targetScheduler.cancelTask(taskId);
+            await runForServer(targetServerId, () => updateScheduledTask(
               taskId,
               previousTask.name,
               previousTask.cron_expression,
               previousTask.command,
               previousTask.enabled,
               previousTask.server_id,
-            );
+            ));
             if (previousTask.enabled) {
               scheduler.scheduleTask(previousTask);
             } else {

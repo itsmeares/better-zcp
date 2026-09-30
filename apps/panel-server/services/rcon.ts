@@ -1,3 +1,4 @@
+import { currentServerId } from "../utils/serverScope.ts";
 import { EventEmitter } from "events";
 import net from "net";
 import { createLogger } from "../utils/logger.ts";
@@ -5,7 +6,7 @@ const log = createLogger("RCON");
 import {
   logCommand,
   getSetting,
-  getActiveServer,
+  getCurrentServer,
   getServer,
 } from "../database/init.ts";
 import { SourceRconClient } from "../utils/sourceRcon.ts";
@@ -248,7 +249,6 @@ export class RconService extends EventEmitter {
   connected: boolean;
   connecting: boolean;
   connectPromise: Promise<boolean> | null;
-  passwordFromSecretFile: boolean;
   config: { host: string; port: number | null; password: string };
   reconnectAttempts: number;
   maxReconnectAttempts: number;
@@ -257,6 +257,7 @@ export class RconService extends EventEmitter {
   lastConnectionErrorLog: number;
   connectionErrorLogCooldown: number;
   configLoaded: boolean;
+  serverId: string | null = null;
   serverManager: any;
   autoReconnectInterval: ReturnType<typeof setInterval> | null;
   autoReconnectDelay: number;
@@ -276,15 +277,15 @@ export class RconService extends EventEmitter {
   maxHealthFailures: number;
   pendingClients: Set<SourceRconClient>;
 
-  constructor() {
+  constructor(serverId: string | null = currentServerId() ?? null) {
     super();
+    this.serverId = serverId;
     this.setMaxListeners(20);
 
     this.client = null;
     this.connected = false;
     this.connecting = false;
     this.connectPromise = null;
-    this.passwordFromSecretFile = Boolean(process.env.RCON_PASSWORD_FILE);
     this.config = {
       host: resolveEnvRconHost(),
       port: parseInt(process.env.RCON_PORT ?? "", 10) || 27015,
@@ -477,27 +478,23 @@ export class RconService extends EventEmitter {
   }
 
   async loadConfig(serverId: string | null = null) {
+    if (this.configLoaded && (!serverId || serverId === this.serverId)) return;
+    const targetId = serverId ?? this.serverId ?? currentServerId();
+    if (!targetId) throw new Error("RCON requires an explicit server ID");
+    if (this.serverId && this.serverId !== targetId) throw new Error("Cannot retarget an RCON connection");
+    this.serverId = targetId;
+    serverId = targetId;
     if (this.configLoaded) return;
     try {
       const targetServer = serverId
         ? await getServer(serverId)
-        : await getActiveServer();
+        : await getCurrentServer();
       if (targetServer) {
         this.config.host = normalizeRconHost(targetServer.rconHost);
         this.config.port = parseConfiguredRconPort(targetServer.rconPort);
 
-        if (targetServer.rconPassword) {
-          if (!this.passwordFromSecretFile) {
-            this.config.password = targetServer.rconPassword;
-          }
-        } else if (!this.passwordFromSecretFile) {
-          this.config.password = "";
-          log.warn(
-            serverId
-              ? `Server ${serverId} has no RCON password set — connection attempts will fail authentication until one is configured`
-              : "Active server has no RCON password set — connection attempts will fail authentication until one is configured",
-          );
-        }
+        this.config.password = targetServer.rconPassword || "";
+        if (!this.config.password) log.warn(`Server ${serverId} has no RCON password configured`);
 
         log.info(
           serverId
@@ -508,50 +505,19 @@ export class RconService extends EventEmitter {
         return;
       }
 
-      if (!serverId) {
-        const dbHost = await getSetting("rconHost");
-        const dbPort = await getSetting("rconPort");
-        const dbPassword = await getSetting("rconPassword");
-
-        if (dbPassword && !this.passwordFromSecretFile) {
-          this.config.password = dbPassword;
-          log.info("password loaded from legacy settings");
-        }
-        if (dbPort !== undefined && dbPort !== null && dbPort !== "") {
-          this.config.port = parseConfiguredRconPort(dbPort);
-        }
-        if (dbHost) {
-          this.config.host = normalizeRconHost(dbHost);
-        }
-      } else {
-        log.warn(`No RCON config found for server ${serverId}`);
-      }
-      this.configLoaded = true;
+      throw new Error(`Server ${serverId} not found`);
     } catch (error: any) {
-      log.debug(`Could not load RCON config from database: ${error.message}`);
+      log.debug(`Could not load RCON config: ${error.message}`);
+      throw error;
     }
   }
 
   async hasConfiguredTarget() {
-    try {
-      if (await getActiveServer()) return true;
-    } catch (e: any) {
-      log.debug(`hasConfiguredTarget: active server lookup failed: ${e.message}`);
-    }
-    try {
-      const [dbHost, dbPort, dbPassword] = await Promise.all([
-        getSetting("rconHost"),
-        getSetting("rconPort"),
-        getSetting("rconPassword"),
-      ]);
-      return Boolean(dbHost || dbPort || dbPassword);
-    } catch (e: any) {
-      log.debug(`hasConfiguredTarget: legacy settings lookup failed: ${e.message}`);
-      return false;
-    }
+    return Boolean(this.serverId && await getServer(this.serverId));
   }
 
   async reloadConfig(serverId: string | null = null) {
+    if (serverId && this.serverId && serverId !== this.serverId) throw new Error("Cannot retarget an RCON connection");
     this.targetVersion++;
     this.connectionVersion++;
     this.configLoaded = false;

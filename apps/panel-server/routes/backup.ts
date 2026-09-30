@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { getActiveServer } from "../database/init.ts";
+import { getCurrentServer } from "../database/init.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   acquireLifecycleLock,
@@ -32,7 +32,7 @@ function errorMessage(error: unknown): string {
 function rejectStaleProfile(
   req: Request,
   res: Response,
-  activeServer: Awaited<ReturnType<typeof getActiveServer>>,
+  activeServer: Awaited<ReturnType<typeof getCurrentServer>>,
 ): boolean {
   if (
     req.body?.expectedServerId === undefined ||
@@ -222,7 +222,7 @@ router.post("/create", async (req, res) => {
     log.info("POST /create — creating manual backup");
     const backupService = req.app.get("backupService");
     const io = req.app.get("io");
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (rejectStaleProfile(req, res, activeServer)) return;
     const includeDb = req.body?.includeDb === undefined
       ? false
@@ -261,7 +261,7 @@ router.delete("/:name", async (req, res) => {
   try {
     log.info(`DELETE /${req.params.name}`);
     const backupService = req.app.get("backupService");
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (rejectStaleProfile(req, res, activeServer)) return;
     const result = await backupService.deleteBackup(req.params.name, activeServer);
 
@@ -316,7 +316,7 @@ router.get("/download/:name", async (req, res) => {
 });
 
 router.post("/restore/:name", async (req, res) => {
-  const activeServerForLock = await getActiveServer();
+  const activeServerForLock = await getCurrentServer();
   const lifecycleLock = acquireLifecycleLock(
     "restore",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -325,7 +325,7 @@ router.post("/restore/:name", async (req, res) => {
     return res.status(409).json(lifecycleInProgressResponse());
   }
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (rejectStaleProfile(req, res, activeServer)) return;
     const backupService = req.app.get("backupService");
     const serverManager = req.app.get("serverManager");
@@ -410,7 +410,7 @@ router.post("/delete-older-than", async (req, res) => {
     }
 
     const backupService = req.app.get("backupService");
-    const activeServer = await getActiveServer();
+    const activeServer = await getCurrentServer();
     if (rejectStaleProfile(req, res, activeServer)) return;
     const result = await backupService.deleteBackupsOlderThan(days, activeServer);
 

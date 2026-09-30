@@ -4,9 +4,9 @@ import os from "os";
 import path from "path";
 import { resolveLaunchMode } from "../services/serverManager.ts";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -70,7 +70,7 @@ describe("refreshLaunchTargetBeforeStart() in CUSTOM LAUNCHER mode", () => {
 
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     logSpy.info.mockReset();
     logSpy.warn.mockReset();
   });

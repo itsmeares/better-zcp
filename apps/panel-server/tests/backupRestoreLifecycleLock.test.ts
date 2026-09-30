@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import path from "path";
 
 
-vi.mock("../database/init.ts", () => ({ getActiveServer: vi.fn() }));
+vi.mock("../database/init.ts", () => ({ getCurrentServer: vi.fn() }));
 
-const { getActiveServer } = await import("../database/init.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/backup.ts");
 const {
   acquireLifecycleLock,
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   it("refuses while SteamCMD is writing the active server install path", async () => {
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       name: "TestServer",
       installPath: restoreInstallPath,
     });
@@ -86,7 +86,7 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   });
 
   it("holds the lock for the duration of the restore and releases it on success", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer" });
+    getCurrentServer.mockResolvedValue({ name: "TestServer" });
     const restoreGate = deferred();
     const backupService = {
       restoreBackup: vi.fn(() => restoreGate.promise),
@@ -125,7 +125,7 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   });
 
   it("refuses with 409 when another lifecycle operation already holds the lock, without ever calling restoreBackup()", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer" });
+    getCurrentServer.mockResolvedValue({ name: "TestServer" });
     const backupService = { restoreBackup: vi.fn() };
     const serverManager = {
       getServerProcessDetails: vi.fn(async () => ({
@@ -156,7 +156,7 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   });
 
   it("releases the lock even when restoreBackup() throws", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer" });
+    getCurrentServer.mockResolvedValue({ name: "TestServer" });
     const backupService = {
       restoreBackup: vi.fn(async () => {
         throw new Error("boom");

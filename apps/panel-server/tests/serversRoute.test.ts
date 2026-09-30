@@ -3,6 +3,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+const scanDedicatedServerProcesses = vi.fn();
+vi.mock("../services/serverManager.ts", async importOriginal => ({...await importOriginal(), scanDedicatedServerProcesses}));
 const createServer = vi.fn();
 const updateServer = vi.fn();
 const getServers = vi.fn();
@@ -17,7 +19,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting,
   getAllSettings,
   getServer: vi.fn(),
-  getActiveServer: vi.fn(),
+  getCurrentServer: vi.fn(),
   createServer,
   updateServer,
   deleteServer: vi.fn(),
@@ -35,7 +37,7 @@ const {
   parseDiscoveredPort,
   parseServerId,
 } = await import("../routes/servers.ts");
-const { getServer, getActiveServer, deleteServer, setActiveServer } =
+const { getServer, getCurrentServer, deleteServer, setActiveServer } =
   await import("../database/init.ts");
 const { getSteamLoginArgs, hasSteamManifestAccessDeniedState } =
   await import("../routes/server.ts");
@@ -86,13 +88,14 @@ describe('GET /api/servers/status', () => {
       { id: 'b', name: 'B', serverName: 'ServerB', installPath: '/tmp/pz', zomboidDataPath: '/tmp/b' },
     ];
     getServers.mockResolvedValue(profiles);
-    getActiveServer.mockResolvedValue(profiles[0]);
+    getCurrentServer.mockResolvedValue(profiles[0]);
     const scan = vi.fn().mockResolvedValue({ matched: [
       { pid: '111', cmd: 'java zombie.network.GameServer -servername ServerA -cachedir=/tmp/a' },
       { pid: '222', cmd: 'java zombie.network.GameServer' },
     ] });
     const res = createResponse();
 
+    scanDedicatedServerProcesses.mockImplementation(scan);
     await runRoute('/status', 'get', { app: { get: (key) => key === 'serverManager' ? { _scanDedicatedServerProcesses: scan } : null } }, res);
 
     expect(scan).toHaveBeenCalledTimes(1);
@@ -108,11 +111,12 @@ describe('GET /api/servers/status', () => {
   it('reports a Docker profile from its container instead of the host process list', async () => {
     const profile = { id: 'docker', name: 'Docker', serverName: 'ServerA', installPath: '/tmp/pz', dockerContainerName: 'pz-a' };
     getServers.mockResolvedValue([profile]);
-    getActiveServer.mockResolvedValue(profile);
+    getCurrentServer.mockResolvedValue(profile);
     const inspectManagedContainer = vi.fn().mockResolvedValue({ State: { Running: true } });
     const dockerClient = { enabled: true, available: true, inspectManagedContainer };
     const res = createResponse();
 
+    scanDedicatedServerProcesses.mockResolvedValue({matched: []});
     await runRoute('/status', 'get', { app: { get: (key) => ({
       serverManager: { _scanDedicatedServerProcesses: async () => ({ matched: [] }) },
       dockerClient,
@@ -130,13 +134,14 @@ describe('GET /api/servers/status', () => {
       { id: 'docker', name: 'Docker', serverName: 'B', installPath: '/tmp/pz', dockerContainerName: 'pz-b' },
     ];
     getServers.mockResolvedValue(profiles);
-    getActiveServer.mockResolvedValue(profiles[0]);
+    getCurrentServer.mockResolvedValue(profiles[0]);
     const dockerClient = {
       enabled: true, available: true,
       inspectManagedContainer: vi.fn().mockResolvedValue({ State: { Running: false } }),
     };
     const res = createResponse();
 
+    scanDedicatedServerProcesses.mockResolvedValue({matched: [{pid:"333",cmd:"/tmp/pz/jre64/bin/java zombie.network.GameServer"}]});
     await runRoute('/status', 'get', { app: { get: (key) => ({
       serverManager: { _scanDedicatedServerProcesses: async () => ({ matched: [
         { pid: '333', cmd: '/tmp/pz/jre64/bin/java zombie.network.GameServer' },
@@ -772,213 +777,5 @@ describe("GET /api/servers", () => {
     expect(payload.servers[0].rconPassword).not.toBe("secret-a");
     expect(payload.servers[0].adminPassword).not.toBe("admin-a");
     expect(payload.servers[1].rconPassword).not.toBe("secret-b");
-  });
-});
-
-describe("DELETE /api/servers/:id: deleting the active server must reload live services for whichever server becomes active, same as POST /:id/activate does", () => {
-  let serverManager;
-  let rconService;
-  let logTailer;
-  let io;
-
-  function buildReq(id, overrides = {}) {
-    return {
-      params: { id },
-      user: { role: "admin" },
-      app: {
-        get: (key) =>
-          ({ serverManager, rconService, logTailer, io, modChecker: null })[
-            key
-          ],
-      },
-      ...overrides,
-    };
-  }
-
-  beforeEach(() => {
-    getServer.mockReset();
-    getActiveServer.mockReset();
-    deleteServer.mockReset();
-    serverManager = { reloadConfig: vi.fn(async () => {}) };
-    rconService = {
-      isConnected: vi.fn(() => false),
-      disconnect: vi.fn(async () => {}),
-      reloadConfig: vi.fn(async () => {}),
-      connect: vi.fn(async () => {}),
-    };
-    logTailer = { reloadConfig: vi.fn(async () => {}) };
-    io = { emit: vi.fn() };
-  });
-
-  it("reloads serverManager and RCON for the newly-active server after deleting the active one", async () => {
-    getServer.mockResolvedValue({
-      id: "deleted-1",
-      name: "Deleted",
-      isActive: true,
-    });
-    deleteServer.mockResolvedValue(true);
-    getActiveServer.mockResolvedValue({
-      id: "promoted-2",
-      name: "Promoted",
-      isActive: true,
-      rconPassword: "secret",
-    });
-
-    const response = createResponse();
-    await runRoute("/:id", "delete", buildReq("deleted-1"), response);
-
-    expect(serverManager.reloadConfig).toHaveBeenCalled();
-    expect(rconService.reloadConfig).toHaveBeenCalled();
-    expect(rconService.connect).toHaveBeenCalled();
-    expect(logTailer.reloadConfig).toHaveBeenCalled();
-    expect(io.emit).toHaveBeenCalledWith(
-      "activeServerChanged",
-      expect.objectContaining({
-        server: expect.objectContaining({ id: "promoted-2" }),
-      }),
-    );
-  });
-
-  it("does NOT reload services when the deleted server was not the active one", async () => {
-    getServer.mockResolvedValue({
-      id: "deleted-1",
-      name: "Deleted",
-      isActive: false,
-    });
-    deleteServer.mockResolvedValue(true);
-
-    const response = createResponse();
-    await runRoute("/:id", "delete", buildReq("deleted-1"), response);
-
-    expect(serverManager.reloadConfig).not.toHaveBeenCalled();
-    expect(rconService.reloadConfig).not.toHaveBeenCalled();
-    expect(io.emit).toHaveBeenCalledWith("activeServerChanged", {
-      deleted: "deleted-1",
-    });
-  });
-
-  it("still succeeds (no reload attempted) when deleting the last remaining server leaves nothing active", async () => {
-    getServer.mockResolvedValue({
-      id: "deleted-1",
-      name: "Deleted",
-      isActive: true,
-    });
-    deleteServer.mockResolvedValue(true);
-    getActiveServer.mockResolvedValue(null);
-
-    const response = createResponse();
-    await runRoute("/:id", "delete", buildReq("deleted-1"), response);
-
-    expect(serverManager.reloadConfig).not.toHaveBeenCalled();
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: true }),
-    );
-  });
-});
-
-describe("POST /api/servers/:id/activate: the activeServerChanged broadcast must not leak credentials", () => {
-  let io;
-
-  function buildReq(id) {
-    return {
-      params: { id },
-      user: { role: "admin" },
-      app: {
-        get: (key) => ({ io, modChecker: null })[key],
-      },
-    };
-  }
-
-  beforeEach(() => {
-    setActiveServer.mockReset();
-    io = { emit: vi.fn() };
-  });
-
-  it("sanitizes the server payload on the Socket.IO broadcast, not just the HTTP response", async () => {
-    setActiveServer.mockResolvedValue({
-      id: "1",
-      name: "Active One",
-      rconPassword: "top-secret",
-    });
-
-    const response = createResponse();
-    await runRoute("/:id/activate", "post", buildReq("1"), response);
-
-    expect(io.emit).toHaveBeenCalledWith(
-      "activeServerChanged",
-      expect.objectContaining({
-        server: expect.not.objectContaining({ rconPassword: "top-secret" }),
-      }),
-    );
-  });
-});
-
-describe("POST /api/servers/:id/activate: a live-service reload failure must not turn a successful activation into an error", () => {
-  let serverManager;
-  let rconService;
-  let io;
-
-  function buildReq(id) {
-    return {
-      params: { id },
-      user: { role: "admin" },
-      app: {
-        get: (key) =>
-          ({ serverManager, rconService, io, modChecker: null })[key],
-      },
-    };
-  }
-
-  beforeEach(() => {
-    setActiveServer.mockReset();
-    io = { emit: vi.fn() };
-    rconService = {
-      isConnected: vi.fn(() => false),
-      disconnect: vi.fn(async () => {}),
-      reloadConfig: vi.fn(async () => {}),
-      connect: vi.fn(async () => {}),
-    };
-  });
-
-  it("still reports success and still broadcasts activeServerChanged when serverManager.reloadConfig throws", async () => {
-    setActiveServer.mockResolvedValue({
-      id: "1",
-      name: "Active One",
-      rconPassword: "secret",
-    });
-    serverManager = {
-      reloadConfig: vi.fn(async () => {
-        throw new Error("reload exploded");
-      }),
-    };
-
-    const response = createResponse();
-    await runRoute("/:id/activate", "post", buildReq("1"), response);
-
-    expect(response.status).not.toHaveBeenCalledWith(500);
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        server: expect.objectContaining({ id: "1" }),
-        warnings: expect.arrayContaining([
-          expect.stringMatching(/could not be fully reloaded/i),
-        ]),
-      }),
-    );
-    expect(io.emit).toHaveBeenCalledWith(
-      "activeServerChanged",
-      expect.objectContaining({ server: expect.objectContaining({ id: "1" }) }),
-    );
-  });
-
-  it("reports success with no warnings when the reload succeeds normally (control)", async () => {
-    setActiveServer.mockResolvedValue({ id: "1", name: "Active One" });
-    serverManager = { reloadConfig: vi.fn(async () => {}) };
-
-    const response = createResponse();
-    await runRoute("/:id/activate", "post", buildReq("1"), response);
-
-    expect(response.status).not.toHaveBeenCalledWith(500);
-    const [payload] = response.json.mock.calls[0];
-    expect(payload.warnings).toBeUndefined();
   });
 });

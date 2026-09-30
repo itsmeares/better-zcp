@@ -1368,7 +1368,7 @@ export default function ServerConfig() {
 
   useEffect(() => {
     if (!socket) return
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       if (hasIniChanges || hasSandboxChanges || hasSpawnPointsChanges || hasSpawnRegionsChanges) {
         setServerChangedSinceLoad(true)
       } else {
@@ -1376,9 +1376,9 @@ export default function ServerConfig() {
         loadData()
       }
     }
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket, hasIniChanges, hasSandboxChanges, hasSpawnPointsChanges, hasSpawnRegionsChanges, editorMode, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps -- loadData is mount-stable, not a dep
 

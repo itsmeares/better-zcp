@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+const it = scopedTests("server-a");
+import { beforeEach, describe, expect, vi } from "vite-plus/test";
 
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
   updateScheduledTask: vi.fn(),
   getServer: vi.fn(),
-  getActiveServer: vi.fn().mockResolvedValue(null),
+  getCurrentServer: vi.fn().mockResolvedValue(null),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: vi.fn().mockResolvedValue(),
@@ -35,7 +37,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     const { scheduler, rconService } = makeScheduler();
     scheduler.performRestart = vi.fn().mockResolvedValue({ success: true });
 
-    await scheduler.runTaskNow({ id: 1, name: "Restart", command: "restart" });
+    await scheduler.runTaskNow({ id: 1, name: "Restart", server_id: "server-a", command: "restart" });
 
     expect(scheduler.performRestart).toHaveBeenCalledWith(null, {
       rconService,
@@ -52,7 +54,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     const { scheduler } = makeScheduler();
     scheduler.performRestart = vi.fn().mockResolvedValue({ success: false, message: "World save failed" });
 
-    const result = await scheduler.runTaskNow({ id: 99, name: "Restart", command: "restart" });
+    const result = await scheduler.runTaskNow({ id: 99, name: "Restart", server_id: "server-a", command: "restart" });
 
     expect(result).toEqual({ success: false, message: "World save failed" });
     expect(logScheduleExecution).toHaveBeenCalledWith(
@@ -64,7 +66,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     vi.useFakeTimers();
     try {
       const { scheduler } = makeScheduler();
-      const task = { id: 100, name: "Restart", command: "restart" };
+      const task = { id: 100, name: "Restart", server_id: "server-a", command: "restart" };
       scheduler.jobs.set(task.id, { stop: vi.fn() });
       scheduler.performRestart = vi.fn()
         .mockResolvedValueOnce({ success: false, deferred: true, message: "Players online" })
@@ -88,7 +90,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
 
   it("drops an old retry when a scheduled restart is edited", () => {
     const { scheduler } = makeScheduler();
-    const task = { id: 101, name: "Restart", command: "restart", cron_expression: "0 */6 * * *" };
+    const task = { id: 101, name: "Restart", server_id: "server-a", command: "restart", cron_expression: "0 */6 * * *" };
     const staleRetry = setTimeout(() => {}, 60000);
     scheduler.pendingRestarts.set(task.id, staleRetry);
 
@@ -150,7 +152,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
   it("routes 'save' through rconService.save()", async () => {
     const { scheduler, rconService } = makeScheduler();
 
-    await scheduler.runTaskNow({ id: 2, name: "Save", command: "save" });
+    await scheduler.runTaskNow({ id: 2, name: "Save", server_id: "server-a", command: "save" });
 
     expect(rconService.save).toHaveBeenCalledWith({ skipLog: true });
   });
@@ -161,7 +163,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     await scheduler.runTaskNow({
       id: 3,
       name: "Broadcast",
-      command: "servermsg Server restarting soon",
+      server_id: "server-a", command: "servermsg Server restarting soon",
     });
 
     expect(rconService.serverMessage).toHaveBeenCalledWith(
@@ -178,7 +180,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     await scheduler.runTaskNow({
       id: 31,
       name: "Broadcast",
-      command: `servermsg ${message}`,
+      server_id: "server-a", command: `servermsg ${message}`,
     });
 
     expect(rconService.serverMessage).toHaveBeenCalledWith(message, {
@@ -193,7 +195,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     await scheduler.runTaskNow({
       id: 4,
       name: "World save",
-      command: "bridge:saveWorld",
+      server_id: "server-a", command: "bridge:saveWorld",
     });
 
     expect(scheduler.executeBridgeAction).toHaveBeenCalledWith(
@@ -204,7 +206,7 @@ describe("Scheduler.runTaskNow command dispatch", () => {
   it("falls back to a raw RCON command for anything else", async () => {
     const { scheduler, rconService } = makeScheduler();
 
-    await scheduler.runTaskNow({ id: 5, name: "Players", command: "players" });
+    await scheduler.runTaskNow({ id: 5, name: "Players", server_id: "server-a", command: "players" });
 
     expect(rconService.execute).toHaveBeenCalledWith("players", {
       skipLog: true,
@@ -249,7 +251,7 @@ describe("POST /api/scheduler/tasks/:id/run", () => {
   });
 
   it("triggers the matching task through scheduler.runTaskNow()", async () => {
-    const task = { id: 7, name: "Restart", command: "restart" };
+    const task = { id: 7, name: "Restart", server_id: "server-a", command: "restart" };
     getScheduledTasks.mockResolvedValue([task]);
     const app = { get: vi.fn().mockReturnValue({ runTaskNow }) };
     const response = createResponse();
@@ -277,7 +279,7 @@ describe("POST /api/scheduler/tasks/:id/run", () => {
   });
 
   it("does not manually run a saved weather task", async () => {
-    getScheduledTasks.mockResolvedValue([{ id: 7, name: "Old weather", command: "bridge:triggerStorm" }]);
+    getScheduledTasks.mockResolvedValue([{ id: 7, name: "Old weather", server_id: "server-a", command: "bridge:triggerStorm" }]);
     const app = { get: vi.fn().mockReturnValue({ runTaskNow }) };
     const response = createResponse();
 
@@ -342,7 +344,7 @@ describe("unattended schedule frequency validation", () => {
         id: 10,
         name: "Too frequent",
         cron_expression: "* * * * *",
-        command: "save",
+        server_id: "server-a", command: "save",
       }),
     ).toBe(false);
     expect(scheduler.jobs.size).toBe(0);
@@ -392,9 +394,9 @@ describe("PUT /api/scheduler/tasks/:id", () => {
       id: 8,
       name: "Renamed task",
       cron_expression: "0 * * * *",
-      command: "save",
+      server_id: "server-a", command: "save",
       enabled: 1,
-      server_id: null,
+
     });
     const response = createResponse();
 
@@ -527,8 +529,8 @@ describe("POST /api/scheduler/restart-now labels its Schedule History entry as m
   }
 
   it("calls scheduler.performRestart with label: 'Manual restart'", async () => {
-    const { getActiveServer } = await import("../database/init.ts");
-    getActiveServer.mockResolvedValue(null);
+    const { getCurrentServer } = await import("../database/init.ts");
+    getCurrentServer.mockResolvedValue(null);
     const performRestart = vi.fn().mockResolvedValue({ success: true });
     const response = createResponse();
 

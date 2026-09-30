@@ -1,3 +1,4 @@
+import { selectServer } from "@/lib/serverSelection"
 import { useState, useEffect, useContext, useRef, useMemo } from 'react'
 import {
   Download,
@@ -510,6 +511,7 @@ export default function ServerSetup() {
         params?: Record<string, string | number>
       }>
     }) => {
+      if (!installViaSteamCmdRef.current) return
       clearInstallInFlightMarker()
       const displayMessage = getInstallProgressMessage(data, data.message)
       try {
@@ -543,8 +545,8 @@ export default function ServerSetup() {
               rconPassword: data.rconPassword || s.rconPassword,
               adminPassword: s.adminPassword,
               serverPort: data.serverPort || s.serverPort,
-              minMemory: (data.minMemory || s.minMemory) * 1024,
-              maxMemory: (data.maxMemory || s.maxMemory) * 1024,
+              minMemory: (data.minMemory || s.minMemory),
+              maxMemory: (data.maxMemory || s.maxMemory),
               useNoSteam: s.useNoSteam,
               useDebug: s.useDebug,
               useUpnp: s.useUpnp,
@@ -578,7 +580,7 @@ export default function ServerSetup() {
 
           if (createResult.server?.id) {
             try {
-              await serversApi.activate(createResult.server.id)
+              await selectServer(createResult.server.id)
               setLogs((prev) => [
                 ...prev,
                 {
@@ -918,8 +920,8 @@ export default function ServerSetup() {
             rconPassword: data.rconPassword || rconPassword,
             adminPassword,
             serverPort: data.serverPort || serverPort,
-            minMemory: (data.minMemory || minMemory) * 1024,
-            maxMemory: (data.maxMemory || maxMemory) * 1024,
+            minMemory: (data.minMemory || minMemory),
+            maxMemory: (data.maxMemory || maxMemory),
             useNoSteam: useNoSteam,
             useDebug: useDebug,
             useUpnp: useUpnp,
@@ -939,7 +941,7 @@ export default function ServerSetup() {
 
         if (createResult.server?.id) {
           try {
-            await serversApi.activate(createResult.server.id)
+            await selectServer(createResult.server.id)
             addLog('success', 'Switched active server to new installation')
           } catch (error) {
             reportClientError('Failed to activate newly created server.', error)

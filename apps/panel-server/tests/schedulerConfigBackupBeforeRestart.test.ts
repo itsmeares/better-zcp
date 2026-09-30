@@ -4,13 +4,13 @@ import os from "os";
 import path from "path";
 
 const getServer = vi.fn();
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn().mockResolvedValue([]),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: vi.fn().mockResolvedValue(),
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServer: (...args) => getServer(...args),
 }));
 
@@ -28,7 +28,7 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
     getServer.mockReset();
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     createBackupIfChanged.mockClear();
   });
 
@@ -77,7 +77,7 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
 
   it("falls back to the active server when no restart was pinned to a specific server", async () => {
     const { zomboidDataPath, configDir } = writeConfigFixture();
-    getActiveServer.mockResolvedValue({
+    getCurrentServer.mockResolvedValue({
       serverName: "servertest",
       zomboidDataPath,
     });
@@ -85,7 +85,7 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     const scheduler = makeScheduler();
     await scheduler._backupConfigBeforeRestart(null);
 
-    expect(getActiveServer).toHaveBeenCalled();
+    expect(getCurrentServer).toHaveBeenCalled();
     expect(getServer).not.toHaveBeenCalled();
     const backupDir = path.join(configDir, "backups");
     expect(

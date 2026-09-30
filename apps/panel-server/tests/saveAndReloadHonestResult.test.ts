@@ -3,7 +3,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));

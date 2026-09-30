@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { scopedTests } from "./helpers/serverScope.ts";
+const it = scopedTests("server-a");
+import { beforeEach, describe, expect, vi } from "vite-plus/test";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 
@@ -14,7 +16,7 @@ vi.mock("../database/init.ts", () => ({
   createScheduledTask: vi.fn(),
   updateScheduledTask: vi.fn(),
   getServer: vi.fn(),
-  getActiveServer: vi.fn().mockResolvedValue(null),
+  getCurrentServer: vi.fn().mockResolvedValue(null),
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 

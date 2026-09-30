@@ -1,5 +1,5 @@
 import { createLogger } from "../utils/logger.ts";
-import { getActiveServer, getSetting } from "../database/init.ts";
+import { getCurrentServer, getSetting } from "../database/init.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 
 type DiskReading = { total: number; free: number };
@@ -26,7 +26,7 @@ export const WARNING_PERCENT = 90;
 export const CRITICAL_PERCENT = 95;
 
 export async function resolveSaveVolumePath(): Promise<string | null> {
-  const activeServer = await getActiveServer();
+  const activeServer = await getCurrentServer();
   if (activeServer?.zomboidDataPath) return activeServer.zomboidDataPath as string;
   return ((await getSetting("zomboidDataPath")) || null) as string | null;
 }

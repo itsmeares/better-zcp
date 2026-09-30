@@ -10,8 +10,9 @@ vi.mock("../database/init.ts", () => ({
   setSetting: async (key, value) => {
     settings.set(key, value);
   },
-  getDb: async () => db,
-  commitNow: async () => {},
+  getAdmin: async () => structuredClone(db.data.users[0] ?? null),
+  createAdmin: async user => { db.data.users.push(structuredClone(user)); },
+  saveAdmin: async user => { db.data.users[0] = structuredClone(user); },
 }));
 
 const { default: authService } = await import("../services/auth.ts");
@@ -130,7 +131,7 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
   it("grants a freshly created administrator the persisted role on authenticated requests", async () => {
     db.data.users = [];
     const created = await authService.createAdmin("newadmin", "test-password");
-    expect(db.data.users[0]).toMatchObject({ id: created.id, role: "admin", roleId: "role-admin" });
+    expect(db.data.users[0]).toMatchObject({ id: created.id, role: "admin" });
 
     const token = authService.generateAccessToken(db.data.users[0]);
     await expect(authService.authenticateApiRequest(`Bearer ${token}`)).resolves.toMatchObject({

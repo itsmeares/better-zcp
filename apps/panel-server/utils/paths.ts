@@ -21,7 +21,7 @@ const configPath = process.env.PANEL_PATHS_CONFIG_PATH
 interface DataPaths {
   dataDir: string;
   logsDir: string;
-  /** The pre-SQLite database location, kept for explicit legacy import checks. */
+  /** Panel database in this data directory. */
   dbPath: string;
   configPath: string;
 }
@@ -107,7 +107,7 @@ export function getDataPaths(): DataPaths {
   currentPaths = {
     dataDir,
     logsDir,
-    dbPath: path.join(dataDir, 'db.json'),
+    dbPath: path.join(dataDir, 'panel.sqlite'),
     configPath
   };
 
@@ -227,7 +227,7 @@ export async function setDataPaths(
           copyDirSync(current.dataDir, newDataDir);
           filesMoved.data = true;
 
-          const databaseFiles = ['db.sqlite', 'db.json'];
+          const databaseFiles = ['panel.sqlite'];
           const sourceHasDatabase = databaseFiles.some((name) =>
             fs.existsSync(path.join(current.dataDir, name)),
           );

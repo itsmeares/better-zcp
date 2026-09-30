@@ -9,7 +9,8 @@ import { createLogger } from "../utils/logger.ts";
 import {
   getSetting,
   setSetting,
-  getDb,
+  getAdmin,
+  getServers,
   getDatabaseFilePath,
 } from "../database/init.ts";
 import { getDataPaths } from "../utils/paths.ts";
@@ -1216,9 +1217,8 @@ export class PanelUpdateChecker {
     const databaseName = path.basename(info.dbPath);
     if (fs.existsSync(info.dbPath)) {
       try {
-        const parsed = (await getDb()).data;
-        info.databaseUsers = Array.isArray(parsed.users) ? parsed.users.length : 0;
-        info.databaseServers = Array.isArray(parsed.servers) ? parsed.servers.length : 0;
+        info.databaseUsers = await getAdmin() ? 1 : 0;
+        info.databaseServers = (await getServers()).length;
         info.databaseReadable = true;
       } catch (err: any) {
         info.databaseReadable = false;
@@ -1232,30 +1232,8 @@ export class PanelUpdateChecker {
       }
     } else {
       info.databaseReadable = false;
-      const legacyDatabasePath = dataPaths.dbPath;
-      if (
-        legacyDatabasePath !== info.dbPath &&
-        fs.existsSync(legacyDatabasePath)
-      ) {
-        const message =
-          `Legacy data/${path.basename(legacyDatabasePath)} was found, but this release uses ` +
-          `${databaseName}. Run the explicit legacy database importer before applying the update.`;
-        addPreflightMessage(
-          blockers,
-          blockerDetails,
-          "updates.preflight.databaseUnreadable",
-          { error: message },
-          message,
-        );
-      } else {
-        addPreflightMessage(
-          warnings,
-          warningDetails,
-          "updates.preflight.databaseMissing",
-          {},
-          `No data/${databaseName} was found beside the running panel. This looks like a fresh install; verify the data folder before applying the update.`,
-        );
-      }
+      addPreflightMessage(warnings, warningDetails, "updates.preflight.databaseMissing", {},
+        `No data/${databaseName} was found beside the running panel. Verify the data folder before applying the update.`);
     }
 
     const assetName = isWindows

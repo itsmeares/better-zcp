@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({})),
+  getCurrentServer: vi.fn(async () => ({})),
 }));
 
 vi.mock("../services/managedContainer.ts", () => ({

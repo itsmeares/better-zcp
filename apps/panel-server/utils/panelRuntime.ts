@@ -1,28 +1,29 @@
-type PanelRuntime = Record<string, any>;
+import { currentServerId } from "./serverScope.ts";
 
-// API handlers read services from the initialized Node process.
-const PANEL_RUNTIME_KEY = "__better_zcp_panel_runtime__";
-type RuntimeGlobal = typeof globalThis & {
-  [PANEL_RUNTIME_KEY]?: PanelRuntime;
-};
+type Services = Record<string, any>;
+let panel: Services | undefined;
+const servers = new Map<string, Services>();
 
-const runtimeGlobal = globalThis as RuntimeGlobal;
-
-export function setPanelRuntime(nextRuntime: PanelRuntime): void {
-  runtimeGlobal[PANEL_RUNTIME_KEY] = nextRuntime;
+export function setPanelRuntime(services: Services): void {
+  panel = services;
 }
-
-export function getPanelRuntime(): PanelRuntime {
-  const runtime = runtimeGlobal[PANEL_RUNTIME_KEY];
-  if (!runtime) throw new Error("Panel runtime is not initialized");
-  return runtime;
+export function setServerRuntime(
+  id: string | number,
+  services: Services,
+): void {
+  servers.set(String(id), services);
 }
-
-export function setPanelDatabase(database: unknown): void {
-  const runtime = runtimeGlobal[PANEL_RUNTIME_KEY];
-  if (runtime) runtime.database = database;
+export function removeServerRuntime(id: string | number): void {
+  servers.delete(String(id));
 }
-
-export function getPanelDatabase<T>(): T | undefined {
-  return runtimeGlobal[PANEL_RUNTIME_KEY]?.database as T | undefined;
+export function getServerRuntimes(): Services[] {
+  return [...servers.values()];
+}
+export function getPanelRuntime(): Services {
+  if (!panel) throw new Error("Panel runtime is not initialized");
+  const id = currentServerId();
+  if (!id) return panel;
+  const server = servers.get(id);
+  if (!server) throw new Error(`Server runtime ${id} is not initialized`);
+  return { ...panel, ...server };
 }

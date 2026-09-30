@@ -1,8 +1,8 @@
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import type { Request, Response } from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
-import { getActiveServer } from "../database/init.ts";
-import panelBridge from "../services/panelBridge.ts";
+import { getCurrentServer } from "../database/init.ts";
 import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 import { getActiveLifecycleOperation } from "../services/lifecycleCoordinator.ts";
@@ -15,7 +15,7 @@ function errorMessage(error: unknown): string {
 
 export async function handleActiveServerStatus(req: Request, res: Response) {
   try {
-    const server = await getActiveServer();
+    const server = await getCurrentServer();
     if (!server) {
       return res.status(404).json({ error: "No active server configured" });
     }
@@ -53,9 +53,9 @@ export async function handleActiveServerStatus(req: Request, res: Response) {
         connecting: !!(rconService?.connecting || rconService?.reconnecting),
       },
       bridge: {
-        configured: !!panelBridge.bridgePath,
-        running: !!panelBridge.isRunning,
-        modConnected: panelBridge.isModConnected ? panelBridge.isModConnected() : false,
+        configured: !!getPanelRuntime().panelBridge.bridgePath,
+        running: !!getPanelRuntime().panelBridge.isRunning,
+        modConnected: getPanelRuntime().panelBridge.isModConnected ? getPanelRuntime().panelBridge.isModConnected() : false,
       },
       lifecycleOperation: getActiveLifecycleOperation(),
     });

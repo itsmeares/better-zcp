@@ -64,7 +64,7 @@ describe("setDataPaths: path validation", () => {
 describe("setDataPaths: moveFiles defaults to false", () => {
   it("does NOT copy files when moveFiles is omitted entirely, even though the old dataDir has real content", async () => {
     const oldDir = freshDir("old-data-default");
-    fs.writeFileSync(path.join(oldDir, "db.json"), "{}");
+    fs.writeFileSync(path.join(oldDir, "panel.sqlite"), "{}");
     const pin = await setDataPaths({ dataDir: oldDir }, false);
     expect(pin.success).toBe(true);
 
@@ -72,14 +72,14 @@ describe("setDataPaths: moveFiles defaults to false", () => {
     const result = await setDataPaths({ dataDir: newDir });
     expect(result.success).toBe(true);
     expect(result.filesMoved.data).toBe(false);
-    expect(fs.existsSync(path.join(newDir, "db.json"))).toBe(false);
+    expect(fs.existsSync(path.join(newDir, "panel.sqlite"))).toBe(false);
   });
 });
 
 describe("setDataPaths: the happy path really moves the database", () => {
-  it("moves db.json to the new location when moveFiles is explicitly true", async () => {
+  it("moves panel.sqlite to the new location when moveFiles is explicitly true", async () => {
     const oldDir = freshDir("old-data-move");
-    fs.writeFileSync(path.join(oldDir, "db.json"), '{"real":true}');
+    fs.writeFileSync(path.join(oldDir, "panel.sqlite"), '{"real":true}');
     const pin = await setDataPaths({ dataDir: oldDir }, false);
     expect(pin.success).toBe(true);
 
@@ -87,14 +87,14 @@ describe("setDataPaths: the happy path really moves the database", () => {
     const result = await setDataPaths({ dataDir: newDir }, true);
     expect(result.success).toBe(true);
     expect(result.filesMoved.data).toBe(true);
-    expect(fs.readFileSync(path.join(newDir, "db.json"), "utf8")).toBe('{"real":true}');
+    expect(fs.readFileSync(path.join(newDir, "panel.sqlite"), "utf8")).toBe('{"real":true}');
   });
 });
 
 describe("setDataPaths: break-verify the anti-lockout guard against a real, reproducible partial-copy", () => {
-  it("aborts BEFORE switching paths if the copy silently leaves db.json behind (e.g. a permissions quirk on that one file)", async () => {
+  it("aborts BEFORE switching paths if the copy silently leaves panel.sqlite behind (e.g. a permissions quirk on that one file)", async () => {
     const oldDir = freshDir("old-data-partial");
-    fs.writeFileSync(path.join(oldDir, "db.json"), '{"important":true}');
+    fs.writeFileSync(path.join(oldDir, "panel.sqlite"), '{"important":true}');
     const pin = await setDataPaths({ dataDir: oldDir }, false);
     expect(pin.success).toBe(true);
     const pinnedDataDir = getDataPaths().dataDir;
@@ -102,7 +102,7 @@ describe("setDataPaths: break-verify the anti-lockout guard against a real, repr
     const newDir = freshDir("new-data-partial");
     const realCopyFileSync = fs.copyFileSync.bind(fs);
     const copySpy = vi.spyOn(fs, "copyFileSync").mockImplementation((src, dest, ...rest) => {
-      if (path.basename(src) === "db.json") return undefined;
+      if (path.basename(src) === "panel.sqlite") return undefined;
       return realCopyFileSync(src, dest, ...rest);
     });
 
@@ -116,7 +116,7 @@ describe("setDataPaths: break-verify the anti-lockout guard against a real, repr
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/did not produce a database file/i);
     expect(getDataPaths().dataDir).toBe(pinnedDataDir);
-    expect(fs.existsSync(path.join(oldDir, "db.json"))).toBe(true);
+    expect(fs.existsSync(path.join(oldDir, "panel.sqlite"))).toBe(true);
   });
 
   it("does NOT false-positive when the source legitimately has no database yet", async () => {

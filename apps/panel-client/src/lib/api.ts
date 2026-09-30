@@ -1,3 +1,4 @@
+import { apiUrl, getSelectedServerId } from "./serverSelection";
 import { reportClientWarning } from "./client-errors";
 import { ApiError } from "./ApiError";
 export { ApiError } from "./ApiError";
@@ -5,7 +6,6 @@ import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import type { LifecycleState } from "./serverStatus";
 
-const API_BASE = "/api";
 
 function getAuthToken(): string | null {
   return getAccessToken();
@@ -352,7 +352,7 @@ async function fetchWithRetry(
 export function apiFetch(endpoint: string, options?: RequestInit,
   retries?: number,
 ) {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, options, retries);
+  return fetchWithRetry(apiUrl(endpoint), options, retries);
 }
 
 async function handleResponse<T = any>(response: Response): Promise<T> {
@@ -391,7 +391,7 @@ function apiGet<T = any>(
   options?: RequestInit & { timeout?: number },
   retries?: number,
 ): Promise<T> {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, options, retries).then((response) =>
+  return fetchWithRetry(apiUrl(endpoint), options, retries).then((response) =>
     handleResponse<T>(response),
   );
 }
@@ -401,7 +401,7 @@ function apiPost<T = any>(
   body?: unknown,
   options?: { signal?: AbortSignal },
 ): Promise<T> {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, {
+  return fetchWithRetry(apiUrl(endpoint), {
     method: "POST",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -410,13 +410,13 @@ function apiPost<T = any>(
 }
 
 function apiDelete<T = any>(endpoint: string): Promise<T> {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, { method: "DELETE" }).then(
+  return fetchWithRetry(apiUrl(endpoint), { method: "DELETE" }).then(
     (response) => handleResponse<T>(response),
   );
 }
 
 function apiPut<T = any>(endpoint: string, body?: unknown): Promise<T> {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, {
+  return fetchWithRetry(apiUrl(endpoint), {
     method: "PUT",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -429,7 +429,7 @@ function apiRoute<T = any>(
   data?: object,
 ): Promise<T> {
   const values: Record<string, unknown> = { ...data };
-  const endpoint = path.replace(/:([a-zA-Z]\w*)/g, (_match, key: string) => {
+  let endpoint = path.replace(/:([a-zA-Z]\w*)/g, (_match, key: string) => {
     const value = values[key];
     if (typeof value !== "string" && typeof value !== "number") {
       throw new Error(`Missing URL parameter: ${key}`);
@@ -437,6 +437,9 @@ function apiRoute<T = any>(
     delete values[key];
     return encodeURIComponent(String(value));
   });
+  const target = (data as {serverId?: unknown; expectedServerId?: unknown})?.expectedServerId
+    ?? (method === "PUT" && path.startsWith("/scheduler/tasks/") ? undefined : (data as {serverId?: unknown})?.serverId);
+  if (typeof target === "string" || typeof target === "number") endpoint = apiUrl(endpoint, String(target)).slice(4);
   if (method === "GET") {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(values)) {
@@ -446,7 +449,7 @@ function apiRoute<T = any>(
   }
   if (method === "POST") return apiPost(endpoint, data === undefined ? undefined : values);
   if (method === "PUT") return apiPut(endpoint, data === undefined ? undefined : values);
-  return fetchWithRetry(`${API_BASE}${endpoint}`, {
+  return fetchWithRetry(apiUrl(endpoint), {
     method: "DELETE",
     headers: Object.keys(values).length ? { "Content-Type": "application/json" } : undefined,
     body: Object.keys(values).length ? JSON.stringify(values) : undefined,
@@ -466,8 +469,8 @@ export const serverApi = {
   getNetworkInterfaces: (): Promise<{
     interfaces: { name: string; address: string }[];
   }> => apiRoute("GET", "/server/network-interfaces"),
-  start: () => apiRoute("POST", "/server/start"),
-  stop: () => apiRoute("POST", "/server/stop"),
+  start: (serverId = getSelectedServerId()) => apiPost(apiUrl("/server/start", serverId).slice(4)),
+  stop: (serverId = getSelectedServerId()) => apiPost(apiUrl("/server/stop", serverId).slice(4)),
   forceStop: () => apiRoute("POST", "/server/force-stop"),
   restart: (warningMinutes?: number) =>
     apiRoute("POST", "/server/restart", { warningMinutes }),
@@ -700,7 +703,7 @@ export const schedulerApi = {
     command: string,
     serverId?: string | number,
   ) =>
-    apiRoute("POST", "/scheduler/tasks", { name, cronExpression, command, serverId }),
+    apiPost(serverId == null ? "/scheduler/tasks" : `/servers/${encodeURIComponent(String(serverId))}/scheduler/tasks`, { name, cronExpression, command, serverId }),
   updateTask: (
     id: number,
     name: string,
@@ -1211,8 +1214,9 @@ export interface ComposedServerStatus {
 }
 
 export const serversApi = {
-  getAll: () =>
-    apiRoute("GET", "/servers") as Promise<{
+  getAll: () => {
+    const selectedId = getSelectedServerId();
+    return apiGet("/servers").then(data => ({ ...data, servers: data.servers.map((server: ServerInstance) => ({ ...server, isActive: String(server.id) === selectedId })) })) as Promise<{
       servers: ServerInstance[];
       lifecycleCapabilities?: {
         supported: boolean;
@@ -1220,13 +1224,14 @@ export const serversApi = {
         containerized: boolean;
         providers: Array<"direct" | "systemd" | "openrc">;
       };
-    }>,
+    }>;
+  },
   getActive: () =>
-    apiRoute("GET", "/servers/active") as Promise<{ server: ServerInstance }>,
+    apiGet(`/servers/${encodeURIComponent(getSelectedServerId() || "none")}`) as Promise<{ server: ServerInstance }>,
   getComposedStatus: (options?: { retries?: number }) =>
-    apiGet("/servers/active/status", undefined, options?.retries) as Promise<ComposedServerStatus>,
+    apiGet(`/servers/${encodeURIComponent(getSelectedServerId() || "none")}/status`, undefined, options?.retries) as Promise<ComposedServerStatus>,
   getResolvedActive: async () => {
-    const data = (await apiRoute("GET", "/servers")) as { servers: ServerInstance[] };
+    const data = await serversApi.getAll();
     return {
       server:
         data.servers.find((server) => server.isActive) ??
@@ -1300,11 +1305,6 @@ export const serversApi = {
   delete: (id: string | number) =>
     apiRoute("DELETE", "/servers/:id", { id: String(id) }) as Promise<{
       success: boolean;
-      message: string;
-    }>,
-  activate: (id: string | number) =>
-    apiRoute("POST", "/servers/:id/activate", { id: String(id) }) as Promise<{
-      server: ServerInstance;
       message: string;
     }>,
   steamUpdate: (
@@ -2004,7 +2004,7 @@ export const backupApi = {
     apiRoute("POST", "/backup/delete-older-than", { days, expectedServerId }),
 
   getDownloadUrl: (name: string): string =>
-    `${API_BASE}/backup/download/${encodeURIComponent(name)}`,
+    apiUrl(`/backup/download/${encodeURIComponent(name)}`),
 
   uploadBackup: async (
     file: File,
@@ -2015,13 +2015,14 @@ export const backupApi = {
     size: number;
     message: string;
   }> => {
+    const uploadUrl = apiUrl("/backup/upload");
     const stallTimeoutMs = 3 * 60 * 1000;
     const sendOnce = (
       token: string | null,
     ): Promise<{ status: number; payload: any }> =>
       new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${API_BASE}/backup/upload`, true);
+        xhr.open("POST", uploadUrl, true);
         if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.setRequestHeader("Content-Type", "application/zip");
         xhr.setRequestHeader("X-Backup-Filename", file.name);
@@ -2082,7 +2083,7 @@ export const backupApi = {
 
   downloadBackup: async (name: string): Promise<void> => {
     const response = await fetchWithRetry(
-      `${API_BASE}/backup/download/${encodeURIComponent(name)}`,
+      apiUrl(`/backup/download/${encodeURIComponent(name)}`),
     );
     if (!response.ok) {
       const payload = await parseResponseBody(response);
@@ -2144,8 +2145,8 @@ export const serversDetectApi = {
     maxDepth?: number;
   }): Promise<Record<string, unknown>> =>
     apiPost("/servers/auto-scan", params) as Promise<Record<string, unknown>>,
-  deleteFiles: (path: string): Promise<unknown> =>
-    apiPost("/server/delete-files", { path, confirm: true }),
+  deleteFiles: (path: string, serverId: string | number): Promise<unknown> =>
+    apiRoute("POST", "/server/delete-files", { path, confirm: true, serverId }),
 };
 
 export interface UpdateStatus {
@@ -2335,16 +2336,9 @@ export interface DiskSpaceReport {
   panelData: DiskSpaceStatus;
 }
 
-export interface CircuitBreakerStatus {
-  open: boolean;
-  lastError: string | null;
-  failCount: number;
-  cooldownEndsAt: string | null;
-}
-
 export interface StorageHealth {
   diskSpace: DiskSpaceReport;
-  circuitBreaker: CircuitBreakerStatus;
+  database: { ok: boolean; error: string | null };
 }
 
 export interface RuntimeInfo {

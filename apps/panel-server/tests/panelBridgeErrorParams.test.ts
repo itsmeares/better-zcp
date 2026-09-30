@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => null),
+  getCurrentServer: vi.fn(async () => null),
   getServer: vi.fn(),
   getAllSettings: vi.fn(async () => ({})),
   setSetting: vi.fn(),
@@ -12,7 +12,10 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const { getServer } = await import("../database/init.ts");
-const { default: bridge } = await import("../services/panelBridge.ts");
+const { PanelBridge } = await import("../services/panelBridge.ts");
+const bridge = new PanelBridge();
+const { setPanelRuntime } = await import("../utils/panelRuntime.ts");
+setPanelRuntime({ panelBridge: bridge });
 const { default: router } = await import("../routes/panelBridge.ts");
 
 function createResponse() {

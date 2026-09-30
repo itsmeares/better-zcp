@@ -6,9 +6,7 @@ overrides:
   vite@*: "catalog:"
 
 allowBuilds:
-  cpu-features: true
   esbuild: true
-  ssh2: true
 
 minimumReleaseAgeExclude:
   - "@tanstack/history@1.162.2"

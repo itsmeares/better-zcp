@@ -1,5 +1,5 @@
 import fs from "fs";
-import { getActiveServer } from "../database/init.ts";
+import { getCurrentServer } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("ConfigMutationGuard");
@@ -53,7 +53,7 @@ export async function requireStoppedForLocalConfigMutation(
   next: Next,
 ): Promise<unknown> {
   try {
-    const activeServer = (await getActiveServer()) as
+    const activeServer = (await getCurrentServer()) as
       ServerProfile | null | undefined;
 
     const { pathsConfigured, pathsExistLocally } =
@@ -111,7 +111,7 @@ export async function warnRunningForLocalConfigEdit(
   next: Next,
 ): Promise<unknown> {
   try {
-    const activeServer = (await getActiveServer()) as
+    const activeServer = (await getCurrentServer()) as
       | ServerProfile
       | null
       | undefined;

@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getActiveServer, getSetting } from "../database/init.ts";
+import { getCurrentServer, getSetting } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("LogTailer");
@@ -60,7 +60,7 @@ export class LogTailer extends EventEmitter {
 
   async findLogPath(): Promise<void> {
     try {
-      const activeServer = await getActiveServer();
+      const activeServer = await getCurrentServer();
       const homeDir = os.homedir();
       let basePath = process.env.PZ_SAVE_PATH ||
         (homeDir ? path.join(homeDir, "Zomboid") : "");

@@ -2,12 +2,12 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const getServer = vi.fn();
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 const logServerEvent = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   getServer,
-  getActiveServer,
+  getCurrentServer,
   getServers: vi.fn().mockResolvedValue([]),
   getSetting: vi.fn(),
   setSetting: vi.fn(),
@@ -36,7 +36,7 @@ describe("ServerManager managed Linux lifecycle", () => {
 
   beforeEach(() => {
     getServer.mockReset().mockResolvedValue(profile);
-    getActiveServer.mockReset().mockResolvedValue(profile);
+    getCurrentServer.mockReset().mockResolvedValue(profile);
     logServerEvent.mockReset().mockResolvedValue(undefined);
     lifecycle = {
       serviceName: "zomboid-panel-server-managed-1",
@@ -47,7 +47,7 @@ describe("ServerManager managed Linux lifecycle", () => {
         message: "ok",
       }),
     };
-    manager = new ServerManager({ lifecycleFactory: () => lifecycle });
+    manager = new ServerManager({ lifecycleFactory: () => lifecycle, serverId: profile.id });
     manager.sleep = vi.fn().mockResolvedValue(undefined);
   });
 

@@ -14,8 +14,9 @@ vi.mock("../database/init.ts", () => ({
   setSetting: async (key, value) => {
     settings.set(key, value);
   },
-  getDb: async () => db,
-  commitNow: async () => {},
+  getAdmin: async () => db.data.users[0] ?? null,
+  saveAdmin: async user => { db.data.users[0] = user; },
+  createAdmin: async user => { db.data.users.push(user); },
 }));
 
 vi.mock("../utils/paths.ts", () => ({
@@ -65,7 +66,7 @@ async function runRoute(routePath, method, req, res) {
   await next();
 }
 
-describe("authService.init() — JWT secret migration out of db.json", () => {
+describe("authService.init() — persistent JWT signing key", () => {
   beforeEach(() => {
     settings.clear();
     db.data.users = [];
@@ -78,7 +79,7 @@ describe("authService.init() — JWT secret migration out of db.json", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("fresh install: generates a key, no legacy value to clear from db.json", async () => {
+  it("fresh install generates a signing key file", async () => {
     await authService.init();
     expect(authService.jwtSecret).toMatch(/^[0-9a-f]{128}$/);
     expect(settings.get("jwtSecret")).toBeUndefined();
@@ -87,45 +88,8 @@ describe("authService.init() — JWT secret migration out of db.json", () => {
     );
   });
 
-  it("existing install: a legacy jwtSecret in db.json migrates verbatim and is cleared from db.json", async () => {
-    settings.set("jwtSecret", "legacy-value-from-old-install");
 
-    await authService.init();
 
-    expect(authService.jwtSecret).toBe("legacy-value-from-old-install");
-    expect(settings.get("jwtSecret")).toBeNull();
-    expect(fs.readFileSync(getJwtSecretPath(), "utf8")).toBe(
-      "legacy-value-from-old-install",
-    );
-  });
-
-  it("a token signed before the upgrade still authenticates a real request after migration — zero forced logout", async () => {
-    const legacySecret = "legacy-value-that-already-signed-a-real-session";
-    settings.set("jwtSecret", legacySecret);
-    const tokenIssuedBeforeUpgrade = jwt.sign(
-      { userId: "u1", tokenGen: 0 },
-      legacySecret,
-    );
-    db.data.users = [{ id: "u1", username: "admin", role: "admin", tokenGen: 0 }];
-
-    await authService.init();
-
-    const authenticated = await authService.authenticateAccessToken(
-      tokenIssuedBeforeUpgrade,
-    );
-    expect(authenticated).not.toBeNull();
-    expect(authenticated.username).toBe("admin");
-  });
-
-  it("JWT_SECRET env override wins even with a legacy db.json value present, and still clears the stale db.json copy", async () => {
-    process.env.JWT_SECRET = "env-pinned-secret-that-is-at-least-32-chars";
-    settings.set("jwtSecret", "legacy-value-now-unused");
-
-    await authService.init();
-
-    expect(authService.jwtSecret).toBe("env-pinned-secret-that-is-at-least-32-chars");
-    expect(settings.get("jwtSecret")).toBeNull();
-  });
 
   it("fails loud and does not start when jwt.secret exists but is unreadable — never silently regenerates", async () => {
     fs.mkdirSync(getJwtSecretPath());

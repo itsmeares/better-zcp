@@ -14,9 +14,9 @@ import {
   sanitizeServerResponseList,
 } from "../utils/sanitize.ts";
 import { testRconConnection } from "../services/rcon.ts";
-import { classifyServerProcess, serverProcessDescriptor } from "../services/serverManager.ts";
+import { scanDedicatedServerProcesses, classifyServerProcess, serverProcessDescriptor } from "../services/serverManager.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.ts";
-import { getServers, getServer, getActiveServer } from "../database/init.ts";
+import { getServers, getServer } from "../database/init.ts";
 import { handleActiveServerStatus } from "./serverStatus.ts";
 import { handleCreateFromDiscovery, handleDiscoverMounts } from "./discovery.ts";
 import {
@@ -35,7 +35,6 @@ import {
 } from "../services/linuxServiceLifecycle.ts";
 import {
   activateLifecycleProvider,
-  activateServerProfile,
   createServerProfile,
   deleteServerProfile,
   getLifecycleTemplateForServer,
@@ -89,9 +88,10 @@ function profileRuntime(req: Request) {
     serverManager: get("serverManager"),
     modChecker: get("modChecker"),
     logTailer: get("logTailer"),
-    io: get("io"),
+    io: get("panelIo"),
     refreshWorkshopChecker: get("refreshWorkshopChecker"),
     autoInstallBridgeIfNeeded: get("autoInstallBridgeIfNeeded"),
+    stop: get("stop"),
   };
 }
 
@@ -486,10 +486,9 @@ router.get("/", async (req, res) => {
 
 router.get("/status", async (req, res) => {
   try {
-    const serverManager = req.app.get("serverManager");
+    const serverManager = { _scanDedicatedServerProcesses: scanDedicatedServerProcesses };
     const servers = (await getServers()) as JsonRecord[];
-    const activeServer = await getActiveServer();
-    const activeId = activeServer?.id || null;
+
 
     let matched: JsonRecord[] = [];
     let detectionError: string | null = null;
@@ -523,7 +522,6 @@ router.get("/status", async (req, res) => {
             name: server.name,
             running: status.running,
             pid: null,
-            isActive: server.id === activeId,
             provider: server.lifecycleProvider,
             stateUnknown: Boolean(status.scanFailed),
           };
@@ -533,7 +531,6 @@ router.get("/status", async (req, res) => {
             name: server.name,
             running: false,
             pid: null,
-            isActive: server.id === activeId,
             provider: server.lifecycleProvider,
             stateUnknown: true,
             error: sanitizeError(errorMessage(error)),
@@ -544,14 +541,12 @@ router.get("/status", async (req, res) => {
         try {
           const signal = await resolveDockerHostSignal(server, req.app.get("dockerClient"));
           return {
-            id: server.id, name: server.name, running: signal.running, pid: null,
-            isActive: server.id === activeId, provider: "docker",
+            id: server.id, name: server.name, running: signal.running, pid: null, provider: "docker",
             stateUnknown: signal.scanFailed,
           };
         } catch (error: unknown) {
           return {
-            id: server.id, name: server.name, running: false, pid: null,
-            isActive: server.id === activeId, provider: "docker",
+            id: server.id, name: server.name, running: false, pid: null, provider: "docker",
             stateUnknown: true, error: sanitizeError(errorMessage(error)),
           };
         }
@@ -565,7 +560,6 @@ router.get("/status", async (req, res) => {
         name: server.name,
         running: Boolean(owned),
         pid: owned?.pid || null,
-        isActive: server.id === activeId,
         provider: "direct",
         stateUnknown: Boolean(detectionError) || (!owned && unknown),
       };
@@ -621,23 +615,9 @@ router.get("/rcon-status", async (req, res) => {
   }
 });
 
-router.get("/active", async (req, res) => {
-  try {
-    const server = await getActiveServer();
-    if (!server) {
-      return res.status(404).json({ error: "No active server configured" });
-    }
-    res.json({
-      server: sanitizeServerResponse(server),
-    });
-  } catch (error: unknown) {
-    log.error(`Failed to get active server: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.get("/active/status", handleActiveServerStatus);
 router.get("/discover-mounts", handleDiscoverMounts);
+
+router.get("/:id/status", handleActiveServerStatus);
 
 router.get("/:id", async (req, res) => {
   try {
@@ -709,6 +689,7 @@ router.post("/", async (req, res) => {
       );
 
     const server = await createServerProfile(config, { allowIniImport });
+    req.app?.get?.("panelIo")?.emit?.("servers:changed", { created: server.id });
     res.status(201).json({
       server: sanitizeServerResponse(server),
       message: "Server created successfully",
@@ -750,21 +731,5 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/activate", async (req, res) => {
-    try {
-      const result = await activateServerProfile(
-        req.params.id,
-        profileRuntime(req),
-      );
-      res.json({
-        ...result,
-        server: sanitizeServerResponse(result.server),
-      });
-    } catch (error: unknown) {
-      if (sendProfileError(error, res)) return;
-      log.error(`Failed to activate server: ${errorMessage(error)}`);
-      res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-    }
-});
 
 export default router;

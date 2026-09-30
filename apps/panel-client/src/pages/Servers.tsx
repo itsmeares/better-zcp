@@ -1,3 +1,4 @@
+import { selectServer } from "@/lib/serverSelection"
 import {
   useState,
   useEffect,
@@ -765,7 +766,7 @@ export default function Servers() {
   useEffect(() => {
     if (!socket) return
 
-    const handleActiveServerChanged = () => {
+    const handleServersChanged = () => {
       void queryClient.invalidateQueries({ queryKey: panelQueryKeys.servers })
       void queryClient.invalidateQueries({
         queryKey: panelQueryKeys.activeServer,
@@ -781,9 +782,9 @@ export default function Servers() {
       })
     }
 
-    socket.on('activeServerChanged', handleActiveServerChanged)
+    socket.on('servers:changed', handleServersChanged)
     return () => {
-      socket.off('activeServerChanged', handleActiveServerChanged)
+      socket.off('servers:changed', handleServersChanged)
     }
   }, [socket, queryClient])
 
@@ -1053,7 +1054,7 @@ export default function Servers() {
 
       setActivating(server.id)
       try {
-        await serversApi.activate(server.id)
+        await selectServer(server.id)
         toast({
           title: 'Server Activated',
           description: 'Now managing: ' + String(server.name),
@@ -1113,10 +1114,7 @@ export default function Servers() {
     async (server: ServerInstance) => {
       setServerActionPending(`start-${server.id}`)
       try {
-        if (!server.isActive) {
-          await serversApi.activate(server.id)
-        }
-        await serverApi.start()
+        await serverApi.start(String(server.id))
         const confirmed = await waitForActionState(server.id, true)
         toast({
           title: confirmed ? 'Server Started' : 'Server Start Requested',
@@ -1151,10 +1149,7 @@ export default function Servers() {
       if (!ok) return
       setServerActionPending(`stop-${server.id}`)
       try {
-        if (!server.isActive) {
-          await serversApi.activate(server.id)
-        }
-        await serverApi.stop()
+        await serverApi.stop(String(server.id))
         const confirmed = await waitForActionState(server.id, false)
         toast({
           title: confirmed ? 'Server Stopped' : 'Server Stop Requested',
@@ -1197,6 +1192,7 @@ export default function Servers() {
         try {
           const result = (await serversDetectApi.deleteFiles(
             deleteServer.installPath,
+            deleteServer.id,
           )) as { error?: string }
           if (result?.error) {
             toast({
@@ -1487,7 +1483,7 @@ export default function Servers() {
 
     setClearingInstall(true)
     try {
-      const result = (await serversDetectApi.deleteFiles(installFolder)) as {
+      const result = (await serversDetectApi.deleteFiles(installFolder, steamOperation.server.id)) as {
         error?: string
       }
       if (result?.error) {
@@ -1633,7 +1629,7 @@ export default function Servers() {
       })
 
       if (createResult.server?.id) {
-        await serversApi.activate(createResult.server.id)
+        await selectServer(createResult.server.id)
       }
 
       toast({

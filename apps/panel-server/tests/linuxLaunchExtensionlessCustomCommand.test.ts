@@ -6,9 +6,10 @@ import path from "path";
 
 const isLinux = process.platform !== "win32";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
+  getServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -41,9 +42,9 @@ const { ServerManager } = await import("../services/serverManager.ts");
       fs.writeFileSync(scriptPath, "#!/bin/sh\nsleep 30\n", "utf8");
       fs.chmodSync(scriptPath, 0o644);
 
-      getActiveServer.mockResolvedValue({
-        serverName: "LinuxNoExtLauncher",
-        serverPath: tmpDir,
+      getCurrentServer.mockResolvedValue({
+        id: "test-server", serverName: "LinuxNoExtLauncher",
+        installPath: tmpDir,
         startCommand: scriptPath,
       });
     });
@@ -63,7 +64,7 @@ const { ServerManager } = await import("../services/serverManager.ts");
     it("chmods the extensionless command before spawning it, so a non-executable file still starts", async () => {
       expect(fs.statSync(scriptPath).mode & 0o111).toBe(0);
 
-      const manager = new ServerManager();
+      const manager = new ServerManager({serverId: "test-server"});
       const result = await manager.startServer({ skipRunningCheck: true });
       spawnedPid = manager.serverProcess?.pid;
 

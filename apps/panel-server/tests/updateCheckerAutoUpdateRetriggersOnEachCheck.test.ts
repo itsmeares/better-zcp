@@ -14,7 +14,7 @@ vi.mock("../database/init.ts", () => ({
     return null;
   }),
   setSetting: vi.fn(async () => {}),
-  getActiveServer: vi.fn(async () => ({
+  getCurrentServer: vi.fn(async () => ({
     id: "server-1",
     installPath: "/opt/pzserver",
   })),

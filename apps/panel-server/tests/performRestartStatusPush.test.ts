@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 
 const getServer = vi.fn();
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn().mockResolvedValue([]),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),
   logScheduleExecution: vi.fn().mockResolvedValue(),
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServer: (...args) => getServer(...args),
 }));
 
@@ -34,13 +34,13 @@ function makeRconService(overrides = {}) {
 describe("performRestart() pushes server:status at its own verified transitions", () => {
   afterEach(() => {
     getServer.mockReset();
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
     runManagedLifecycle.mockReset();
   });
 
   it("native restart: emits {running:false} once the old process is confirmed stopped, then {running:true} once the new one is confirmed up", async () => {
     getServer.mockResolvedValue(null);
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     runManagedLifecycle.mockResolvedValue({ handled: false });
 
     const emit = vi.fn();
@@ -72,7 +72,7 @@ describe("performRestart() pushes server:status at its own verified transitions"
 
   it("Docker-managed restart reports startup and readiness without a fake stopped moment", async () => {
     getServer.mockResolvedValue(null);
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     runManagedLifecycle.mockResolvedValue({ handled: true, success: true });
 
     const emit = vi.fn();
@@ -98,7 +98,7 @@ describe("performRestart() pushes server:status at its own verified transitions"
 
   it("does not throw when no io has been wired (setIo never called)", async () => {
     getServer.mockResolvedValue(null);
-    getActiveServer.mockResolvedValue(null);
+    getCurrentServer.mockResolvedValue(null);
     runManagedLifecycle.mockResolvedValue({ handled: true, success: true });
 
     const scheduler = new Scheduler({}, {});

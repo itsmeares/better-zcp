@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { resolvePanelLocalIp } from "./utils/panelInfo.ts";
 import readline from "readline";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
@@ -22,7 +23,7 @@ import {
   logBanner,
   logReady,
 } from "./utils/logger.ts";
-import { setPanelRuntime } from "./utils/panelRuntime.ts";
+import { setPanelRuntime, getServerRuntimes } from "./utils/panelRuntime.ts";
 const log = createLogger("Panel");
 
 type AnyRecord = Record<string, any>;
@@ -53,13 +54,12 @@ type PendingUpdateInspection = {
 };
 import {
   initDatabase,
-  getActiveServer,
+  getCurrentServer,
   getAllSettings,
   getServers,
+  getServer,
   getSetting,
   setSetting,
-  flushWrites,
-  flushForShutdown,
   closeDatabase,
   recordPerformanceSnapshot,
   logServerEvent,
@@ -153,10 +153,7 @@ process.stderr?.on?.("error", (err) => {
 // Global error handlers.
 function fatalExit(label: string, err: unknown) {
   log.error(`${label}:`, err);
-  Promise.race([
-    flushWrites().catch(() => {}),
-    new Promise((resolve) => setTimeout(resolve, 3000)),
-  ]).finally(() => process.exit(1));
+  try { closeDatabase(); } finally { process.exit(1); }
 }
 
 process.on("uncaughtException", (error) => {
@@ -177,46 +174,8 @@ async function gracefulShutdown(signal: string) {
   log.info(`Received ${signal}, shutting down gracefully...`);
 
   try {
-    stopPlayerPolling();
-
-    stopPerfPolling();
-
-    if (scheduler) {
-      scheduler.stopAllJobs?.();
-    }
-
-    if (modChecker) {
-      modChecker.stop();
-    }
-
-    if (logTailer) {
-      logTailer.stopWatching();
-    }
-
-    if (updateChecker) {
-      updateChecker.stop();
-    }
-
-    if (panelUpdateChecker) {
-      panelUpdateChecker.stop();
-    }
-
-    if (diskMonitor) {
-      diskMonitor.stop();
-    }
-
-    if (panelBridge?.isRunning) {
-      panelBridge.stop();
-    }
-
-    if (rconService) {
-      rconService.stopAutoReconnect();
-      if (rconService.connected) {
-        await rconService.disconnect();
-      }
-    }
-
-    await flushForShutdown();
+    for (const runtime of getServerRuntimes()) await runtime.stop();
+    panelUpdateChecker.stop();
     closeDatabase();
 
     httpServer.close(() => {
@@ -240,7 +199,9 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 import { addLogToBuffer } from "./utils/logBuffer.ts";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
-import panelBridge from "./services/panelBridge.ts";
+import { startServerRuntime } from "./services/serverRuntime.ts";
+import { currentServerId, runForServer } from "./utils/serverScope.ts";
+export { classifyStartupProcessState, probeRconFallbackIfConfigured } from "./services/serverDetection.ts";
 
 dotenv.config();
 
@@ -488,283 +449,12 @@ function refreshInlineScriptCspHash() {
   inlineScriptCspSources = computeInlineScriptCspHashes(cspClientDistPath, log);
   return inlineScriptCspSources.join(" ");
 }
-const rconService = new RconService();
-const serverManager = new ServerManager();
 const dockerClient = new DockerClient();
 setDockerClient(dockerClient);
-const modChecker = new ModChecker();
-const logTailer = new LogTailer();
-const scheduler = new Scheduler(rconService, serverManager);
-const backupService = new BackupService();
-
-rconService.setServerManager(serverManager);
-scheduler.setBackupService(backupService);
-
-scheduler.setIo(io);
-
-rconService.startAutoReconnect();
-
-async function findPanelBridgePath() {
-  const activeServer = await getActiveServer();
-  if (!activeServer) {
-    return { error: "No active server configured" };
-  }
-
-  const serverName = activeServer.serverName || activeServer.name;
-  if (!serverName) {
-    return { error: "Server name not configured" };
-  }
-
-  const settings = await getAllSettings();
-  if (settings?.panelBridge?.bridgePath) {
-    const savedPath = settings.panelBridge.bridgePath;
-    const statusFile = path.join(savedPath, "status.json");
-    if (fs.existsSync(statusFile)) {
-      return { path: savedPath, source: "database (saved)", serverName };
-    }
-  }
-
-  const possiblePaths: Array<{ p: string; source: string; priority: number }> = [];
-
-  const safeReadDir = (dirPath: string): string[] => {
-    try {
-      return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
-    } catch (e: any) {
-      return [];
-    }
-  };
-
-  if (activeServer.zomboidDataPath) {
-    possiblePaths.push({
-      p: path.join(
-        activeServer.zomboidDataPath,
-        "Lua",
-        "panelbridge",
-        serverName,
-      ),
-      source: "zomboidDataPath/Lua (cachedir)",
-      priority: 1,
-    });
-  }
-
-  if (activeServer.installPath) {
-    const parentDir = path.dirname(activeServer.installPath);
-    const parentContents = safeReadDir(parentDir);
-    for (const item of parentContents) {
-      if (item.startsWith("Server_files") || item.match(/Server.*files/i)) {
-        possiblePaths.push({
-          p: path.join(parentDir, item, "Lua", "panelbridge", serverName),
-          source: `${item}/Lua`,
-          priority: 2,
-        });
-      }
-    }
-  }
-
-  if (activeServer.installPath) {
-    possiblePaths.push({
-      p: path.join(activeServer.installPath, "Lua", "panelbridge", serverName),
-      source: "installPath/Lua",
-      priority: 3,
-    });
-  }
-
-  for (const { p, source } of possiblePaths) {
-    const statusFile = path.join(p, "status.json");
-    if (fs.existsSync(statusFile)) {
-      return { path: p, source, serverName };
-    }
-  }
-
-  for (const { p, source } of possiblePaths) {
-    const initFile = path.join(p, ".init");
-    if (fs.existsSync(initFile)) {
-      return { path: p, source: `${source} (.init)`, serverName };
-    }
-  }
-
-  for (const { p, source } of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return { path: p, source: `${source} (exists)`, serverName };
-    }
-  }
-
-  if (possiblePaths.length > 0) {
-    possiblePaths.sort((a, b) => a.priority - b.priority);
-    const bestPath = possiblePaths[0];
-    return {
-      path: bestPath.p,
-      source: `${bestPath.source} (expected)`,
-      serverName,
-      notCreated: true,
-    };
-  }
-
-  return {
-    error: "No valid bridge path could be determined",
-    searchedPaths: possiblePaths.map((x) => x.p),
-    serverName,
-  };
-}
-
-async function tryStartPanelBridge(trigger: string = "unknown"): Promise<boolean> {
-  if (panelBridge.isRunning) {
-    log.debug(`Already running (trigger: ${trigger})`);
-    return true;
-  }
-
-  const result = await findPanelBridgePath();
-
-  if (result.error) {
-    log.debug(`${result.error} (trigger: ${trigger})`);
-    return false;
-  }
-
-  const autoUpdateEnabled =
-    (await getSetting("panelBridgeAutoUpdate")) !== false;
-  if (!autoUpdateEnabled) {
-    log.debug("PanelBridge mod auto-update disabled by setting");
-  }
-  if (autoUpdateEnabled)
-    try {
-      const activeServer = await getActiveServer();
-      const installDir = resolveInstallDir(activeServer);
-      if (installDir) {
-        const destLuaFile = path.join(
-          installDir,
-          "media",
-          "lua",
-          "server",
-          "PanelBridge.lua",
-        );
-
-        let srcContent = getEmbeddedPanelBridgeLua();
-
-        if (!srcContent) {
-          const possibleModPaths = [
-            path.join(__dirname, "..", "..", "integrations", "panelbridge", "PanelBridge"),
-            path.join(path.dirname(process.execPath), "pz-mod", "PanelBridge"),
-            path.join(process.cwd(), "pz-mod", "PanelBridge"),
-          ];
-          for (const modPath of possibleModPaths) {
-            const candidate = path.join(
-              modPath,
-              "media",
-              "lua",
-              "server",
-              "PanelBridge.lua",
-            );
-            if (fs.existsSync(candidate)) {
-              srcContent = fs.readFileSync(candidate, "utf8");
-              break;
-            }
-          }
-        }
-
-        if (srcContent && fs.existsSync(destLuaFile)) {
-          const destContent = fs.readFileSync(destLuaFile, "utf8");
-          const srcVersion = (srcContent.match(/VERSION\s*=\s*"([^"]+)"/) ||
-            [])[1];
-          const destVersion = (destContent.match(/VERSION\s*=\s*"([^"]+)"/) ||
-            [])[1];
-          if (
-            srcVersion &&
-            destVersion &&
-            compareModVersions(srcVersion, destVersion) > 0
-          ) {
-            writeLuaAtomic(destLuaFile, srcContent);
-            log.info(
-              `PanelBridge mod auto-updated on server: ${destVersion} → ${srcVersion}`,
-            );
-          }
-        } else if (srcContent && !fs.existsSync(destLuaFile)) {
-          writeLuaAtomic(destLuaFile, srcContent);
-          log.info("PanelBridge mod auto-installed to server");
-        }
-      }
-    } catch (modError: any) {
-      log.warn(`Auto-update mod check failed: ${modError.message}`);
-    }
-
-  try {
-    panelBridge.configure(result.path, true);
-    panelBridge.start();
-    log.info(`Started from ${result.source} (trigger: ${trigger})`);
-    return true;
-  } catch (error: any) {
-    log.warn(`Failed to start - ${error.message}`);
-    return false;
-  }
-}
-
-rconService.on("connected", async () => {
-  try {
-    log.info("RCON connected - checking PanelBridge...");
-    rconConnectedAt = Date.now();
-    lastPlayerList = [];
-    await tryStartPanelBridge("rcon-connected");
-  } catch (err: any) {
-    log.debug(`RCON-connected PanelBridge check failed: ${err.message}`);
-  }
-});
-
-rconService.on("disconnected", () => {
-  setTimeout(() => {
-    checkServerStatusNow("RCON disconnect");
-  }, 3000);
-});
-
-panelBridge.on("started", () => {
-  io.emit("panelBridge:status", {
-    isRunning: true,
-    bridgePath: panelBridge.bridgePath,
-  });
-});
-
-panelBridge.on("stopped", () => {
-  io.emit("panelBridge:status", {
-    isRunning: false,
-    bridgePath: panelBridge.bridgePath,
-  });
-});
-
-panelBridge.on("modStatus", (status) => {
-  io.emit("panelBridge:modStatus", status);
-});
-
-panelBridge.on("configured", ({ path }) => {
-  io.emit("panelBridge:configured", { bridgePath: path });
-});
-
-backupService.setServerManager(serverManager);
-backupService.setRconService(rconService);
-
-const updateChecker = new UpdateChecker(io, { rconService, serverManager });
-
 const panelUpdateChecker = new PanelUpdateChecker(io);
-
-const diskMonitor = new DiskMonitor(io);
-setPanelRuntime({
-  authService,
-  rconService,
-  serverManager,
-  dockerClient,
-  modChecker,
-  refreshWorkshopChecker,
-  autoInstallBridgeIfNeeded,
-  backupService,
-  scheduler,
-  panelBridge,
-  io,
-  checkServerStatusNow,
-  updateChecker,
-  logTailer,
-  panelUpdateChecker,
-  refreshCorsConfig,
-  getCorsDebugSnapshot,
-  clearCorsBlockedOrigins,
-  diskMonitor,
-});
+setPanelRuntime({ authService, dockerClient, panelUpdateChecker, io, panelIo: io,
+  refreshCorsConfig, getCorsDebugSnapshot, clearCorsBlockedOrigins,
+  ensureServerRuntime: (id: string) => startServerRuntime(id, io, dockerClient) });
 
 function resolveSourcePanelVersion(): string {
   return JSON.parse(
@@ -836,19 +526,6 @@ function inspectPendingPanelUpdate(): PendingUpdateInspection {
   });
 }
 
-export function classifyStartupProcessState(
-  processState: AnyRecord | null | undefined,
-) {
-  if (
-    !processState ||
-    processState.scanFailed ||
-    typeof processState.running !== "boolean"
-  ) {
-    return { running: false, unknown: true };
-  }
-  return { running: processState.running, unknown: false };
-}
-
 panelRequestHandler = createPanelRequestHandler(panelWebOptions, {
   isAllowedOrigin,
   recordCorsBlock,
@@ -857,8 +534,13 @@ panelRequestHandler = createPanelRequestHandler(panelWebOptions, {
 
 io.use(async (socket: AuthenticatedSocket, next) => {
   try {
+    const serverId = socket.handshake.auth?.serverId;
+    if (serverId != null) {
+      if (typeof serverId !== "string" || !/^[A-Za-z0-9_-]+$/.test(serverId) || !await getServer(serverId)) return next(new Error("Server not found"));
+      socket.data.serverId = serverId;
+    }
     const needsSetup = await authService.needsSetup();
-    if (needsSetup) return next();
+    if (needsSetup) return next(new Error("First-run setup required"));
 
     const authEnabled = await authService.isAuthEnabled();
     if (!authEnabled) {
@@ -897,35 +579,37 @@ io.on("connection", (socket: AuthenticatedSocket) => {
     socket.join(`user:${socket.user.userId}`);
   }
 
+  if (socket.data.serverId) socket.join(`server:${socket.data.serverId}`);
+
   socket.on("disconnect", () => {
     log.debug(`Client disconnected: ${socket.id}`);
   });
 
   socket.on("subscribe:status", () => {
-    socket.join("server-status");
+    if (socket.user && socket.data.serverId) socket.join(`server:${socket.data.serverId}:server-status`);
   });
 
   socket.on("subscribe:players", async () => {
     if (!socket.user) return;
-    socket.join("players");
+    if (socket.user && socket.data.serverId) socket.join(`server:${socket.data.serverId}:players`);
   });
 
   socket.on("subscribe:logs", async () => {
     if (!socket.user) return;
-    socket.join("logs");
+    if (socket.user && socket.data.serverId) socket.join(`server:${socket.data.serverId}:logs`);
   });
 
   socket.on("subscribe:perf", async () => {
     if (!socket.user) return;
-    socket.join("perf");
+    if (socket.user && socket.data.serverId) socket.join(`server:${socket.data.serverId}:perf`);
   });
   socket.on("unsubscribe:perf", () => {
-    socket.leave("perf");
+    if (socket.data.serverId) socket.leave(`server:${socket.data.serverId}:perf`);
   });
 
   socket.on("subscribe:rcon", async () => {
     if (!socket.user) return;
-    socket.join("rcon-live");
+    if (socket.user && socket.data.serverId) socket.join(`server:${socket.data.serverId}:rcon-live`);
   });
 });
 
@@ -941,339 +625,12 @@ onSessionRevoked(evictRevokedSockets);
 
 onLog((logEntry) => {
   addLogToBuffer(logEntry.level, logEntry.message, logEntry.source);
-  io.to("logs").emit("log:entry", logEntry);
+  const serverId = currentServerId();
+  if (serverId) io.to(`server:${serverId}:logs`).emit("log:entry", logEntry);
+  else io.emit("panel:log", logEntry);
 });
 
 import { getDataPaths } from "./utils/paths.ts";
-
-let lastPlayerList: PlayerRecord[] = [];
-let playerPollingInterval: ReturnType<typeof setInterval> | null = null;
-let rconConnectedAt = 0;
-
-function startPlayerPolling() {
-  if (playerPollingInterval) {
-    clearInterval(playerPollingInterval);
-  }
-  lastPlayerList = [];
-
-  playerPollingInterval = setInterval(async () => {
-    try {
-      if (!rconService.connected) {
-        return;
-      }
-
-      if (rconConnectedAt && Date.now() - rconConnectedAt < 15000) {
-        return;
-      }
-
-      const result = (await rconService.getPlayers()) as {
-        success?: boolean;
-        players?: PlayerRecord[];
-      };
-      if (result.success && result.players) {
-
-        const currentNames = result.players
-          .map((p) => p.name)
-          .sort()
-          .join(",");
-        const lastNames = lastPlayerList
-          .map((p) => p.name)
-          .sort()
-          .join(",");
-
-        if (currentNames !== lastNames) {
-          lastPlayerList = result.players;
-          io.to("players").emit("players:update", result.players);
-          log.debug(
-            `Player list updated: ${result.players.length} players online`,
-          );
-        }
-      }
-    } catch (error: any) {
-      log.debug(`Player polling error: ${error.message}`);
-    }
-  }, 5000);
-  if (playerPollingInterval.unref) playerPollingInterval.unref();
-
-  log.info("Server-side player polling started (5s interval)");
-}
-
-function stopPlayerPolling() {
-  if (playerPollingInterval) {
-    clearInterval(playerPollingInterval);
-    playerPollingInterval = null;
-    log.info("Server-side player polling stopped");
-  }
-}
-
-let perfPollingInterval: ReturnType<typeof setInterval> | null = null;
-let lastCpuInfo: { total: number; idle: number } | null = null;
-
-function getCpuUsage() {
-  const cpus = os.cpus();
-  const total = cpus.reduce(
-    (acc, cpu) => {
-      const t = Object.values(cpu.times).reduce((a, b) => a + b, 0);
-      const idle = cpu.times.idle;
-      return { total: acc.total + t, idle: acc.idle + idle };
-    },
-    { total: 0, idle: 0 },
-  );
-
-  if (!lastCpuInfo) {
-    lastCpuInfo = total;
-    return 0;
-  }
-
-  const totalDiff = total.total - lastCpuInfo.total;
-  const idleDiff = total.idle - lastCpuInfo.idle;
-  lastCpuInfo = total;
-  return totalDiff > 0 ? Math.round((1 - idleDiff / totalDiff) * 100) : 0;
-}
-
-let lastDiskSample: { at: number; value: SwapSnapshot | null } = {
-  at: 0,
-  value: null,
-};
-const DISK_SAMPLE_INTERVAL_MS = 60000;
-
-async function getDiskSnapshot() {
-  const now = Date.now();
-  if (now - lastDiskSample.at < DISK_SAMPLE_INTERVAL_MS) {
-    return lastDiskSample.value;
-  }
-  lastDiskSample.at = now;
-  try {
-    const activeServer = await getActiveServer();
-    const target =
-      activeServer?.zomboidDataPath ||
-      activeServer?.installPath ||
-      getDataPaths().dataDir;
-    const disk = await getDiskFree(target);
-    lastDiskSample.value =
-      disk && disk.total > 0
-        ? { total: disk.total, used: disk.total - disk.free }
-        : null;
-  } catch {
-    lastDiskSample.value = null;
-  }
-  return lastDiskSample.value;
-}
-
-let lastSwapSample: { at: number; value: SwapSnapshot | null } = {
-  at: 0,
-  value: null,
-};
-const SWAP_SAMPLE_INTERVAL_MS = 60000;
-
-async function getSwapSnapshot() {
-  const now = Date.now();
-  if (now - lastSwapSample.at < SWAP_SAMPLE_INTERVAL_MS) {
-    return lastSwapSample.value;
-  }
-  lastSwapSample.at = now;
-  try {
-    lastSwapSample.value = await getSwapInfo();
-  } catch {
-    lastSwapSample.value = null;
-  }
-  return lastSwapSample.value;
-}
-
-async function getPzProcessMemory(): Promise<number | null> {
-  return new Promise<number | null>((resolve) => {
-    const timeout = setTimeout(() => resolve(null), 5000);
-
-    if (process.platform === "win32") {
-      exec(
-        'powershell -Command "Get-CimInstance Win32_Process -Filter \\"Name=\'java.exe\'\\" | Select-Object ProcessId, WorkingSetSize, CommandLine | Format-List"',
-        { timeout: 8000 },
-        (err, stdout) => {
-          clearTimeout(timeout);
-          if (err || !stdout) return resolve(null);
-
-          const blocks = stdout
-            .split(/ProcessId/)
-            .filter((b) =>
-              b.toLowerCase().includes("zombie.network.gameserver"),
-            );
-          if (blocks.length === 0) return resolve(null);
-
-          const wsMatch = blocks[0].match(/WorkingSetSize\s*:\s*(\d+)/i);
-          if (!wsMatch) return resolve(null);
-
-          resolve(parseInt(wsMatch[1], 10));
-        },
-      );
-    } else {
-      exec(
-        'ps aux --no-headers | grep -i "zombie.network.[Gg]ame[Ss]erver" | grep -v grep',
-        { timeout: 5000 },
-        (err, stdout) => {
-          clearTimeout(timeout);
-          if (err || !stdout || !stdout.trim()) return resolve(null);
-
-          const parts = stdout.trim().split(/\s+/);
-          if (parts.length >= 6) {
-            const rssKB = parseInt(parts[5], 10);
-            if (!isNaN(rssKB)) return resolve(rssKB * 1024);
-          }
-          resolve(null);
-        },
-      );
-    }
-  });
-}
-
-async function startPerfPolling() {
-  if (perfPollingInterval) clearInterval(perfPollingInterval);
-
-
-  getCpuUsage();
-
-  perfPollingInterval = setInterval(async () => {
-    try {
-      const hostMem = os.totalmem();
-      const hostMemFree = os.freemem();
-      const cpuUsage = getCpuUsage();
-      const panelMem = process.memoryUsage();
-
-      const pzMemBytes = await getPzProcessMemory();
-      const disk = await getDiskSnapshot();
-      const swap = await getSwapSnapshot();
-
-      const snapshot = {
-        hostMemTotal: hostMem,
-        hostMemUsed: hostMem - hostMemFree,
-        cpuUsage,
-        hostDiskTotal: disk?.total ?? null,
-        hostDiskUsed: disk?.used ?? null,
-        hostSwapTotal: swap?.total ?? null,
-        hostSwapUsed: swap?.used ?? null,
-        panelMemHeap: panelMem.heapUsed,
-        panelMemRss: panelMem.rss,
-        pzMemUsed: pzMemBytes,
-        memoryUsed: panelMem.heapUsed,
-        memoryTotal: panelMem.heapTotal,
-        playerCount: lastPlayerList.length,
-        serverRunning: serverManager.isRunning,
-      };
-
-      await recordPerformanceSnapshot(snapshot);
-
-      io.to("perf").emit("perf:snapshot", snapshot);
-    } catch (err: any) {
-      log.debug(`Perf snapshot failed: ${err.message}`);
-    }
-  }, 60000);
-
-  if (perfPollingInterval.unref) perfPollingInterval.unref();
-  log.info("Performance polling started (60s interval)");
-}
-
-function stopPerfPolling() {
-  if (perfPollingInterval) {
-    clearInterval(perfPollingInterval);
-    perfPollingInterval = null;
-  }
-}
-
-let statusWatchdogInterval: ReturnType<typeof setInterval> | null = null;
-let lastKnownRunning: boolean | null = null;
-
-export async function getObservedServerRunning() {
-  return resolveObservedServerRunning(serverManager, rconService, dockerClient);
-}
-
-export async function checkServerStatusNow(
-  detectionReason: string = "watchdog",
-): Promise<void> {
-  try {
-    const running = await getObservedServerRunning();
-    if (running === null) {
-      log.debug("Status watchdog: server state is unknown; skipping transition");
-      return;
-    }
-    if (lastKnownRunning !== null && running !== lastKnownRunning) {
-      log.info(
-        `Server state changed → ${running ? "running" : "stopped"} (detected by ${detectionReason})`,
-      );
-      io.emit("server:status", {
-        ...(running ? { running: true } : { running: false }),
-        state: running
-          ? rconService.connected
-            ? "ready"
-            : "running-not-ready"
-          : "stopped",
-      });
-      if (!running) {
-        logServerEvent(
-          "server_stop",
-          `Server process exited (detected by ${detectionReason})`,
-        );
-      }
-    }
-    lastKnownRunning = running;
-  } catch (err: any) {
-    log.debug(`Status watchdog error: ${err.message}`);
-  }
-}
-
-function startStatusWatchdog() {
-  if (statusWatchdogInterval) clearInterval(statusWatchdogInterval);
-  statusWatchdogInterval = setInterval(checkServerStatusNow, 10000);
-  if (statusWatchdogInterval.unref) statusWatchdogInterval.unref();
-  log.info("Server status watchdog started (10s interval)");
-}
-
-export async function probeRconFallbackIfConfigured(
-  activeServer: AnyRecord | null | undefined,
-  rconServiceInstance: AnyRecord,
-  timeoutMs: number,
-): Promise<boolean> {
-  if (!activeServer) {
-    log.debug(
-      "No server configured yet — skipping RCON port fallback probe",
-    );
-    return false;
-  }
-
-  let rconPortOccupied = false;
-  try {
-    await rconServiceInstance.loadConfig();
-    const rconHost = rconServiceInstance.config.host || "127.0.0.1";
-    const rconPort = rconServiceInstance.config.port || 27015;
-    const portOpen = await rconServiceInstance.checkPortOpen(
-      rconHost,
-      rconPort,
-    );
-    if (portOpen) {
-      rconPortOccupied = true;
-      log.info(
-        `RCON port ${rconHost}:${rconPort} is open even though process check failed — connecting...`,
-      );
-      try {
-        await Promise.race([
-          rconServiceInstance.connect(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("RCON connection timeout")),
-              timeoutMs,
-            ),
-          ),
-        ]);
-        if (rconServiceInstance.connected) {
-          log.info("RCON connected via port fallback probe");
-        }
-      } catch (e: any) {
-        log.debug(`Fallback RCON connect failed: ${e.message}`);
-      }
-    }
-  } catch (e: any) {
-    log.debug(`Fallback RCON probe error: ${e.message}`);
-  }
-  return rconPortOccupied;
-}
 
 export async function logExposureWarningIfNeeded({
   needsSetup,
@@ -1294,12 +651,7 @@ export async function logExposureWarningIfNeeded({
       : `http://<this-machine>:${boundPort}`;
 
   if (needsSetup) {
-    loggerInstance.warn(
-      "SECURITY: no admin account exists yet. Every API route is open to " +
-        `anyone who can reach ${reachableUrl} until first-run setup completes. ` +
-        "If this port reaches the internet, complete setup immediately or " +
-        "block the port at your firewall/router until you have.",
-    );
+    loggerInstance.warn(`First-run setup: no admin account exists yet. Open ${reachableUrl} and use the setup token printed below.`);
     return;
   }
 
@@ -1426,232 +778,12 @@ async function start(): Promise<void> {
 
     logSection("Services");
 
-    await logTailer.init();
-
-    logTailer.on("playerDeath", async (data) => {
-      try {
-        const { logPlayerAction } = await import("./database/init.ts");
-        logPlayerAction(
-          data.player,
-          "death",
-          `${data.pvp ? "PvP" : "non-pvp"} death at (${data.location})`,
-        ).catch((err) =>
-          log.debug(`Failed to log player death: ${err.message}`),
-        );
-      } catch (err: any) {
-        log.debug(`playerDeath DB log failed: ${err.message}`);
-      }
-      io.emit("player:death", data);
-    });
-
-    await scheduler.init();
-
-    await modChecker.init(scheduler, serverManager, io);
-
-    if (modChecker.workshopAcfPath) {
-      modChecker.start();
-    } else {
-      log.info(
-        "Mod checker: Workshop ACF not found — configure server install path",
-      );
+    for (const server of await getServers()) {
+      await startServerRuntime(server.id, io, dockerClient);
     }
-
-    logSection("Server Detection");
-
-    (async () => {
-      try {
-        await new Promise((r) => setTimeout(r, 1000));
-
-        const bridgeStarted = await tryStartPanelBridge("startup");
-        if (bridgeStarted) {
-          log.info(
-            "PanelBridge started on startup (found active bridge files)",
-          );
-        }
-
-        const timeoutMs = 15000;
-        const activeServer = await getActiveServer();
-        const processState = (await Promise.race([
-          serverManager.getServerProcessDetails(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Server check timeout")),
-              timeoutMs,
-            ),
-          ),
-        ])) as AnyRecord | null;
-        const startupState = classifyStartupProcessState(processState);
-        const processStateUnknown = startupState.unknown;
-        const isRunning = startupState.running;
-
-        if (isRunning || processStateUnknown) {
-          log.info(
-            processStateUnknown
-              ? "PZ server process state is unknown - trying RCON but will not auto-start"
-              : "PZ server detected running - connecting RCON...",
-          );
-
-          let connected = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              await Promise.race([
-                rconService.connect(),
-                new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error("RCON connection timeout")),
-                    timeoutMs,
-                  ),
-                ),
-              ]);
-
-              if (rconService.connected) {
-                connected = true;
-                log.info(`RCON connected on attempt ${attempt}`);
-                break;
-              }
-            } catch (e: any) {
-              log.debug(
-                `RCON connection attempt ${attempt} failed: ${e.message}`,
-              );
-              if (attempt < 3) {
-                await new Promise((r) => setTimeout(r, 5000));
-              }
-            }
-          }
-
-          if (!connected) {
-            log.warn(
-              "RCON connection failed after 3 attempts - auto-reconnect will keep trying",
-            );
-          }
-        } else {
-          log.info("PZ server not detected running on startup");
-
-          const rconPortOccupied = await probeRconFallbackIfConfigured(
-            activeServer,
-            rconService,
-            timeoutMs,
-          );
-
-          const autoStartServer = await getSetting("autoStartServer");
-          if (autoStartServer === true || autoStartServer === "true") {
-            if (rconPortOccupied) {
-              log.warn(
-                "Auto-start SKIPPED: RCON port is already occupied — a PZ server is likely running but process detection failed. Will keep retrying RCON connection.",
-              );
-              rconService.setServerStarting(false);
-            } else {
-              const lifecycleLock = acquireLifecycleLock(
-                "startup-auto-start",
-                activeServer?.name || activeServer?.serverName || null,
-              );
-              if (!lifecycleLock) {
-                log.warn(
-                  "Auto-start skipped because another lifecycle operation is in progress",
-                );
-                rconService.setServerStarting(false);
-              } else {
-                log.info("Auto-start is enabled - starting PZ server...");
-
-                rconService.setServerStarting(true);
-
-                try {
-                  const startResult = await serverManager.startServer({
-                    serverId: (activeServer?.id as string | null | undefined) ?? null,
-                  });
-                  if (startResult.success) {
-                    log.info("PZ server auto-started successfully");
-
-                    log.info("PZ server auto-started - Monitoring RCON port...");
-
-                    await rconService.loadConfig();
-                    const rconHost = rconService.config.host || "127.0.0.1";
-                    const rconPort = rconService.config.port || 27015;
-
-                    const maxPollAttempts = 60;
-
-                    for (let i = 0; i < maxPollAttempts; i++) {
-                      const portOpen = await rconService.checkPortOpen(
-                        rconHost,
-                        rconPort,
-                      );
-
-                      if (!portOpen) {
-                        if (i % 6 === 0) {
-                          log.debug(
-                            `Auto-start: Waiting for RCON port ${rconHost}:${rconPort}...`,
-                          );
-                        }
-                        await new Promise((r) => setTimeout(r, 5000));
-                        continue;
-                      }
-
-                      log.info(`RCON port open! Attempting connection...`);
-
-                      try {
-                        await Promise.race([
-                          rconService.connect(),
-                          new Promise((_, reject) =>
-                            setTimeout(
-                              () => reject(new Error("RCON connection timeout")),
-                              15000,
-                            ),
-                          ),
-                        ]);
-
-                        if (rconService.connected) {
-                          log.info(
-                            "RCON connected successfully after auto-start",
-                          );
-                          break;
-                        } else {
-                          log.debug(
-                            "RCON port open but connection failed, retrying in 5s...",
-                          );
-                          await new Promise((r) => setTimeout(r, 5000));
-                        }
-                      } catch (e: any) {
-                        log.debug(
-                          `Auto-start RCON connection failed: ${e.message}`,
-                        );
-                        await new Promise((r) => setTimeout(r, 5000));
-                      }
-                    }
-                  } else {
-                    log.error(
-                      "Failed to auto-start PZ server:",
-                      startResult.error,
-                    );
-                  }
-                } catch (e: any) {
-                  log.error("Error during auto-start:", e.message);
-                } finally {
-                  rconService.setServerStarting(false);
-                  lifecycleLock.release();
-                }
-              }
-            }
-          }
-
-          // Even if server isn't running, Panel Bridge might have stale files
-          // The bridge will detect the mod isn't responding via status timestamp
-        }
-      } catch (e: any) {
-        log.debug(`Startup initialization: ${e.message}`);
-      }
-    })();
-
-    startPlayerPolling();
-
-    startPerfPolling();
-
-    startStatusWatchdog();
-
-    updateChecker.start();
 
     panelUpdateChecker.start(_pkgVersion);
 
-    diskMonitor.start();
 
     const savedPort = await getSetting("panelPort");
     const PORT = resolvePanelPort(process.env.PORT || savedPort || 3001, {
@@ -1671,12 +803,12 @@ async function start(): Promise<void> {
         activePanelPort = boundPort;
         if (listenPort === 0 && !process.env.PORT && boundPort !== PORT) {
           await setSetting("panelPort", boundPort);
-          await flushWrites();
+
           log.warn(`Configured panel port ${PORT} was unavailable; switched to free port ${boundPort} and saved it.`);
         }
         logSection("Ready");
         const urls = [{ label: "Local: ", url: `http://localhost:${boundPort}` }];
-        const localIp = await serverManager.getLocalIp();
+        const localIp = await resolvePanelLocalIp(getSetting);
         if (localIp !== "127.0.0.1") {
           urls.push({
             label: "Network:",
@@ -1696,7 +828,7 @@ async function start(): Promise<void> {
           ) {
             log.info("Update bundle startup acknowledged; previous artifacts removed");
             await setSetting("preUpdateDataBackupPath", null);
-            await flushWrites();
+
 
             if (process.platform !== "win32") {
               const linuxExeDir = path.dirname(process.execPath);

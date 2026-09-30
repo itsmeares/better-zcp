@@ -225,18 +225,9 @@ describe("local password reset hardening", () => {
 describe("logout and export trust boundaries", () => {
   it("rejects forged refresh tokens even when the payload matches a real session", async () => {
     const dbModule = await import("../database/init.ts");
-    const getDbSpy = vi.spyOn(dbModule, "getDb").mockResolvedValue({
-      data: {
-        users: [
-          {
-            id: "user-1",
-            username: "admin",
-            role: "admin",
-            tokenGen: 0,
-            refreshSessions: [{ id: "real-session", expiresAt: new Date(Date.now() + 60_000).toISOString() }],
-          },
-        ],
-      },
+    const getDbSpy = vi.spyOn(dbModule, "getAdmin").mockResolvedValue({
+      id: "user-1", username: "admin", role: "admin", tokenGen: 0,
+      refreshSessions: [{ id: "real-session", expiresAt: new Date(Date.now()+60_000).toISOString() }],
     });
 
     authService.jwtSecret = "test-secret";
@@ -252,8 +243,8 @@ describe("logout and export trust boundaries", () => {
 describe("config mutation guard", () => {
   it("fails closed when server state cannot be verified", async () => {
     const dbModule = await import("../database/init.ts");
-    const getActiveServerSpy = vi
-      .spyOn(dbModule, "getActiveServer")
+    const getCurrentServerSpy = vi
+      .spyOn(dbModule, "getCurrentServer")
       .mockResolvedValue(null);
 
     try {
@@ -269,7 +260,7 @@ describe("config mutation guard", () => {
         expect.objectContaining({ code: "SERVER_STATE_UNKNOWN" }),
       );
     } finally {
-      getActiveServerSpy.mockRestore();
+      getCurrentServerSpy.mockRestore();
     }
   });
 
@@ -281,8 +272,8 @@ describe("config mutation guard", () => {
     expect(fs.existsSync(missingPath)).toBe(false);
 
     const dbModule = await import("../database/init.ts");
-    const getActiveServerSpy = vi
-      .spyOn(dbModule, "getActiveServer")
+    const getCurrentServerSpy = vi
+      .spyOn(dbModule, "getCurrentServer")
       .mockResolvedValue({
         installPath: missingPath,
       });
@@ -302,7 +293,7 @@ describe("config mutation guard", () => {
         expect.objectContaining({ code: "SERVER_STATE_UNKNOWN" }),
       );
     } finally {
-      getActiveServerSpy.mockRestore();
+      getCurrentServerSpy.mockRestore();
     }
   });
 });

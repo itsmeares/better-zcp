@@ -3,9 +3,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const getActiveServer = vi.fn();
+const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: (...args) => getActiveServer(...args),
+  getCurrentServer: (...args) => getCurrentServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
@@ -19,7 +19,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
 
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
-    getActiveServer.mockReset();
+    getCurrentServer.mockReset();
   });
 
   function baseServer(overrides = {}) {
@@ -43,7 +43,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
       "utf-8",
     );
 
-    getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
+    getCurrentServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
     const result = await ensureRconConfigured();
     expect(result).toBe(true);
@@ -65,7 +65,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
       "utf-8",
     );
 
-    getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
+    getCurrentServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
     const result = await ensureRconConfigured();
     expect(result).toBe(true);
@@ -90,7 +90,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
       "utf-8",
     );
 
-    getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
+    getCurrentServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
     const result = await ensureRconConfigured();
     expect(result).toBe(true);
@@ -104,7 +104,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-rcon-"));
     const zomboidDataPath = path.join(root, "Zomboid");
 
-    getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
+    getCurrentServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
     const result = await ensureRconConfigured();
     expect(result).toBe(true);
@@ -128,7 +128,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
     const legacyIni = path.join(zomboidDataPath, "servertest.ini");
     fs.writeFileSync(legacyIni, "FromLegacyPath=true\n", "utf-8");
 
-    getActiveServer.mockResolvedValue(
+    getCurrentServer.mockResolvedValue(
       baseServer({ zomboidDataPath, serverConfigPath: explicitConfigPath }),
     );
 
@@ -153,7 +153,7 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
       "utf-8",
     );
 
-    getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
+    getCurrentServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
     const result = await ensureRconConfigured();
     expect(result).toBe(true);

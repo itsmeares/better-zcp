@@ -1,10 +1,10 @@
-import { getActiveServer } from "../database/init.ts";
+import { getPanelRuntime } from "../utils/panelRuntime.ts";
+import { getCurrentServer } from "../database/init.ts";
 import { resolveProvider } from "./serverStatusModel.ts";
 import {
   resolveDockerHostSignal,
   type DockerControl,
 } from "../services/managedContainer.ts";
-import panelBridge from "../services/panelBridge.ts";
 
 interface ObservedSignals {
   processRunning?: boolean;
@@ -54,14 +54,14 @@ export async function resolveObservedServerRunning(
   rconService: RconServiceLike | null | undefined,
   dockerClient: DockerControl | null | undefined = null,
 ): Promise<boolean | null> {
-  const activeServer = (await getActiveServer()) as ActiveServerLike | null;
+  const activeServer = (await getCurrentServer()) as ActiveServerLike | null;
   const provider = resolveProvider(activeServer);
   if (provider === "docker-local" || provider === "docker-managed") {
     const dockerSignal = await resolveDockerHostSignal(activeServer, dockerClient);
     return isServerObservedRunning({
       processRunning: dockerSignal.running,
       rconConnected: rconService?.connected,
-      bridgeConnected: panelBridge.isModConnected(),
+      bridgeConnected: getPanelRuntime().panelBridge.isModConnected(),
       processScanFailed: dockerSignal.scanFailed,
       hostStateAuthoritative: !dockerSignal.scanFailed,
     });
@@ -75,7 +75,7 @@ export async function resolveObservedServerRunning(
   return isServerObservedRunning({
     processRunning: processDetails?.running,
     rconConnected: rconService?.connected,
-    bridgeConnected: panelBridge.isModConnected(),
+    bridgeConnected: getPanelRuntime().panelBridge.isModConnected(),
     processScanFailed: !processDetails || processDetails.scanFailed,
     hostStateAuthoritative:
       Boolean(processDetails) &&
