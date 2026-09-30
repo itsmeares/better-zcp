@@ -27,7 +27,7 @@ interface ServerSignalInput {
   port?: string | number | null;
 }
 
-interface BridgeSignalInput {
+interface GameIntegrationSignalInput {
   configured?: boolean;
   running?: boolean;
   modConnected?: boolean;
@@ -104,14 +104,14 @@ export function buildServerSignal({
   return { status, label: "RCON", detail };
 }
 
-export function buildBridgeSignal({
+export function buildGameIntegrationSignal({
   configured,
   running,
   modConnected,
-}: BridgeSignalInput = {}): Signal {
-  if (!configured) return { status: "not-installed", label: "PanelBridge", detail: null };
+}: GameIntegrationSignalInput = {}): Signal {
+  if (!configured) return { status: "not-configured", label: "Game integration", detail: null };
   const status = running && modConnected ? "active" : "offline";
-  return { status, label: "PanelBridge", detail: null };
+  return { status, label: "Game integration", detail: null };
 }
 
 export function resolveLifecycleState({
@@ -151,7 +151,7 @@ export function composeServerStatus({
   isRunning,
   scanFailed,
   rcon,
-  bridge,
+  gameIntegration,
   dockerContainer,
   lifecycleOperation,
 }: {
@@ -159,14 +159,14 @@ export function composeServerStatus({
   isRunning?: boolean;
   scanFailed?: boolean;
   rcon?: ServerSignalInput;
-  bridge?: BridgeSignalInput;
+  gameIntegration?: GameIntegrationSignalInput;
   dockerContainer?: DockerContainer | null;
   lifecycleOperation?: string | null;
 } = {}) {
   const provider = resolveProvider(server);
   const host = buildHostSignal(provider, Boolean(isRunning), scanFailed, dockerContainer);
   const serverSignal = buildServerSignal(rcon);
-  const bridgeSignal = buildBridgeSignal(bridge);
+  const gameIntegrationSignal = buildGameIntegrationSignal(gameIntegration);
   const state = resolveLifecycleState({
     hostStatus: host.status,
     rconStatus: serverSignal.status,
@@ -177,7 +177,7 @@ export function composeServerStatus({
     selected: true,
     host,
     server: serverSignal,
-    bridge: bridgeSignal,
+    gameIntegration: gameIntegrationSignal,
     state,
     summary: buildSummary(host, serverSignal),
   };

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vite-plus/test'
 import { backupApi, modsApi, serversApi } from './api'
+import { apiUrl } from './serverSelection'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -37,4 +38,13 @@ it('sends Node API paths, query values, and request bodies', async () => {
       body: { expectedServerId: 'server-a' },
     },
   ])
+})
+
+it('scopes game integration calls to the selected server profile', () => {
+  expect(apiUrl('/game-integration/status', 'server-a')).toBe(
+    '/api/servers/server-a/game-integration/status',
+  )
+  expect(apiUrl('/game-integration/status', null)).toBe(
+    '/api/game-integration/status',
+  )
 })

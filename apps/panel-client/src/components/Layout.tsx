@@ -494,12 +494,13 @@ export default function Layout({ children }: LayoutProps) {
     if (composedStatus) {
       const hostRunning = composedStatus.host.status === 'running'
       const rconConnected = composedStatus.server.status === 'connected'
-      const bridgeActive = composedStatus.bridge.status === 'active'
+      const gameIntegrationActive =
+        composedStatus.gameIntegration.status === 'active'
       const hostUnknown = ['unknown', 'not-applicable'].includes(
         composedStatus.host.status,
       )
       setServerRunState(
-        hostRunning || rconConnected || bridgeActive
+        hostRunning || rconConnected || gameIntegrationActive
           ? 'running'
           : hostUnknown
             ? 'unknown'
@@ -541,12 +542,12 @@ export default function Layout({ children }: LayoutProps) {
       })
     }
     socket.on('server:status', onStatus)
-    socket.on('panelBridge:status', refreshComposedStatus)
-    socket.on('panelBridge:modStatus', refreshComposedStatus)
+    socket.on('gameIntegration:status', refreshComposedStatus)
+    socket.on('gameIntegration:modStatus', refreshComposedStatus)
     return () => {
       socket.off('server:status', onStatus)
-      socket.off('panelBridge:status', refreshComposedStatus)
-      socket.off('panelBridge:modStatus', refreshComposedStatus)
+      socket.off('gameIntegration:status', refreshComposedStatus)
+      socket.off('gameIntegration:modStatus', refreshComposedStatus)
     }
   }, [socket, provider, queryClient])
 

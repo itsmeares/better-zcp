@@ -22,6 +22,7 @@ export async function handleActiveServerStatus(req: Request, res: Response) {
 
     const serverManager = req.app.get("serverManager");
     const rconService = req.app.get("rconService");
+    const gameIntegration = getPanelRuntime().gameIntegration;
     const rconConfig = rconService?.getConfig ? rconService.getConfig() : {};
 
     const provider = resolveProvider(server);
@@ -52,10 +53,10 @@ export async function handleActiveServerStatus(req: Request, res: Response) {
         ...rconConfig,
         connecting: !!(rconService?.connecting || rconService?.reconnecting),
       },
-      bridge: {
-        configured: !!getPanelRuntime().panelBridge.bridgePath,
-        running: !!getPanelRuntime().panelBridge.isRunning,
-        modConnected: getPanelRuntime().panelBridge.isModConnected ? getPanelRuntime().panelBridge.isModConnected() : false,
+      gameIntegration: {
+        configured: !!gameIntegration.getStatus().configured,
+        running: !!gameIntegration.isRunning,
+        modConnected: gameIntegration.isConnected(),
       },
       lifecycleOperation: getActiveLifecycleOperation(),
     });

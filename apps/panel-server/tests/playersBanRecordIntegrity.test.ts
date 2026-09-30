@@ -7,10 +7,6 @@ const removeSteamIdBan = vi.fn();
 vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
-  getPlayerNotes: vi.fn(),
-  getPlayerNote: vi.fn(),
-  upsertPlayerNote: vi.fn(),
-  deletePlayerNote: vi.fn(),
   getPlayerStats: vi.fn(),
   getPlayerStat: vi.fn(),
   getSteamIdBans: vi.fn(),
@@ -19,9 +15,6 @@ vi.mock("../database/init.ts", () => ({
   getCurrentServer: vi.fn(),
 }));
 
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({
-  panelBridge: { isRunning: false, sendCommand: vi.fn() },
-}) }));
 
 const { default: router } = await import("../routes/players.ts");
 

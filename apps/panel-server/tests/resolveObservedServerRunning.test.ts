@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 const getCurrentServer = vi.fn();
 vi.mock("../database/init.ts", () => ({ getCurrentServer }));
 
-const fakeBridge = { isModConnected: vi.fn(() => false) };
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ panelBridge: fakeBridge }) }));
+const fakeGameIntegration = { isConnected: vi.fn(() => false) };
+vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({ gameIntegration: fakeGameIntegration }) }));
 
 const resolveDockerHostSignal = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
@@ -19,7 +19,7 @@ function fakeServerManager(details) {
 describe("resolveObservedServerRunning", () => {
   beforeEach(() => {
     getCurrentServer.mockReset();
-    fakeBridge.isModConnected.mockReset().mockReturnValue(false);
+    fakeGameIntegration.isConnected.mockReset().mockReturnValue(false);
     resolveDockerHostSignal.mockReset();
   });
 

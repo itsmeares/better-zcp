@@ -24,11 +24,7 @@ import {
   Clock,
   ChevronRight,
   MoreHorizontal,
-  StickyNote,
-  Tag,
-  X,
   Plus,
-  Save,
   Trash2,
   Heart,
   Skull,
@@ -39,7 +35,6 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -85,8 +80,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { HelpTip } from '@/components/HelpTip'
 import { SpawnBrowser } from '@/components/SpawnBrowser'
 import { NumberInput } from '@/components/NumberInput'
-import { playersApi, panelBridgeApi } from '@/lib/api'
-import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
+import { gameIntegrationApi, playersApi } from '@/lib/api'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -400,12 +394,12 @@ export default function Players() {
   const [voiceBanEnabled, setVoiceBanEnabled] = useState(true)
 
   const [playerPowers, setPlayerPowers] = useState<
-    Record<string, { godMode: boolean; invisible: boolean; noclip: boolean }>
+    Record<string, { godMode?: boolean; invisible?: boolean; noclip?: boolean }>
   >({})
 
   const [playerSearchFilter, setPlayerSearchFilter] = useState('')
 
-  const [bridgeConnected, setBridgeConnected] = useState(false)
+  const [gameIntegrationConnected, setGameIntegrationConnected] = useState(false)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -420,12 +414,6 @@ export default function Players() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [logPlayerFilter, setLogPlayerFilter] = useState('')
 
-  interface PlayerNote {
-    playerName: string
-    note: string
-    tags: string[]
-    updated_at: string
-  }
   interface PlayerStat {
     playerName: string
     player_name?: string
@@ -433,18 +421,14 @@ export default function Players() {
     session_count: number
     first_seen: string
     last_seen: string
+    deaths?: number
+    sessions?: Array<{ start: string; end: string; duration_seconds: number }>
   }
-  const [playerNotes, setPlayerNotes] = useState<Record<string, PlayerNote>>({})
   const [playerStats, setPlayerStats] = useState<Record<string, PlayerStat>>({})
-  const [currentNote, setCurrentNote] = useState('')
-  const [currentTags, setCurrentTags] = useState<string[]>([])
-  const [newTag, setNewTag] = useState('')
-  const [notesLoading, setNotesLoading] = useState(false)
-  const [savingNote, setSavingNote] = useState(false)
-  const [deleteNoteConfirmOpen, setDeleteNoteConfirmOpen] = useState(false)
+  const [statsLoading, setStatsLoading] = useState(false)
   const [playersLoadError, setPlayersLoadError] = useState<string | null>(null)
   const [toolsLoadError, setToolsLoadError] = useState<string | null>(null)
-  const [notesError, setNotesError] = useState<string | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
   const [logsError, setLogsError] = useState<string | null>(null)
 
   interface PlayerVitals {
@@ -568,16 +552,28 @@ export default function Players() {
 
   const fetchRosterVitals = useCallback(async () => {
     try {
-      const res = await panelBridgeApi.getAllPlayerDetails()
+      const res = await gameIntegrationApi.getAllPlayerDetails()
       if (!res.success || !res.data?.players) return
       const next: Record<string, { health?: number; isInfected?: boolean }> = {}
+      const nextPowers: Record<
+        string,
+        { godMode?: boolean; invisible?: boolean; noclip?: boolean }
+      > = {}
       for (const p of res.data.players) {
-        next[p.username] = { health: p.health, isInfected: p.isInfected }
+        next[p.username] = {
+          health: p.health?.overallBodyHealth,
+          isInfected: p.health?.isInfected,
+        }
+        nextPowers[p.username] = {
+          godMode: p.godMod,
+          invisible: p.invisible,
+          noclip: p.noclip,
+        }
       }
       setRosterVitals(next)
+      setPlayerPowers((prev) => ({ ...prev, ...nextPowers }))
     } catch {
-      // Bridge down or unreachable -- leave whatever was last fetched (or
-      // nothing) rather than clearing it on a single transient failure.
+      // Keep the last good snapshot through a transient connection failure.
     }
   }, [])
 
@@ -600,112 +596,26 @@ export default function Players() {
     }
   }, [])
 
-  const fetchNotesAndStats = useCallback(async () => {
-    setNotesLoading(true)
+  const fetchPlayerStats = useCallback(async () => {
+    setStatsLoading(true)
     try {
-      const [notesData, statsData] = await Promise.all([
-        playersApi.getNotes(),
-        playersApi.getStats(),
-      ])
-      const notesMap: Record<string, PlayerNote> = {}
-      if (notesData.notes) {
-        notesData.notes.forEach((n: PlayerNote) => {
-          notesMap[n.playerName] = n
-        })
-      }
+      const statsData = await playersApi.getStats()
       const statsMap: Record<string, PlayerStat> = {}
       if (statsData.stats) {
-        statsData.stats.forEach((s: PlayerStat) => {
-          const key = s.player_name || s.playerName
-          if (key) {
-            statsMap[key] = { ...s, playerName: key, player_name: key }
-          }
+        statsData.stats.forEach((stat: PlayerStat) => {
+          const key = stat.player_name || stat.playerName
+          if (key) statsMap[key] = { ...stat, playerName: key, player_name: key }
         })
       }
-      setPlayerNotes(notesMap)
       setPlayerStats(statsMap)
-      setNotesError(null)
+      setStatsError(null)
     } catch (error) {
-      reportClientError('Failed to fetch notes and stats.', error)
-      setNotesError(
-        getErrorMessage(error, 'Failed to load player notes and stats.'),
-      )
+      reportClientError('Failed to fetch player stats.', error)
+      setStatsError(getErrorMessage(error, 'Failed to load player stats.'))
     } finally {
-      setNotesLoading(false)
+      setStatsLoading(false)
     }
   }, [])
-
-  const handleSaveNote = async () => {
-    if (!selectedPlayer) return
-    const normalizedNote = currentNote.trim()
-    setSavingNote(true)
-    try {
-      await playersApi.saveNote(selectedPlayer, normalizedNote, currentTags)
-      toast({
-        title: 'Note Saved',
-        description: 'Note for ' + String(selectedPlayer) + ' has been saved',
-        variant: 'success' as const,
-      })
-      setPlayerNotes((prev) => ({
-        ...prev,
-        [selectedPlayer]: {
-          playerName: selectedPlayer,
-          note: normalizedNote,
-          tags: currentTags,
-          updated_at: new Date().toISOString(),
-        },
-      }))
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(error, 'Failed to save note'),
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingNote(false)
-    }
-  }
-
-  const handleDeleteNote = async () => {
-    if (!selectedPlayer) return
-    setSavingNote(true)
-    try {
-      await playersApi.deleteNote(selectedPlayer)
-      toast({
-        title: 'Note Deleted',
-        description: 'Note for ' + String(selectedPlayer) + ' has been deleted',
-        variant: 'success' as const,
-      })
-      setPlayerNotes((prev) => {
-        const updated = { ...prev }
-        delete updated[selectedPlayer]
-        return updated
-      })
-      setCurrentNote('')
-      setCurrentTags([])
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(error, 'Failed to delete note'),
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingNote(false)
-      setDeleteNoteConfirmOpen(false)
-    }
-  }
-
-  const addTag = () => {
-    const tag = newTag.trim().toLowerCase().slice(0, 24)
-    if (tag && !currentTags.includes(tag) && currentTags.length < 10) {
-      setCurrentTags([...currentTags, tag])
-    }
-    setNewTag('')
-  }
-
-  const removeTag = (tag: string) => {
-    setCurrentTags(currentTags.filter((t) => t !== tag))
-  }
 
   const formatPlaytime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600)
@@ -794,44 +704,46 @@ export default function Players() {
     }
   }, [])
 
+  const fetchGameIntegrationStatus = useCallback(async () => {
+    try {
+      const status = await gameIntegrationApi.getStatus()
+      setGameIntegrationConnected(Boolean(status.modConnected && status.isRunning))
+    } catch {
+      setGameIntegrationConnected(false)
+    }
+  }, [])
+
   useEffect(() => {
     Promise.all([
       fetchPlayers(),
       fetchData(),
-      fetchNotesAndStats(),
+      fetchPlayerStats(),
       fetchBannedSteamIds(),
       fetchWhitelist(),
       fetchAccessLevels(),
     ]).catch((err) => {
       reportClientError('Failed to load initial player data.', err)
     })
-    let isMounted = true
-    panelBridgeApi
-      .getStatus()
-      .then((status) => {
-        if (isMounted)
-          setBridgeConnected(Boolean(status.modConnected && status.isRunning))
-      })
-      .catch(() => {
-        if (isMounted) setBridgeConnected(false)
-      })
+    void fetchGameIntegrationStatus()
     fetchRosterVitals()
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return
       fetchPlayers()
+      fetchPlayerStats()
+      fetchGameIntegrationStatus()
       fetchRosterVitals()
     }, 15000)
     return () => {
-      isMounted = false
       clearInterval(interval)
     }
   }, [
     fetchPlayers,
     fetchData,
-    fetchNotesAndStats,
+    fetchPlayerStats,
     fetchBannedSteamIds,
     fetchWhitelist,
     fetchAccessLevels,
+    fetchGameIntegrationStatus,
     fetchRosterVitals,
   ])
 
@@ -839,10 +751,11 @@ export default function Players() {
     if (!socket) return
     const handleServersChanged = () => {
       fetchPlayers()
-      fetchNotesAndStats()
+      fetchPlayerStats()
       fetchBannedSteamIds()
       fetchWhitelist()
       fetchAccessLevels()
+      fetchGameIntegrationStatus()
       fetchRosterVitals()
     }
     socket.on('servers:changed', handleServersChanged)
@@ -852,10 +765,11 @@ export default function Players() {
   }, [
     socket,
     fetchPlayers,
-    fetchNotesAndStats,
+    fetchPlayerStats,
     fetchBannedSteamIds,
     fetchWhitelist,
     fetchAccessLevels,
+    fetchGameIntegrationStatus,
     fetchRosterVitals,
   ])
 
@@ -869,16 +783,6 @@ export default function Players() {
     )
     setSelectedPlayer(matchingPlayer?.name || requestedPlayer)
   }, [initialLoading, players, requestedPlayer])
-
-  useEffect(() => {
-    if (selectedPlayer && playerNotes[selectedPlayer]) {
-      setCurrentNote(playerNotes[selectedPlayer].note)
-      setCurrentTags(playerNotes[selectedPlayer].tags || [])
-    } else {
-      setCurrentNote('')
-      setCurrentTags([])
-    }
-  }, [selectedPlayer, playerNotes])
 
   const handleAction = async (
     action: string,
@@ -977,58 +881,18 @@ export default function Players() {
     )
   }
 
-  const bridgeVerifyToastOverride = (
-    actionLabel: string,
-    actionKey: string,
-    data: unknown,
-  ) => {
-    const state = getBridgeVerifiedState(
-      actionKey,
-      data as { verified?: unknown } | null | undefined,
-    )
-    if (state === 'unverifiable') {
-      return {
-        toastOverride: {
-          title: actionLabel,
-          description:
-            String(actionLabel) +
-            ' was sent, but the mod could not confirm it took effect.',
-          variant: 'default' as const,
-        },
-      }
-    }
-    if (state === 'old-bridge') {
-      return {
-        toastOverride: {
-          title: actionLabel,
-          description:
-            String(actionLabel) +
-            " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
-          variant: 'default' as const,
-        },
-      }
-    }
-    return undefined
-  }
-
   const handleTeleport = (targetOverride?: string) => {
     const target =
       (targetOverride ?? teleportTarget ?? '').trim() || selectedPlayer
     if (!target || !teleportX || !teleportY) return
-    const label = 'Teleport player'
     handleAction(
-      label,
+      'Teleport player',
       async () => {
-        const response = await playersApi.teleport(target, {
+        await playersApi.teleport(target, {
           x: Number(teleportX),
           y: Number(teleportY),
           z: Number(teleportZ || '0'),
         })
-        return bridgeVerifyToastOverride(
-          label,
-          'teleportPlayer',
-          response?.data,
-        )
       },
       () => {
         setTeleportDialogOpen(false)
@@ -1147,71 +1011,34 @@ export default function Players() {
     )
   }
 
-  const handleGodMode = (enabled: boolean) => {
+  const setPower = (
+    label: string,
+    enabled: boolean,
+    action: (player: string, value: boolean) => Promise<unknown>,
+  ) => {
     const player = selectedPlayer
     if (!player) return
-    const label = enabled ? 'Enable god mode' : 'Disable god mode'
     handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setGodMode', {
-        username: player,
-        enabled,
-      })
-      const state = getBridgeVerifiedState('setGodMode', response?.data)
-      if (state === null || state === 'confirmed') {
-        setPlayerPowers((prev) => ({
-          ...prev,
-          [player]: { ...prev[player], godMode: enabled },
-        }))
-      }
-      return bridgeVerifyToastOverride(label, 'setGodMode', response?.data)
+      await action(player, enabled)
+      await fetchRosterVitals()
     })
   }
 
-  const handleInvisible = (enabled: boolean) => {
-    const player = selectedPlayer
-    if (!player) return
-    const label = enabled ? 'Enable invisible' : 'Disable invisible'
-    handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setInvisible', {
-        username: player,
-        enabled,
-      })
-      const state = getBridgeVerifiedState('setInvisible', response?.data)
-      if (state === null || state === 'confirmed') {
-        setPlayerPowers((prev) => ({
-          ...prev,
-          [player]: { ...prev[player], invisible: enabled },
-        }))
-      }
-      return bridgeVerifyToastOverride(label, 'setInvisible', response?.data)
-    })
-  }
+  const handleGodMode = (enabled: boolean) =>
+    setPower(enabled ? 'Enable god mode' : 'Disable god mode', enabled, playersApi.setGodMode)
 
-  const handleNoclip = (enabled: boolean) => {
-    const player = selectedPlayer
-    if (!player) return
-    const label = enabled ? 'Enable noclip' : 'Disable noclip'
-    handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setNoclip', {
-        username: player,
-        enabled,
-      })
-      const state = getBridgeVerifiedState('setNoclip', response?.data)
-      if (state === null || state === 'confirmed') {
-        setPlayerPowers((prev) => ({
-          ...prev,
-          [player]: { ...prev[player], noclip: enabled },
-        }))
-      }
-      return bridgeVerifyToastOverride(label, 'setNoclip', response?.data)
-    })
-  }
+  const handleInvisible = (enabled: boolean) =>
+    setPower(enabled ? 'Enable invisible' : 'Disable invisible', enabled, playersApi.setInvisible)
+
+  const handleNoclip = (enabled: boolean) =>
+    setPower(enabled ? 'Enable noclip' : 'Disable noclip', enabled, playersApi.setNoclip)
 
   const handleHealPlayer = () => {
     const player = selectedPlayer
     if (!player) return
     handleAction('Heal player', async () => {
-      await panelBridgeApi.sendCommand('healPlayer', { username: player })
+      const response = await gameIntegrationApi.healPlayer(player)
+      if (!response.success) throw new Error(response.error || 'Heal failed.')
     })
   }
 
@@ -1234,7 +1061,8 @@ export default function Players() {
     })
     if (!confirmed) return
     handleAction('Kill player', async () => {
-      await panelBridgeApi.killPlayer(player)
+      const response = await gameIntegrationApi.killPlayer(player)
+      if (!response.success) throw new Error(response.error || 'Kill failed.')
     })
   }
 
@@ -1249,7 +1077,7 @@ export default function Players() {
   )
 
   useEffect(() => {
-    if (!selectedPlayer || !isSelectedPlayerOnline || !bridgeConnected) {
+    if (!selectedPlayer || !isSelectedPlayerOnline || !gameIntegrationConnected) {
       setPlayerVitals(null)
       setPlayerVitalsError(null)
       setPlayerVitalsLoading(false)
@@ -1259,7 +1087,7 @@ export default function Players() {
     const load = async () => {
       setPlayerVitalsLoading(true)
       try {
-        const response = await panelBridgeApi.getPlayerDetails(selectedPlayer)
+        const response = await gameIntegrationApi.getPlayerDetails(selectedPlayer)
         if (cancelled) return
         if (response.success) {
           setPlayerVitals(response.data)
@@ -1285,7 +1113,7 @@ export default function Players() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [selectedPlayer, isSelectedPlayerOnline, bridgeConnected])
+  }, [selectedPlayer, isSelectedPlayerOnline, gameIntegrationConnected])
 
   const selectedPlayerConfirmedNotWhitelisted = useMemo(
     () =>
@@ -1598,7 +1426,6 @@ export default function Players() {
                       const hasPowers =
                         powers &&
                         (powers.godMode || powers.invisible || powers.noclip)
-                      const note = playerNotes[player.name]
                       const stat = playerStats[player.name]
                       const vitals = rosterVitals[player.name]
 
@@ -1623,27 +1450,6 @@ export default function Players() {
                                 {player.name}
                               </span>
                               <span className="sr-only">{'Online'}</span>
-                              {note && note.tags && note.tags.length > 0 && (
-                                <div className="flex gap-1">
-                                  {note.tags.slice(0, 2).map((tag) => (
-                                    <Badge
-                                      key={tag}
-                                      variant="outline"
-                                      className="text-xs px-1.5 py-0 h-4"
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                  {note.tags.length > 2 && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs px-1.5 py-0 h-4"
-                                    >
-                                      +{note.tags.length - 2}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
                             </div>
                             <div className="flex items-center gap-1">
                               {vitals && typeof vitals.health === 'number' && (
@@ -1676,9 +1482,6 @@ export default function Players() {
                                 <span className="text-xs text-muted-foreground me-1">
                                   {formatPlaytime(stat.total_playtime_seconds)}
                                 </span>
-                              )}
-                              {note && (
-                                <StickyNote className="w-3 h-3 text-muted-foreground" />
                               )}
                               {hasPowers && (
                                 <div className="flex gap-0.5">
@@ -1737,7 +1540,6 @@ export default function Players() {
                     {offlineRoster.map((stat) => {
                       const name = stat.player_name || stat.playerName || ''
                       const isSelected = selectedPlayer === name
-                      const note = playerNotes[name]
                       const lastSeen = stat.last_seen
                         ? new Date(stat.last_seen)
                         : null
@@ -1769,14 +1571,6 @@ export default function Players() {
                               <span className="font-medium truncate">
                                 {name}
                               </span>
-                              {note && note.tags && note.tags.length > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs px-1.5 py-0 h-4"
-                                >
-                                  {note.tags[0]}
-                                </Badge>
-                              )}
                             </div>
                             <div className="flex flex-col items-end text-end">
                               <span className="text-xs text-muted-foreground">
@@ -2089,7 +1883,6 @@ export default function Players() {
                   const isOnline = players.some(
                     (p) => p.name === selectedPlayer,
                   )
-                  const note = playerNotes[selectedPlayer]
                   const stat = playerStats[selectedPlayer]
                   return (
                     <div className="relative overflow-hidden rounded-md border border-border/50 bg-gradient-to-br from-muted/30 via-card to-card p-4">
@@ -2168,11 +1961,10 @@ export default function Players() {
                               </span>
                             )}
                           </div>
-                          {((note?.tags && note.tags.length > 0) ||
-                            (selectedPlayerPowers &&
-                              (selectedPlayerPowers.godMode ||
-                                selectedPlayerPowers.invisible ||
-                                selectedPlayerPowers.noclip))) && (
+                          {selectedPlayerPowers &&
+                            (selectedPlayerPowers.godMode ||
+                              selectedPlayerPowers.invisible ||
+                              selectedPlayerPowers.noclip) && (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5">
                               {selectedPlayerPowers?.godMode && (
                                 <Badge
@@ -2196,23 +1988,6 @@ export default function Players() {
                                   className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary"
                                 >
                                   <Layers className="h-3 w-3" /> {'Noclip'}
-                                </Badge>
-                              )}
-                              {note?.tags?.map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant="secondary"
-                                  className="px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {note?.note && (
-                                <Badge
-                                  variant="outline"
-                                  className="gap-1 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
-                                >
-                                  <StickyNote className="h-3 w-3" /> {'Note'}
                                 </Badge>
                               )}
                             </div>
@@ -2258,70 +2033,39 @@ export default function Players() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !bridgeConnected
-                                    ? 'Requires PanelBridge to be connected'
-                                    : null
-                                }
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  handleGodMode(!selectedPlayerPowers?.godMode)
+                                }}
+                                disabled={loading}
                               >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    handleGodMode(
-                                      !selectedPlayerPowers?.godMode,
-                                    )
-                                  }}
-                                  disabled={loading || !bridgeConnected}
-                                >
-                                  <Ghost className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.godMode
-                                    ? 'Disable God Mode'
-                                    : 'Enable God Mode'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !bridgeConnected
-                                    ? 'Requires PanelBridge to be connected'
-                                    : null
-                                }
+                                <Ghost className="w-4 h-4 me-2" />
+                                {selectedPlayerPowers?.godMode
+                                  ? 'Disable God Mode'
+                                  : 'Enable God Mode'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  handleInvisible(!selectedPlayerPowers?.invisible)
+                                }}
+                                disabled={loading}
                               >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    handleInvisible(
-                                      !selectedPlayerPowers?.invisible,
-                                    )
-                                  }}
-                                  disabled={loading || !bridgeConnected}
-                                >
-                                  <Eye className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.invisible
-                                    ? 'Disable Invisible'
-                                    : 'Enable Invisible'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !bridgeConnected
-                                    ? 'Requires PanelBridge to be connected'
-                                    : null
-                                }
+                                <Eye className="w-4 h-4 me-2" />
+                                {selectedPlayerPowers?.invisible
+                                  ? 'Disable Invisible'
+                                  : 'Enable Invisible'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  handleNoclip(!selectedPlayerPowers?.noclip)
+                                }}
+                                disabled={loading}
                               >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    handleNoclip(!selectedPlayerPowers?.noclip)
-                                  }}
-                                  disabled={loading || !bridgeConnected}
-                                >
-                                  <Layers className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.noclip
-                                    ? 'Disable Noclip'
-                                    : 'Enable Noclip'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
+                                <Layers className="w-4 h-4 me-2" />
+                                {selectedPlayerPowers?.noclip
+                                  ? 'Disable Noclip'
+                                  : 'Enable Noclip'}
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
 
                               <DropdownMenuItem
@@ -2429,11 +2173,11 @@ export default function Players() {
                   {'Powers'}
                 </TabsTrigger>
                 <TabsTrigger
-                  value="notes"
+                  value="history"
                   className="min-h-8 shrink-0 px-3 text-xs font-medium"
                   onClick={() => fetchActivityLogs()}
                 >
-                  {'Notes & Log'}
+                  {'History & playtime'}
                 </TabsTrigger>
               </TabsList>
 
@@ -2446,9 +2190,9 @@ export default function Players() {
                   <p className="text-sm text-muted-foreground">
                     {'This player is offline.'}
                   </p>
-                ) : !bridgeConnected ? (
+                ) : !gameIntegrationConnected ? (
                   <p className="text-sm text-muted-foreground">
-                    {'PanelBridge is not connected.'}
+                    {'Game integration is not connected.'}
                   </p>
                 ) : playerVitalsLoading && !playerVitals ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2578,7 +2322,7 @@ export default function Players() {
                           </span>
                           <HelpTip label={'Other stats'}>
                             {
-                              "Shown as raw numbers, not a bar like the vitals above: PanelBridge sends these values, but which of them use a 0-1 scale versus 0-100 hasn't been confirmed against the game itself for every one of them. A colored bar would have to guess the scale, and a confidently wrong severity is worse than no severity at all."
+                              "Shown as raw numbers, not a bar like the vitals above: Game integration sends these values, but which of them use a 0-1 scale versus 0-100 hasn't been confirmed against the game itself for every one of them. A colored bar would have to guess the scale, and a confidently wrong severity is worse than no severity at all."
                             }
                           </HelpTip>
                         </div>
@@ -3604,20 +3348,14 @@ export default function Players() {
                               : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason
-                        reason={
-                          selectedPlayer && !bridgeConnected
-                            ? 'Requires PanelBridge to be connected'
-                            : null
-                        }
-                      >
+
                         {selectedPlayerPowers?.godMode === undefined ? (
                           <div className="flex items-center gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleGodMode(true)}
                             >
@@ -3627,7 +3365,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleGodMode(false)}
                             >
@@ -3643,7 +3381,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer || loading || !bridgeConnected
+                              !selectedPlayer || loading
                             }
                             onClick={() =>
                               handleGodMode(!selectedPlayerPowers.godMode)
@@ -3654,7 +3392,7 @@ export default function Players() {
                               : 'Enable'}
                           </Button>
                         )}
-                      </DisabledReason>
+
                     </div>
                   </div>
 
@@ -3693,20 +3431,14 @@ export default function Players() {
                               : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason
-                        reason={
-                          selectedPlayer && !bridgeConnected
-                            ? 'Requires PanelBridge to be connected'
-                            : null
-                        }
-                      >
+
                         {selectedPlayerPowers?.invisible === undefined ? (
                           <div className="flex items-center gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleInvisible(true)}
                             >
@@ -3716,7 +3448,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleInvisible(false)}
                             >
@@ -3732,7 +3464,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer || loading || !bridgeConnected
+                              !selectedPlayer || loading
                             }
                             onClick={() =>
                               handleInvisible(!selectedPlayerPowers.invisible)
@@ -3743,7 +3475,7 @@ export default function Players() {
                               : 'Enable'}
                           </Button>
                         )}
-                      </DisabledReason>
+
                     </div>
                   </div>
 
@@ -3782,20 +3514,14 @@ export default function Players() {
                               : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason
-                        reason={
-                          selectedPlayer && !bridgeConnected
-                            ? 'Requires PanelBridge to be connected'
-                            : null
-                        }
-                      >
+
                         {selectedPlayerPowers?.noclip === undefined ? (
                           <div className="flex items-center gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleNoclip(true)}
                             >
@@ -3805,7 +3531,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer || loading || !bridgeConnected
+                                !selectedPlayer || loading
                               }
                               onClick={() => handleNoclip(false)}
                             >
@@ -3821,7 +3547,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer || loading || !bridgeConnected
+                              !selectedPlayer || loading
                             }
                             onClick={() =>
                               handleNoclip(!selectedPlayerPowers.noclip)
@@ -3830,7 +3556,7 @@ export default function Players() {
                             {selectedPlayerPowers.noclip ? 'Disable' : 'Enable'}
                           </Button>
                         )}
-                      </DisabledReason>
+
                     </div>
                   </div>
 
@@ -3848,8 +3574,8 @@ export default function Players() {
                     </div>
                     <DisabledReason
                       reason={
-                        selectedPlayer && !bridgeConnected
-                          ? 'Requires PanelBridge to be connected'
+                        selectedPlayer && !gameIntegrationConnected
+                          ? 'Requires Game integration to be connected'
                           : null
                       }
                     >
@@ -3857,7 +3583,7 @@ export default function Players() {
                         variant="outline"
                         size="sm"
                         disabled={
-                          !selectedPlayer || loading || !bridgeConnected
+                          !selectedPlayer || loading || !gameIntegrationConnected
                         }
                         onClick={handleHealPlayer}
                       >
@@ -3874,11 +3600,6 @@ export default function Players() {
                       <div>
                         <div className="flex items-center gap-1.5">
                           <p className="font-medium">{'Kill'}</p>
-                          <HelpTip label={'Kill'}>
-                            {
-                              "Also turns off God Mode first, even if the kill itself fails — it isn't turned back on automatically."
-                            }
-                          </HelpTip>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {'Permanently ends the character'}
@@ -3887,8 +3608,8 @@ export default function Players() {
                     </div>
                     <DisabledReason
                       reason={
-                        selectedPlayer && !bridgeConnected
-                          ? 'Requires PanelBridge to be connected'
+                        selectedPlayer && !gameIntegrationConnected
+                          ? 'Requires Game integration to be connected'
                           : null
                       }
                     >
@@ -3896,7 +3617,7 @@ export default function Players() {
                         variant="destructive"
                         size="sm"
                         disabled={
-                          !selectedPlayer || loading || !bridgeConnected
+                          !selectedPlayer || loading || !gameIntegrationConnected
                         }
                         onClick={handleKillPlayer}
                       >
@@ -3907,246 +3628,77 @@ export default function Players() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="notes" className="space-y-4 mt-4">
-                {notesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  </div>
-                ) : !selectedPlayer ? (
+              <TabsContent value="history" className="space-y-4 mt-4">
+                {!selectedPlayer ? (
                   <EmptyState
                     type="noData"
-                    title={'Select a player to view or add notes'}
+                    title={'Select a player to view playtime and history'}
                   />
                 ) : (
                   <div className="space-y-4">
-                    {playerStats[selectedPlayer] && (
+                    {statsLoading && !playerStats[selectedPlayer] ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    ) : statsError ? (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>{'Player stats unavailable'}</AlertTitle>
+                        <AlertDescription className="flex items-center justify-between gap-3">
+                          <span>{statsError}</span>
+                          <Button variant="outline" size="sm" onClick={() => void fetchPlayerStats()}>
+                            <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
+                    ) : playerStats[selectedPlayer] ? (
                       <Card className="border-border/60 bg-muted/20">
-                        <CardContent className="pt-4">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-primary" />
-                              <div>
-                                <div className="text-muted-foreground text-xs">
-                                  {'Total Playtime'}
-                                </div>
-                                <div className="font-medium">
-                                  {formatPlaytime(
-                                    playerStats[selectedPlayer]
-                                      .total_playtime_seconds,
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <TrendingUp className="w-4 h-4 text-primary" />
-                              <div>
-                                <div className="text-muted-foreground text-xs">
-                                  {'Sessions'}
-                                </div>
-                                <div className="font-medium">
-                                  {playerStats[selectedPlayer].session_count}
-                                </div>
-                              </div>
+                        <CardContent className="space-y-4 pt-4">
+                          <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-5">
+                            <div>
+                              <div className="text-xs text-muted-foreground">{'Lifetime playtime'}</div>
+                              <div className="font-medium">{formatPlaytime(playerStats[selectedPlayer].total_playtime_seconds)}</div>
                             </div>
                             <div>
-                              <div className="text-muted-foreground text-xs">
-                                {'First Seen'}
-                              </div>
-                              <div className="font-medium text-xs">
-                                {new Date(
-                                  playerStats[selectedPlayer].first_seen,
-                                ).toLocaleDateString('en')}
-                              </div>
+                              <div className="text-xs text-muted-foreground">{'Lifetime sessions'}</div>
+                              <div className="font-medium">{playerStats[selectedPlayer].session_count}</div>
                             </div>
                             <div>
-                              <div className="text-muted-foreground text-xs">
-                                {'Last Seen'}
-                              </div>
-                              <div className="font-medium text-xs">
-                                {new Date(
-                                  playerStats[selectedPlayer].last_seen,
-                                ).toLocaleString('en')}
-                              </div>
+                              <div className="text-xs text-muted-foreground">{'Deaths'}</div>
+                              <div className="font-medium">{playerStats[selectedPlayer].deaths ?? 0}</div>
                             </div>
+                            <div>
+                              <div className="text-xs text-muted-foreground">{'First seen'}</div>
+                              <div className="font-medium text-xs">{new Date(playerStats[selectedPlayer].first_seen).toLocaleDateString('en')}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-muted-foreground">{'Last seen'}</div>
+                              <div className="font-medium text-xs">{new Date(playerStats[selectedPlayer].last_seen).toLocaleString('en')}</div>
+                            </div>
+                          </div>
+                          <div className="border-t border-border/40 pt-3">
+                            <h4 className="mb-2 text-sm font-medium">{'Sessions in the last 30 days'}</h4>
+                            {playerStats[selectedPlayer].sessions?.length ? (
+                              <div className="max-h-48 space-y-2 overflow-auto">
+                                {playerStats[selectedPlayer].sessions.map((session, index) => (
+                                  <div key={`${session.start}-${index}`} className="flex flex-wrap justify-between gap-x-4 gap-y-1 rounded border border-border/40 px-3 py-2 text-xs">
+                                    <span>{new Date(session.start).toLocaleString('en')}</span>
+                                    <span className="text-muted-foreground">
+                                      {formatPlaytime(session.duration_seconds)}
+                                      {' · ended ' + new Date(session.end).toLocaleString('en')}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">{'No completed sessions in the last 30 days.'}</p>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{'No playtime history recorded for this player yet.'}</p>
                     )}
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <Tag className="w-4 h-4" />
-                        {'Tags'}
-                      </Label>
-                      <div className="flex flex-wrap gap-2 min-h-[32px]">
-                        {currentTags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="gap-1 pe-1"
-                          >
-                            {tag}
-                            <button
-                              type="button"
-                              onClick={() => removeTag(tag)}
-                              className="ms-1 rounded p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                              aria-label={'Remove ' + String(tag) + ' tag'}
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </Badge>
-                        ))}
-                        <div className="flex items-center gap-1">
-                          <Input
-                            value={newTag}
-                            onChange={(e) =>
-                              setNewTag(e.target.value.slice(0, 24))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                addTag()
-                              }
-                            }}
-                            placeholder={'Add tag...'}
-                            className="h-8 w-28 text-xs"
-                            maxLength={24}
-                          />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={addTag}
-                            className="h-8 w-8 p-0"
-                            aria-label={'Add tag'}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {
-                          'Common tags: trusted, suspicious, new, vip, builder, griefer, afk. Up to 10 tags, 24 characters each.'
-                        }
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      {notesError && (
-                        <Alert variant="destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>{'Notes could not be loaded'}</AlertTitle>
-                          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <span className="min-w-0 break-words">
-                              {notesError}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => fetchNotesAndStats()}
-                              className="self-start"
-                            >
-                              <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
-                            </Button>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <StickyNote className="w-4 h-4" />
-                        {'Admin Note'}
-                      </Label>
-                      <Textarea
-                        value={currentNote}
-                        onChange={(e) =>
-                          setCurrentNote(e.target.value.slice(0, 1000))
-                        }
-                        placeholder={'Add notes about this player...'}
-                        className="min-h-[120px] resize-y"
-                        maxLength={1000}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {String(currentNote.length) + '/1000 characters'}
-                      </p>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2">
-                      <div className="text-xs text-muted-foreground">
-                        {playerNotes[selectedPlayer]?.updated_at && (
-                          <span>
-                            {'Last updated: ' +
-                              String(
-                                new Date(
-                                  playerNotes[selectedPlayer].updated_at,
-                                ).toLocaleString('en'),
-                              )}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        {playerNotes[selectedPlayer] && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteNoteConfirmOpen(true)}
-                            disabled={savingNote}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4 me-1" />
-                            {'Delete'}
-                          </Button>
-                        )}
-                        <AlertDialog
-                          open={deleteNoteConfirmOpen}
-                          onOpenChange={setDeleteNoteConfirmOpen}
-                        >
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                {'Delete this note?'}
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {'The admin note and tags saved for ' +
-                                  String(selectedPlayer) +
-                                  ' will be permanently deleted. This cannot be undone.'}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={savingNote}>
-                                {'Cancel'}
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                disabled={savingNote}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  void handleDeleteNote()
-                                }}
-                              >
-                                {savingNote ? (
-                                  <Loader2 className="w-4 h-4 me-1 animate-spin" />
-                                ) : null}
-                                {'Delete note'}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-
-                        <Button
-                          size="sm"
-                          onClick={handleSaveNote}
-                          disabled={
-                            savingNote ||
-                            (!currentNote.trim() && currentTags.length === 0)
-                          }
-                        >
-                          {savingNote ? (
-                            <Loader2 className="w-4 h-4 me-1 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4 me-1" />
-                          )}
-                          {'Save Note'}
-                        </Button>
-                      </div>
-                    </div>
                   </div>
                 )}
 

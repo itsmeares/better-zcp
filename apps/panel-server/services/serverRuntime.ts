@@ -1,8 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { RconService } from "./rcon.ts";
 import { ServerManager } from "./serverManager.ts";
 import { ModChecker, refreshWorkshopChecker } from "./modChecker.ts";
@@ -11,29 +9,20 @@ import { ServerMaintenance } from "./serverMaintenance.ts";
 import { Scheduler } from "./scheduler.ts";
 import { BackupService } from "./backupService.ts";
 import { UpdateChecker } from "./updateChecker.ts";
-import { PanelBridge } from "./panelBridge.ts";
+import { GameIntegration } from "./gameIntegration.ts";
 import { DiskMonitor } from "./diskMonitor.ts";
-import {
-  autoInstallBridgeIfNeeded,
-  resolveInstallDir,
-} from "./panelBridgeInstaller.ts";
-import {
-  getEmbeddedPanelBridgeLua,
-  compareModVersions,
-  writeLuaAtomic,
-} from "../utils/embeddedLua.ts";
+import { ensureGameIntegrationInstalled } from "./gameIntegrationInstaller.ts";
 import {
   getCurrentServer,
-  getAllSettings,
   getSetting,
   recordPerformanceSnapshot,
-  logServerEvent,
+  syncPlayerSessions,
 } from "../database/init.ts";
+import { getServerName } from "./sandboxPersistence.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 import { getSwapInfo } from "../utils/swapInfo.ts";
 import { createLogger, logSection } from "../utils/logger.ts";
-import { resolveObservedServerRunning } from "../utils/serverStatus.ts";
 import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 import {
   setServerRuntime,
@@ -51,28 +40,6 @@ import type { DockerClient } from "./dockerClient.ts";
 type AnyRecord = Record<string, any>;
 type PlayerRecord = AnyRecord & { name: string };
 type SwapSnapshot = { total: number; used: number };
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-export async function findPanelBridgePath() {
-  const server = await getCurrentServer();
-  if (!server) return { error: "No server configured" };
-  const serverName = server.serverName || server.name;
-  if (!serverName) return { error: "Server name not configured" };
-  const settings = await getAllSettings();
-  const savedPath = settings?.panelBridge?.bridgePath;
-  const dataPath =
-    server.zomboidDataPath ||
-    process.env.PZ_SAVE_PATH ||
-    path.join(os.homedir(), "Zomboid");
-  const bridgePath =
-    savedPath || path.join(dataPath, "Lua", "panelbridge", serverName);
-  return {
-    path: bridgePath,
-    source: savedPath ? "database (saved)" : "server cachedir/Lua",
-    serverName,
-    notCreated: !fs.existsSync(bridgePath),
-  };
-}
 
 async function initializeServerRuntime(
   serverId: string | number,
@@ -95,126 +62,15 @@ async function initializeServerRuntime(
     const maintenance = new ServerMaintenance(String(serverId), rconService, serverManager, io);
     const scheduler = new Scheduler(rconService, serverManager, maintenance);
     const backupService = new BackupService(maintenance);
-    const panelBridge = new PanelBridge();
+    const gameIntegration = new GameIntegration();
     const diskMonitor = new DiskMonitor(io);
     rconService.setServerManager(serverManager);
     scheduler.setBackupService(backupService);
     scheduler.setIo(io);
 
-    async function tryStartPanelBridge(
-      trigger: string = "unknown",
-    ): Promise<boolean> {
-      if (panelBridge.isRunning) {
-        log.debug(`Already running (trigger: ${trigger})`);
-        return true;
-      }
-
-      const result = await findPanelBridgePath();
-
-      if (result.error) {
-        log.debug(`${result.error} (trigger: ${trigger})`);
-        return false;
-      }
-
-      const autoUpdateEnabled =
-        (await getSetting("panelBridgeAutoUpdate")) !== false;
-      if (!autoUpdateEnabled) {
-        log.debug("PanelBridge mod auto-update disabled by setting");
-      }
-      if (autoUpdateEnabled)
-        try {
-          const activeServer = await getCurrentServer();
-          const installDir = resolveInstallDir(activeServer);
-          if (installDir) {
-            const destLuaFile = path.join(
-              installDir,
-              "media",
-              "lua",
-              "server",
-              "PanelBridge.lua",
-            );
-
-            let srcContent = getEmbeddedPanelBridgeLua();
-
-            if (!srcContent) {
-              const possibleModPaths = [
-                path.join(
-                  __dirname,
-                  "..",
-                  "..",
-                  "..",
-                  "integrations",
-                  "panelbridge",
-                  "PanelBridge",
-                ),
-                path.join(
-                  path.dirname(process.execPath),
-                  "pz-mod",
-                  "PanelBridge",
-                ),
-                path.join(process.cwd(), "pz-mod", "PanelBridge"),
-              ];
-              for (const modPath of possibleModPaths) {
-                const candidate = path.join(
-                  modPath,
-                  "media",
-                  "lua",
-                  "server",
-                  "PanelBridge.lua",
-                );
-                if (fs.existsSync(candidate)) {
-                  srcContent = fs.readFileSync(candidate, "utf8");
-                  break;
-                }
-              }
-            }
-
-            if (srcContent && fs.existsSync(destLuaFile)) {
-              const destContent = fs.readFileSync(destLuaFile, "utf8");
-              const srcVersion = (srcContent.match(/VERSION\s*=\s*"([^"]+)"/) ||
-                [])[1];
-              const destVersion = (destContent.match(
-                /VERSION\s*=\s*"([^"]+)"/,
-              ) || [])[1];
-              if (
-                srcVersion &&
-                destVersion &&
-                compareModVersions(srcVersion, destVersion) > 0
-              ) {
-                writeLuaAtomic(destLuaFile, srcContent);
-                log.info(
-                  `PanelBridge mod auto-updated on server: ${destVersion} → ${srcVersion}`,
-                );
-              }
-            } else if (srcContent && !fs.existsSync(destLuaFile)) {
-              writeLuaAtomic(destLuaFile, srcContent);
-              log.info("PanelBridge mod auto-installed to server");
-            }
-          }
-        } catch (modError: any) {
-          log.warn(`Auto-update mod check failed: ${modError.message}`);
-        }
-
-      try {
-        panelBridge.configure(result.path, true);
-        panelBridge.start();
-        log.info(`Started from ${result.source} (trigger: ${trigger})`);
-        return true;
-      } catch (error: any) {
-        log.warn(`Failed to start - ${error.message}`);
-        return false;
-      }
-    }
-
-    rconService.on("connected", async () => {
-      try {
-        log.info("RCON connected - checking PanelBridge...");
-        rconConnectedAt = Date.now();
-        lastPlayerList = [];
-        await tryStartPanelBridge("rcon-connected");
-      } catch (err: any) {
-        log.debug(`RCON-connected PanelBridge check failed: ${err.message}`);
-      }
+    rconService.on("connected", () => {
+      rconConnectedAt = Date.now();
+      lastPlayerList = [];
     });
 
     rconService.on("disconnected", () => {
@@ -223,26 +79,12 @@ async function initializeServerRuntime(
       }, 3000);
     });
 
-    panelBridge.on("started", () => {
-      io.emit("panelBridge:status", {
-        isRunning: true,
-        bridgePath: panelBridge.bridgePath,
-      });
+    gameIntegration.on("status", (status) => {
+      io.emit("gameIntegration:status", status);
     });
 
-    panelBridge.on("stopped", () => {
-      io.emit("panelBridge:status", {
-        isRunning: false,
-        bridgePath: panelBridge.bridgePath,
-      });
-    });
-
-    panelBridge.on("modStatus", (status) => {
-      io.emit("panelBridge:modStatus", status);
-    });
-
-    panelBridge.on("configured", ({ path }) => {
-      io.emit("panelBridge:configured", { bridgePath: path });
+    gameIntegration.on("snapshot", (snapshot) => {
+      io.emit("gameIntegration:modStatus", snapshot);
     });
 
     backupService.setServerManager(serverManager);
@@ -275,6 +117,9 @@ async function initializeServerRuntime(
             players?: PlayerRecord[];
           };
           if (result.success && result.players) {
+            await syncPlayerSessions(
+              result.players.map((player) => player.name).filter(Boolean),
+            );
             const currentNames = result.players
               .map((p) => p.name)
               .sort()
@@ -481,11 +326,15 @@ async function initializeServerRuntime(
     ): Promise<void> {
       if (stopped) return;
       try {
+        const previous = lastKnownRunning;
         lastKnownRunning = await observeServerStatus(
           { serverManager, rconService, dockerClient, io },
           lastKnownRunning,
           detectionReason,
         );
+        if (previous !== false && lastKnownRunning === false) {
+          await syncPlayerSessions([]);
+        }
       } catch (error: any) {
         log.debug(`Status watchdog error: ${error.message}`);
       }
@@ -507,11 +356,10 @@ async function initializeServerRuntime(
       scheduler,
       maintenance,
       backupService,
-      panelBridge,
+      gameIntegration,
       updateChecker,
       diskMonitor,
       refreshWorkshopChecker,
-      autoInstallBridgeIfNeeded,
       io,
       checkServerStatusNow,
       stop: async () =>
@@ -526,7 +374,7 @@ async function initializeServerRuntime(
           updateChecker.stop();
           await maintenance.shutdown();
           diskMonitor.stop();
-          panelBridge.stop();
+          gameIntegration.stop();
           rconService.stopAutoReconnect();
           await rconService.disconnect();
           initializations.delete(String(serverId));
@@ -538,6 +386,21 @@ async function initializeServerRuntime(
       await serverManager.loadConfig(String(serverId));
       await rconService.loadConfig(String(serverId));
       rconService.startAutoReconnect();
+      const activeServer = await getCurrentServer();
+      if (activeServer?.zomboidDataPath && activeServer.serverName) {
+        try {
+          const serverName = await getServerName(activeServer);
+          const directory = path.join(
+            activeServer.zomboidDataPath,
+            "Lua",
+            "argus",
+            serverName,
+          );
+          gameIntegration.start(directory, serverName);
+        } catch (error: any) {
+          log.warn(`Game integration could not start: ${error.message}`);
+        }
+      }
       await logTailer.init();
 
       logTailer.on("playerDeath", async (data) => {
@@ -574,13 +437,6 @@ async function initializeServerRuntime(
         try {
           await new Promise((r) => setTimeout(r, 1000));
           if (stopped) return;
-
-          const bridgeStarted = await tryStartPanelBridge("startup");
-          if (bridgeStarted) {
-            log.info(
-              "PanelBridge started on startup (found active bridge files)",
-            );
-          }
 
           const timeoutMs = 15000;
           const activeServer = await getCurrentServer();
@@ -671,6 +527,7 @@ async function initializeServerRuntime(
                   rconService.setServerStarting(true);
 
                   try {
+                    await ensureGameIntegrationInstalled(activeServer);
                     const startResult = await serverManager.startServer({
                       serverId:
                         (activeServer?.id as string | null | undefined) ?? null,
@@ -753,8 +610,7 @@ async function initializeServerRuntime(
               }
             }
 
-            // Even if server isn't running, Panel Bridge might have stale files
-            // The bridge will detect the mod isn't responding via status timestamp
+            // Keep the integration monitor attached to this profile; its heartbeat will expire while stopped.
           }
         } catch (e: any) {
           log.debug(`Startup initialization: ${e.message}`);

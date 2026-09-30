@@ -1,30 +1,12 @@
-const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
-  "restoreUtilities",
-  "shutOffUtilities",
-  "saveWorld",
-  "sendToServerChat",
-]);
-
 export function classifyScheduledCommand(command: unknown): string {
   const commandLower = String(command ?? "").toLowerCase();
+  if (commandLower.trimStart().startsWith("bridge:")) return "unsupported";
   if (commandLower === "restart") return "restart";
   if (commandLower === "save") return "save";
   if (commandLower.startsWith("servermsg ")) return "servermsg";
-  if (commandLower.startsWith("bridge:")) return "bridge";
   return "raw";
 }
 
-export function parseBridgeActionName(rawCommand: string): string {
-  const body = rawCommand.slice("bridge:".length).trim();
-  const firstSpace = body.indexOf(" ");
-  return (firstSpace === -1 ? body : body.slice(0, firstSpace)).trim();
-}
-
-export function isSchedulableBridgeAction(action: string): boolean {
-  return SCHEDULABLE_BRIDGE_ACTIONS.has(action);
-}
-
 export function isSchedulableCommand(command: string): boolean {
-  return classifyScheduledCommand(command) !== "bridge" ||
-    isSchedulableBridgeAction(parseBridgeActionName(command));
+  return classifyScheduledCommand(command) !== "unsupported";
 }

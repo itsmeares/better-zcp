@@ -5,10 +5,6 @@ const logPlayerAction = vi.fn();
 vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
-  getPlayerNotes: vi.fn(),
-  getPlayerNote: vi.fn(),
-  upsertPlayerNote: vi.fn(),
-  deletePlayerNote: vi.fn(),
   getPlayerStats: vi.fn(),
   getPlayerStat: vi.fn(),
   getSteamIdBans: vi.fn(),
@@ -16,10 +12,6 @@ vi.mock("../database/init.ts", () => ({
   removeSteamIdBan: vi.fn(),
   getCurrentServer: vi.fn(),
 }));
-
-vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({
-  panelBridge: { isRunning: false, sendCommand: vi.fn() },
-}) }));
 
 const { default: router } = await import("../routes/players.ts");
 
@@ -40,7 +32,7 @@ function createRequest(body, rconService) {
   return { body, app: { get: () => rconService } };
 }
 
-describe("players routes: activity log only written on RCON/bridge success", () => {
+describe("players routes: activity log only written on RCON success", () => {
   beforeEach(() => {
     logPlayerAction.mockReset();
   });
@@ -308,36 +300,4 @@ describe("players toggle routes: enabled must remain a boolean", () => {
       expect(rconService[method]).not.toHaveBeenCalled();
     },
   );
-});
-
-describe("player notes: persisted values must keep their documented shape", () => {
-  it("rejects a non-text note instead of storing an object", async () => {
-    const response = createResponse();
-    const upsert = (await import("../database/init.ts")).upsertPlayerNote;
-
-    await getRouteHandler("post", "/notes")(
-      createRequest({ playerName: "Bob", note: { malicious: true } }, {}),
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(400);
-    expect(response.json).toHaveBeenCalledWith({
-      error: "Note must be text",
-      code: "PLAYERS_NOTE_MUST_BE_TEXT",
-    });
-    expect(upsert).not.toHaveBeenCalled();
-  });
-
-  it("rejects an invalid player name before reaching persistence", async () => {
-    const response = createResponse();
-    const upsert = (await import("../database/init.ts")).upsertPlayerNote;
-
-    await getRouteHandler("post", "/notes")(
-      createRequest({ playerName: "bad\\name", note: "note" }, {}),
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(400);
-    expect(upsert).not.toHaveBeenCalled();
-  });
 });

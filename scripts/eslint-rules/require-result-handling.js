@@ -9,7 +9,7 @@ const RESULT_RETURNING_METHODS = [
   "addModToTrack",
   "handleModUpdate",
   "triggerModRestart",
-  // panelBridge
+  // game integration
   "ping",
   // panelUpdateChecker
   "downloadUpdate",

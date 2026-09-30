@@ -7,7 +7,10 @@ vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: vi.fn(async () => ({ handled: false })),
   isBundledGameProfile: vi.fn(() => false), ensureBundledGameContainer: vi.fn(),
 }));
-vi.mock("../services/panelBridgeInstaller.ts", () => ({ autoInstallBridgeIfNeeded: vi.fn() }));
+const { ensureGameIntegrationInstalled } = vi.hoisted(() => ({
+  ensureGameIntegrationInstalled: vi.fn(),
+}));
+vi.mock("../services/gameIntegrationInstaller.ts", () => ({ ensureGameIntegrationInstalled }));
 vi.mock("../services/serverLaunch.ts", () => ({ candidateIniPaths: vi.fn(() => []), isFirstBootMissingAdminPassword: vi.fn(() => false), refreshLaunchTargetBeforeStart: vi.fn(async () => {}) }));
 vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime: () => ({}) }));
 const { ServerMaintenance } = await import("../services/serverMaintenance.ts");
@@ -25,13 +28,16 @@ function fixture(running = true) {
   const maintenance = new ServerMaintenance(profile.id, rcon, manager, { emit: vi.fn() });
   return { maintenance, rcon, manager };
 }
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  ensureGameIntegrationInstalled.mockReset();
+});
 describe("server maintenance", () => {
   it("saves, verifies stopped, does the work and resumes a running game even if a backup fails", async () => {
     const { maintenance, rcon, manager } = fixture();
     const work = vi.fn(async () => { expect((await maintenance.state()).running).toBe(false); return { success: false, message: "Disk full" }; });
     const result = await maintenance.run({ kind: "backup", label: "Full backup", automatic: true, work });
-    expect(result.success).toBe(false); expect(rcon.save).toHaveBeenCalledOnce(); expect(work).toHaveBeenCalledOnce(); expect(manager.startServer).toHaveBeenCalledOnce();
+    expect(result.success).toBe(false); expect(rcon.save).toHaveBeenCalledOnce(); expect(work).toHaveBeenCalledOnce(); expect(ensureGameIntegrationInstalled).toHaveBeenCalledOnce(); expect(manager.startServer).toHaveBeenCalledOnce();
   });
   it("leaves a partially updated game stopped", async () => {
     const { maintenance, manager } = fixture();

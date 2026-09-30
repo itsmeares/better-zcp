@@ -1,0 +1,9 @@
+name=Argus - Better ZCP Game Integration
+id=Argus
+description=Provides live Build 42 player, world, and sandbox data to Better ZCP.
+modversion=1.0.0
+pzversion=42.0
+authors=Better ZCP
+url=https://github.com/itsmeares/better-zcp
+require=
+pack=media/

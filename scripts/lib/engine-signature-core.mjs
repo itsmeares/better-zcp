@@ -257,16 +257,19 @@ function splitTopLevelArgs(text) {
   return args.map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
-const HELPER_NAMES = ['invoke', 'hasMethod', 'safeCall', 'safeGet', 'tryGet'];
-const HELPER_CALL_RE = new RegExp(`PanelBridge\\.(${HELPER_NAMES.join('|')})\\s*\\(`, 'g');
+const LOCAL_ENGINE_HELPERS = ['call', 'get', 'safeString'];
+const LOCAL_ENGINE_HELPER_RE = new RegExp(`\\b(${LOCAL_ENGINE_HELPERS.join('|')})\\s*\\(`, 'g');
 
 export function extractHelperCallSites(src) {
   const sites = [];
   let m;
-  HELPER_CALL_RE.lastIndex = 0;
-  while ((m = HELPER_CALL_RE.exec(src))) {
+  LOCAL_ENGINE_HELPER_RE.lastIndex = 0;
+  while ((m = LOCAL_ENGINE_HELPER_RE.exec(src))) {
+    // Do not treat `local function call(...)` (or the other wrapper declarations)
+    // as calls to an engine method.
+    if (/function\s+$/.test(src.slice(Math.max(0, m.index - 16), m.index))) continue;
     const helperName = m[1];
-    const openIdx = HELPER_CALL_RE.lastIndex - 1;
+    const openIdx = LOCAL_ENGINE_HELPER_RE.lastIndex - 1;
     const closeIdx = findMatchingParen(src, openIdx);
     if (closeIdx === -1) continue;
     const argsText = src.slice(openIdx + 1, closeIdx);
@@ -284,32 +287,26 @@ export function extractHelperCallSites(src) {
       methodArgRaw: methodArgText,
       offset: openIdx,
     });
-    HELPER_CALL_RE.lastIndex = closeIdx;
+    LOCAL_ENGINE_HELPER_RE.lastIndex = closeIdx;
   }
   return sites;
 }
 
 export const SEED_GLOBALS = {
   getWorld: { class: 'zombie.iso.IsoWorld' },
-  getClimateManager: { class: 'zombie.iso.weather.ClimateManager' },
   getGameTime: { class: 'zombie.GameTime' },
-  getPlayerByUsername: { class: 'zombie.characters.IsoPlayer' },
-  getSpecificPlayer: { class: 'zombie.characters.IsoPlayer' },
   getOnlinePlayers: { class: 'java.util.ArrayList', elementType: 'zombie.characters.IsoPlayer' },
   getSandboxOptions: { class: 'zombie.SandboxOptions' },
-  getCell: { class: 'zombie.iso.IsoCell' },
-  getZombiePopManager: { class: 'zombie.popman.ZombiePopulationManager' },
-  getGameServer: { class: 'zombie.network.GameServer' },
+  getScriptManager: { class: 'zombie.scripting.ScriptManager' },
 };
 
-export const STATIC_CLASS_SEEDS = {
-  GameTime: 'zombie.GameTime',
-};
+export const STATIC_CLASS_SEEDS = {};
 
 const LUA_KEYWORDS = new Set([
   'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if', 'in', 'local',
   'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while',
 ]);
+const LUA_STRING_METHODS = new Set(['byte', 'char', 'dump', 'find', 'format', 'gmatch', 'gsub', 'len', 'lower', 'match', 'rep', 'reverse', 'sub', 'upper']);
 
 export function resolveAllCallSites(rawSrc, classProvider) {
   const src = stripLuaComments(rawSrc);
@@ -318,7 +315,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
   const varTypes = new Map();
 
   const helperSites = extractHelperCallSites(src);
-  const helperSitesByOffset = new Map(helperSites.map((s) => [s.startOffset, s]));
 
   function walkStepsFrom(steps, startIndex, currentType, elementType) {
     for (let k = startIndex; k < steps.length; k++) {
@@ -348,16 +344,59 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     return { type: currentType, elementType, reason: currentType ? null : 'chain-broke-before-end' };
   }
 
-  function resolveHelperResultType(site) {
-    if (!site.methodNameLiteral) return { type: null, elementType: null, reason: 'dynamic method name' };
-    const receiverChain = parseChainAt(site.receiverText, 0);
+  function resolveWrapperExpression(receiverText, methodNameLiteral) {
+    if (!methodNameLiteral) return { type: null, elementType: null, reason: 'dynamic method name' };
+    const receiverChain = parseChainAt(receiverText, 0);
     const receiverResolved = receiverChain
-      ? walkStepsFrom(receiverChain.steps, 1, ...startState(receiverChain.steps[0]))
-      : { type: null };
-    if (!receiverResolved.type) return { type: null, elementType: null, reason: 'helper receiver unresolved' };
-    const info = classProvider(receiverResolved.type, site.methodNameLiteral);
+      ? resolveChainType(receiverChain.steps)
+      : { type: null, elementType: null, reason: 'unparseable helper receiver' };
+    if (!receiverResolved.type) return { type: null, elementType: null, reason: receiverResolved.reason || 'helper receiver unresolved' };
+    const info = classProvider(receiverResolved.type, methodNameLiteral);
     if (!info || !info.exists) return { type: null, elementType: null, reason: 'helper method not found' };
+    if (methodNameLiteral === 'get' && receiverResolved.elementType) {
+      return { type: receiverResolved.elementType, elementType: null, reason: null };
+    }
+    // call() returns the two values from pcall(), so callers assigning
+    // `local ok, value = call(...)` get the engine return type in slot two.
     return { type: info.returnClass || null, elementType: info.elementClass || null, reason: null };
+  }
+
+  function resolveAssignmentExpression(text) {
+    const wrapper = /^\s*(call|get|safeString)\s*\(/.exec(text);
+    if (wrapper) {
+      const openIdx = text.indexOf('(', wrapper.index);
+      const closeIdx = findMatchingParen(text, openIdx);
+      if (closeIdx !== -1) {
+        const args = splitTopLevelArgs(text.slice(openIdx + 1, closeIdx));
+        const receiverText = args[0] || '';
+        const methodMatch = /^['"]([A-Za-z_]\w*)['"]$/.exec(args[1] || '');
+        return resolveWrapperExpression(receiverText, methodMatch?.[1] || null);
+      }
+    }
+    let chain = parseChainAt(text, 0);
+    if (!chain) return { type: null, elementType: null, reason: 'unparseable assignment' };
+    const resolved = resolveChainType(chain.steps);
+    if (!resolved.type && !resolved.elementType) {
+      // Some engine handles are obtained inside a guarded expression, e.g.
+      // `type(getScriptManager) == "function" and getScriptManager() or nil`.
+      for (const nested of findAllChains(text)) {
+        const nestedResolved = resolveChainType(nested.steps);
+        if (nestedResolved.type || nestedResolved.elementType) return nestedResolved;
+      }
+      for (const [globalName, seed] of Object.entries(SEED_GLOBALS)) {
+        if (new RegExp(`\\b${globalName}\\s*\\(`).test(text)) {
+          return { type: seed.class, elementType: seed.elementType || null, reason: null };
+        }
+      }
+    }
+    // Existing call sites occasionally use a guarded `a and b()` return.
+    let after = chain.endIndex;
+    while (after < text.length && WS.test(text[after])) after++;
+    if (text.slice(after, after + 4) === 'and ') {
+      const next = parseChainAt(text, after + 4);
+      if (next) return resolveChainType(next.steps);
+    }
+    return resolved;
   }
 
   function startState(first) {
@@ -372,12 +411,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
   function resolveChainType(steps) {
     if (!steps || steps.length === 0) return { type: null, elementType: null, reason: 'empty-chain' };
     const first = steps[0];
-    if (!first.called && first.name === 'PanelBridge' && helperSitesByOffset.has(first.offset)) {
-      const site = helperSitesByOffset.get(first.offset);
-      const helperResult = resolveHelperResultType(site);
-      if (!helperResult.type) return helperResult;
-      return walkStepsFrom(steps, 2, helperResult.type, helperResult.elementType);
-    }
     if (!first.called && STATIC_CLASS_SEEDS[first.name] && steps[1] && steps[1].sep === '.' && steps[1].called) {
       const info = classProvider(STATIC_CLASS_SEEDS[first.name], steps[1].name);
       if (!info || !info.exists) return { type: null, elementType: null, reason: `${first.name}.${steps[1].name}() not found` };
@@ -392,32 +425,29 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     return walkStepsFrom(steps, 1, ...startState(first));
   }
 
-  const assignRe = /(?:^|[^.\w])(?:local\s+)?([A-Za-z_]\w*)\s*=(?!=)\s*/gm;
+  const assignRe = /(?:^|[^.\w])(?:local\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*=(?!=)\s*/gm;
   let m;
   while ((m = assignRe.exec(src))) {
-    const name = m[1];
-    if (LUA_KEYWORDS.has(name)) continue;
+    const names = m[1].split(',').map((name) => name.trim());
+    if (names.some((name) => LUA_KEYWORDS.has(name))) continue;
     if (tableDepth[m.index] > 0) continue;
     const exprStart = m.index + m[0].length;
-    let chain = parseChainAt(src, exprStart);
-    if (!chain) continue;
-    for (;;) {
-      let after = chain.endIndex;
-      while (after < src.length && (src[after] === ' ' || src[after] === '\t')) after++;
-      if (src.slice(after, after + 4) === 'and ' && IDENT_START.test(src[after + 4] || '')) {
-        const next = parseChainAt(src, after + 4);
-        if (!next) break;
-        chain = next;
-        continue;
-      }
-      break;
+    let exprEnd = exprStart;
+    let parenDepth = 0;
+    while (exprEnd < src.length) {
+      const char = src[exprEnd];
+      if (char === '(') parenDepth++;
+      else if (char === ')') parenDepth = Math.max(0, parenDepth - 1);
+      else if ((char === '\n' || char === '\r' || char === ';') && parenDepth === 0) break;
+      exprEnd++;
     }
-    let after = chain.endIndex;
-    while (after < src.length && (src[after] === ' ' || src[after] === '\t')) after++;
-    const nextChar = src[after] || '\n';
-    if (!/[\n\r),;]/.test(nextChar)) continue;
-    const resolved = resolveChainType(chain.steps);
-    varTypes.set(name, { type: resolved.type, elementType: resolved.elementType });
+    const expression = src.slice(exprStart, exprEnd).trim();
+    const resolved = resolveAssignmentExpression(expression);
+    const targetIndex = /^\s*call\s*\(/.test(expression) ? 1 : 0;
+    const target = names[targetIndex];
+    if (target && (resolved.type || resolved.elementType) && !varTypes.has(target)) {
+      varTypes.set(target, { type: resolved.type, elementType: resolved.elementType });
+    }
   }
 
   const callSites = [];
@@ -448,6 +478,7 @@ export function resolveAllCallSites(rawSrc, classProvider) {
       const line = lineOfOffset(lineIndex, site.offset);
       const resolved = resolveChainType(site.receiverSteps);
       const receiverType = resolved.type;
+      if (receiverType === 'java.lang.String' && LUA_STRING_METHODS.has(site.methodName)) continue;
       let methodInfo = null;
       if (receiverType) methodInfo = classProvider(receiverType, site.methodName);
       const receiverExpr = site.receiverSteps

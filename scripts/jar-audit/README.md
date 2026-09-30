@@ -2,7 +2,7 @@
 
 These scripts read the actual game server's own compiled Java classes and
 Lua-callable API surface out of its shipped jar, so RCON/console commands
-and Lua bridge (PanelBridge) calls can be checked against the shipped bytecode
+and Argus game integration calls can be checked against the shipped bytecode
 instead of an external wiki. These are verification tools, not runtime code.
 
 ## What you need
@@ -71,22 +71,13 @@ false positive (the loop is list housekeeping, not reply-building), and why
 that one counter-example is reason enough not to trust this signal at
 scale without hand-checking each hit.
 
-### `scan-lua-calls.mjs` -- not included as a generic tool, see below
+### Lua game integration calls
 
-The PanelBridge Lua checker used for the Lua audit is NOT a clean, reusable
-CLI the way the two RCON scripts are -- it depends on a hand-curated
-`RECEIVER_CLASSES` map built by reading `integrations/panelbridge/media/lua/
-server/PanelBridge.lua`'s own variable assignments (e.g. knowing that the
-Lua local `climate` came from `getClimateManager()`, which is
-`zombie.iso.weather.ClimateManager`). That map goes stale the moment new
-receiver variable names show up in the Lua file, and this repo doesn't
-currently have a generic Lua-static-analysis pass that could rebuild it
-automatically. If this needs to run again, rebuild the receiver map by hand
-against the Lua file at that time using `classfile-parser.mjs` as the
-verification half -- the pattern is documented in
-  the audit notes, not shipped as a ready-to-run script,
-because a stale receiver map that still runs without error is worse than
-no script at all.
+The retained Argus integration has a source-aware engine API check in the
+repository root: run `pnpm run check:engine-signatures`. Generate its manifest
+from the Build 42 jar with `pnpm run gen:engine-signatures`; the check resolves
+call sites from the current Lua source and verifies methods across class
+hierarchies.
 
 ## What this technique CANNOT tell you
 
@@ -94,7 +85,7 @@ This is the main limitation:
 
 **A method not found under one class is not proof the method doesn't
 exist.** The first Lua-audit pass checked one class per receiver and got
-47 "not found" out of 147 -- a third of the bridge looking broken. Nearly
+47 "not found" out of 147 -- a third of the game integration looking broken. Nearly
 all of those were checking the wrong link in the chain:
 
 - **Interfaces carry methods too, not just superclasses.** B42's

@@ -86,8 +86,8 @@ const routeModules: RouteModule[] = [
     load: loadRouteModule(() => import("../routes/system.ts")),
   },
   {
-    base: "/api/panel-bridge",
-    load: loadRouteModule(() => import("../routes/panelBridge.ts")),
+    base: "/api/game-integration",
+    load: loadRouteModule(() => import("../routes/gameIntegration.ts")),
   },
   { base: "/api", load: loadRouteModule(() => import("../routes/core.ts")) },
 ];
@@ -576,7 +576,7 @@ export async function handleApiRequest(
 ): Promise<globalThis.Response | null> {
   const url = new URL(request.url);
   const profilePath = url.pathname.match(
-    /^\/api\/servers\/([A-Za-z0-9_-]+)\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|panel-bridge)(\/.*)?$/,
+    /^\/api\/servers\/([A-Za-z0-9_-]+)\/(rcon|server|players|mods|server-files|debug|backup|map|config|docker|scheduler|system|game-integration)(\/.*)?$/,
   );
   if (profilePath)
     url.pathname = `/api/${profilePath[2]}${profilePath[3] || ""}`;
@@ -604,7 +604,7 @@ export async function handleApiRequest(
     );
   if (
     !serverId &&
-    /^\/api\/(rcon|players|mods|server-files|backup|scheduler|panel-bridge)(\/|$)/.test(
+    /^\/api\/(rcon|players|mods|server-files|backup|scheduler|game-integration)(\/|$)/.test(
       pathname,
     ) &&
     !pathname.startsWith("/api/mods/thumbnail/")
@@ -614,13 +614,9 @@ export async function handleApiRequest(
       { status: 400 },
     );
   }
-  const nestedTarget = pathname.match(
-    /^\/api\/panel-bridge\/scan-server\/([^/]+)$/,
-  )?.[1];
   if (
     serverId &&
     [
-      nestedTarget,
       url.searchParams.get("serverId"),
       url.searchParams.get("expectedServerId"),
     ].some((target) => target != null && target !== serverId)

@@ -28,8 +28,6 @@ import { setPanelRuntime, setServerRuntime } from "../utils/panelRuntime.ts";
 import { handleApiRequest } from "../http/apiDispatcher.ts";
 import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 import { RconService } from "../services/rcon.ts";
-import { findPanelBridgePath } from "../services/serverRuntime.ts";
-import { getDataPaths } from "../utils/paths.ts";
 import { ServerManager } from "../services/serverManager.ts";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -178,38 +176,6 @@ describe("server and data foundation", () => {
       new Request("http://panel/api/servers/missing/rcon/history"),
     );
     expect(missing?.status).toBe(404);
-  });
-
-  it("keeps bridge discovery inside the owning cachedir when another server has matching files", async () => {
-    const root = getDataPaths().dataDir;
-    const installPath = path.join(root, "install");
-    const dataPath = path.join(root, "own-data");
-    const foreignBridge = path.join(
-      root,
-      "Server_files_peer",
-      "Lua",
-      "panelbridge",
-      "same_name",
-    );
-    fs.mkdirSync(foreignBridge, { recursive: true });
-    fs.writeFileSync(path.join(foreignBridge, "status.json"), "{}");
-    const server = await createServer({
-      serverName: "same_name",
-      installPath,
-      zomboidDataPath: dataPath,
-    });
-    await runForServer(server.id, async () => {
-      expect(await findPanelBridgePath()).toMatchObject({
-        path: path.join(dataPath, "Lua", "panelbridge", "same_name"),
-        notCreated: true,
-      });
-      await setSetting("panelBridge", {
-        bridgePath: path.join(dataPath, "custom"),
-      });
-      expect(await findPanelBridgePath()).toMatchObject({
-        path: path.join(dataPath, "custom"),
-      });
-    });
   });
 
   it("locks one profile and refuses retargeting live managers or connections", async () => {

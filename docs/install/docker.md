@@ -12,7 +12,7 @@ assumes you've read the others.
 | What you already have                                                                                                                                                                     | Use this path                                                                                     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Nothing running yet. You want the panel to install and manage game servers. | [Managed stack](#path-a-managed-stack) — separate panel and game containers |
-| Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or use PanelBridge. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access       |
+| Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or install game integration. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access       |
 | **Unraid**, with Project Zomboid already running in its own container/template.                                                                                                           | [Unraid template](#path-c-unraid) — panel with the PZ folders mounted                             |
 | macOS | Run the panel with Docker Desktop or OrbStack and connect it to a PZ server on Linux using [Path B](#path-b-docker-composeyml-bind-mounts). The managed stack requires an amd64 Linux Docker host. |
 
@@ -74,7 +74,7 @@ service is removed by Compose.
 **What it is:** the panel only, with commented-out bind-mount examples for a
 Project Zomboid install that already exists on this host or is reachable
 over a network share. Use this when you need the panel to edit PZ's config
-files, take local backups, or use PanelBridge, and PZ isn't in the same
+files, take local backups, or install game integration, and PZ isn't in the same
 container as the panel.
 
 ### Phase 1 — Prerequisites
@@ -305,7 +305,7 @@ folders, one of two things happens:
   volumes come up owned by that value instead. Docker manages
   `panel-data`/`panel-logs` volumes itself, so this is usually only visible
   if you replaced them with host bind mounts.
-- **PZ config edits or PanelBridge file access fail with permission
+- **PZ config edits or game integration installation fail with permission
   errors** (the actual failure mode) — the panel process is running as a
   UID/GID that doesn't have write access to your real PZ folders, because
   `PUID`/`PGID` didn't match the account that owns them on the host.

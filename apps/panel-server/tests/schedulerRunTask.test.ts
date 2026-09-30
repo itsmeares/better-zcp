@@ -112,19 +112,21 @@ describe("Scheduler.runTaskNow command dispatch", () => {
     });
   });
 
-  it("routes 'bridge:<action>' through executeBridgeAction()", async () => {
-    const { scheduler } = makeScheduler();
-    scheduler.executeBridgeAction = vi.fn().mockResolvedValue();
-
-    await scheduler.runTaskNow({
+  it("keeps saved bridge tasks unsupported and never dispatches them to RCON", async () => {
+    const { scheduler, rconService } = makeScheduler();
+    expect(scheduler.scheduleTask({
       id: 4,
       name: "World save",
       server_id: "server-a", command: "bridge:saveWorld",
-    });
+      cron_expression: "0 * * * *", enabled: 1,
+    })).toBe(false);
 
-    expect(scheduler.executeBridgeAction).toHaveBeenCalledWith(
-      "bridge:saveWorld",
-    );
+    expect(await scheduler.runTaskNow({
+      id: 4,
+      name: "World save",
+      server_id: "server-a", command: "bridge:saveWorld",
+    })).toEqual({ success: false, message: "Unsupported scheduled task command" });
+    expect(rconService.execute).not.toHaveBeenCalled();
   });
 
   it("falls back to a raw RCON command for anything else", async () => {

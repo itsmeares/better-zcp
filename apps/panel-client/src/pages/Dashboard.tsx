@@ -60,7 +60,7 @@ import {
   serverApi,
   rconApi,
   playersApi,
-  panelBridgeApi,
+  gameIntegrationApi,
   backupApi,
   configApi,
   serversApi,
@@ -69,6 +69,7 @@ import {
   modsApi,
   schedulerApi,
   PanelUpdateStatus,
+  GameIntegrationStatus,
 } from '@/lib/api'
 import { formatUptime } from '@/lib/utils'
 import {
@@ -95,17 +96,6 @@ interface PlayerActivity {
   action: string
   details: string | null
   logged_at: string
-}
-interface BridgeStatus {
-  configured: boolean
-  isRunning: boolean
-  modConnected: boolean
-  modStatus: {
-    alive: boolean
-    version?: string
-    serverName?: string
-    playerCount?: number
-  } | null
 }
 interface ServerStatus {
   running: boolean
@@ -386,7 +376,7 @@ function ConnLine({
 
 export default function Dashboard() {
   const [players, setPlayers] = useState<Player[]>([])
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
+  const [gameIntegrationStatus, setGameIntegrationStatus] = useState<GameIntegrationStatus | null>(null)
   const [worldMap, setWorldMap] = useState<string | null>(null)
   const [playerActivity, setPlayerActivity] = useState<PlayerActivity[]>([])
   const [performanceHistory, setPerformanceHistory] = useState<
@@ -655,16 +645,16 @@ export default function Dashboard() {
       setPlayers([])
     }
   }, [])
-  const fetchBridgeStatus = useCallback(async () => {
+  const fetchGameIntegrationStatus = useCallback(async () => {
     try {
-      setBridgeStatus(await panelBridgeApi.getStatus())
+      setGameIntegrationStatus(await gameIntegrationApi.getStatus())
     } catch {
-      setBridgeStatus(null)
+      setGameIntegrationStatus(null)
     }
   }, [])
   const fetchWorldStats = useCallback(async () => {
     try {
-      const result = await panelBridgeApi.getWorldStats()
+      const result = await gameIntegrationApi.getWorldStats()
       setWorldMap(result.success && result.data?.map ? result.data.map : null)
     } catch {
       setWorldMap(null)
@@ -828,7 +818,7 @@ export default function Dashboard() {
           fetchStatus(),
           fetchComposedStatus(),
           fetchPlayers(),
-          fetchBridgeStatus(),
+          fetchGameIntegrationStatus(),
         ])
         setInitialLoading(false)
         void Promise.allSettled([
@@ -881,7 +871,7 @@ export default function Dashboard() {
     fetchStatus,
     fetchComposedStatus,
     fetchPlayers,
-    fetchBridgeStatus,
+    fetchGameIntegrationStatus,
     fetchPlayerActivity,
     fetchAutoStartSetting,
     fetchActiveServer,
@@ -900,47 +890,34 @@ export default function Dashboard() {
       void fetchStatus()
       void fetchComposedStatus()
       void fetchPlayers()
-      void fetchBridgeStatus()
+      void fetchGameIntegrationStatus()
     }
-    const onBridgeMod = (d: {
-      alive: boolean
-      version?: string
-      serverName?: string
-      playerCount?: number
-    }) => {
-      setBridgeStatus((prev) => ({
-        configured: prev?.configured ?? true,
-        isRunning: prev?.isRunning ?? true,
-        modConnected: d.alive,
-        modStatus: {
-          alive: d.alive,
-          version: d.version || prev?.modStatus?.version,
-          serverName: d.serverName || prev?.modStatus?.serverName,
-          playerCount: d.playerCount ?? 0,
-        },
-      }))
+    const onGameIntegrationMod = () => {
+      void fetchGameIntegrationStatus()
     }
     socket.on('server:status', onStatus)
     socket.on('players:update', onPlayers)
     socket.on('servers:changed', onActiveServer)
-    socket.on('panelBridge:modStatus', onBridgeMod)
+    socket.on('gameIntegration:status', onGameIntegrationMod)
+    socket.on('gameIntegration:modStatus', onGameIntegrationMod)
     return () => {
       socket.off('server:status', onStatus)
       socket.off('players:update', onPlayers)
       socket.off('servers:changed', onActiveServer)
-      socket.off('panelBridge:modStatus', onBridgeMod)
+      socket.off('gameIntegration:status', onGameIntegrationMod)
+      socket.off('gameIntegration:modStatus', onGameIntegrationMod)
     }
   }, [
     socket,
     fetchStatus,
     fetchComposedStatus,
     fetchPlayers,
-    fetchBridgeStatus,
+    fetchGameIntegrationStatus,
     fetchActiveServer,
   ])
 
   useEffect(() => {
-    if (!bridgeStatus?.modConnected) {
+    if (!gameIntegrationStatus?.modConnected) {
       setWorldMap(null)
       return
     }
@@ -949,7 +926,7 @@ export default function Dashboard() {
       if (document.visibilityState !== 'hidden') fetchWorldStats()
     }, 10000)
     return () => clearInterval(interval)
-  }, [bridgeStatus?.modConnected, fetchWorldStats])
+  }, [gameIntegrationStatus?.modConnected, fetchWorldStats])
 
   useEffect(() => {
     if (initialLoading || showPerformanceCharts) return
@@ -1040,7 +1017,7 @@ export default function Dashboard() {
       if (document.visibilityState === 'visible') {
         fetchStatus()
         fetchPlayers()
-        fetchBridgeStatus()
+        fetchGameIntegrationStatus()
         fetchPlayerActivity()
         if (showPerformanceCharts) fetchPerformanceHistory()
       }
@@ -1050,7 +1027,7 @@ export default function Dashboard() {
   }, [
     fetchStatus,
     fetchPlayers,
-    fetchBridgeStatus,
+    fetchGameIntegrationStatus,
     fetchPlayerActivity,
     fetchPerformanceHistory,
     showPerformanceCharts,
@@ -1314,11 +1291,11 @@ export default function Dashboard() {
         headline: 'Host CPU ' + String(hostCpu) + '%',
       }
     }
-    if (bridgeStatus?.configured && !bridgeStatus.modConnected) {
+    if (gameIntegrationStatus?.configured && !gameIntegrationStatus.modConnected) {
       return {
         level: 'warning',
-        headline: 'PanelBridge offline',
-        action: { label: 'Bridge settings', to: '/settings' },
+        headline: 'Game integration offline',
+        action: { label: 'Game integration settings', to: '/settings' },
       }
     }
     if (modsPending) {
@@ -1518,7 +1495,7 @@ export default function Dashboard() {
             {worldMap && (
               <span
                 className="hidden font-mono text-[11px] text-muted-foreground/60 sm:inline"
-                title={'Map (from PanelBridge)'}
+                title={'Map (from live game data)'}
               >
                 {worldMap}
               </span>
@@ -1755,7 +1732,7 @@ export default function Dashboard() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/settings" className="flex items-center">
-                    <Server className="me-2 h-4 w-4" /> {'Bridge settings'}
+                    <Server className="me-2 h-4 w-4" /> {'Game integration settings'}
                   </Link>
                 </DropdownMenuItem>
                 {!rconConnected && (
@@ -2254,18 +2231,18 @@ export default function Dashboard() {
                 }
               />
               <ConnLine
-                label={'Bridge'}
+                label={'Game integration'}
                 state={
-                  bridgeStatus?.modConnected
+                  gameIntegrationStatus?.modConnected
                     ? 'on'
-                    : bridgeStatus?.isRunning
+                    : gameIntegrationStatus?.isRunning
                       ? 'wait'
                       : 'off'
                 }
                 value={
-                  bridgeStatus?.modConnected && bridgeStatus.modStatus?.version
-                    ? `v${bridgeStatus.modStatus.version.replace(/^v/, '')}`
-                    : bridgeStatus?.isRunning
+                  gameIntegrationStatus?.modConnected && gameIntegrationStatus.modStatus?.version
+                    ? `v${gameIntegrationStatus.modStatus.version.replace(/^v/, '')}`
+                    : gameIntegrationStatus?.isRunning
                       ? 'pending'
                       : 'offline'
                 }
@@ -2356,15 +2333,19 @@ export default function Dashboard() {
               </label>
             </div>
           </section>
-          {bridgeStatus && !bridgeStatus.configured && (
+          {gameIntegrationStatus && !gameIntegrationStatus.configured && (
             <section className="rounded-md border border-warning/25 bg-warning/[0.04] p-3">
               <p className="text-xs font-medium text-warning/85">
-                {'Bridge offline'}
+                {'Game integration offline'}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {'Advanced world controls require PanelBridge.'}{' '}
-                <Link to="/settings" className="text-primary hover:underline">
-                  {'Configure bridge'}
+                {'Live world data requires Game integration.'}{' '}
+                <Link
+                  to="/settings"
+                  search={{ tab: 'game-integration' }}
+                  className="text-primary hover:underline"
+                >
+                  {'View Game integration status'}
                 </Link>
                 .
               </p>

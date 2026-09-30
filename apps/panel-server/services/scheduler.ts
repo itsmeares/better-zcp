@@ -1,5 +1,4 @@
 import { requireServerId } from "../utils/serverScope.ts";
-import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import cron from "node-cron";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
@@ -30,9 +29,7 @@ import {
 } from "../utils/restartWarning.ts";
 import {
   classifyScheduledCommand,
-  isSchedulableBridgeAction,
   isSchedulableCommand,
-  parseBridgeActionName,
 } from "../utils/schedulerCommands.ts";
 export { classifyScheduledCommand } from "../utils/schedulerCommands.ts";
 
@@ -374,6 +371,9 @@ export class Scheduler {
 
   async executeTask(task: ScheduledTask): Promise<void> {
     const commandKind = classifyScheduledCommand(task.command);
+    if (commandKind === "unsupported") {
+      throw new Error("Unsupported scheduled task command");
+    }
 
     const { rconService, serverManager } =
       await this._resolveServicesForTask(task);
@@ -403,8 +403,6 @@ export class Scheduler {
             `Broadcast failed: ${sent?.error || "unknown error"}`,
           );
         }
-      } else if (commandKind === "bridge") {
-        await this.executeBridgeAction(task.command);
       } else {
         const result = await rconService.execute(task.command, {
           skipLog: true,
@@ -421,35 +419,6 @@ export class Scheduler {
   async _resolveServicesForTask(task: ScheduledTask) {
     if (String(task.server_id) !== requireServerId()) throw new Error("Scheduled task belongs to another server");
     return { rconService: this.rconService, serverManager: this.serverManager, cleanup: null };
-  }
-
-  async executeBridgeAction(rawCommand: string): Promise<any> {
-    const body = rawCommand.slice("bridge:".length).trim();
-    if (!body) throw new Error("bridge: action missing");
-
-    const action = parseBridgeActionName(rawCommand);
-    const firstSpace = body.indexOf(" ");
-    const argsRaw = firstSpace === -1 ? "" : body.slice(firstSpace + 1).trim();
-
-    if (!isSchedulableBridgeAction(action)) {
-      throw new Error(
-        `bridge action '${action}' is not allowed in scheduled tasks`,
-      );
-    }
-
-    let args: Record<string, any> = {};
-    if (argsRaw) {
-      try {
-        args = JSON.parse(argsRaw);
-        if (typeof args !== "object" || args === null || Array.isArray(args)) {
-          throw new Error("args must be a JSON object");
-        }
-      } catch (err: unknown) {
-        throw new Error(`invalid bridge args JSON: ${errorMessage(err)}`);
-      }
-    }
-
-    return getPanelRuntime().panelBridge.sendCommand(action, args);
   }
 
   cancelTask(taskId: string | number): boolean {

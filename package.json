@@ -36,8 +36,6 @@
     "lint:server": "pnpm --filter @better-zcp/panel-server lint",
     "check:engine-signatures": "node scripts/check-engine-signatures.mjs",
     "gen:engine-signatures": "node scripts/gen-engine-signatures.mjs",
-    "check:bridge-actions": "node scripts/audit-bridge-actions.mjs .",
-    "check:bridge-routes": "node scripts/audit-bridge-routes.mjs .",
     "check:rcon-commands": "node scripts/audit-rcon-commands.mjs .",
     "prepare": "node .husky/install.mjs"
   },

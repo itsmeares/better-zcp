@@ -601,3 +601,15 @@ describe('RconService', () => {
     });
   });
 });
+
+
+describe("Build 42 coordinate teleport", () => {
+  it("sends the named-player RCON command and accepts basement floors", async () => {
+    const service = new RconService();
+    service.execute = vi.fn(async () => ({ success: true }));
+    await service.teleportTo(100.5, 200, -2, "Alice");
+    expect(service.execute).toHaveBeenCalledWith('teleportto "Alice" 100.5,200,-2');
+    await expect(service.teleportTo(100, 200, 0.5, "Alice")).rejects.toThrow("integer Z");
+    await expect(service.teleportTo(100, 200, 32, "Alice")).rejects.toThrow("integer Z");
+  });
+});

@@ -1890,7 +1890,7 @@ export default function Servers() {
                                 compact
                                 host={currentActiveStatus.host}
                                 server={currentActiveStatus.server}
-                                bridge={currentActiveStatus.bridge}
+                                gameIntegration={currentActiveStatus.gameIntegration}
                               />
                             )
                           }

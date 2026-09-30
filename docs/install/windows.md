@@ -165,8 +165,8 @@ The panel controls your PZ server over RCON — it won't connect without this.
    Use whatever port you actually want RCON on (27015 is PZ's own default)
    and a password only you know — this is not the same as your in-game admin
    password.
-3. **Optional, only if you plan to use PanelBridge** (teleport, heal, god
-   mode, and item actions — the RCON-can't-reach features): also add
+3. **Optional, only if you plan to use game integration** (live player
+   details, heal, kill, coordinate teleport, and live mod settings): also add
    ```ini
    DoLuaChecksum=false
    ```

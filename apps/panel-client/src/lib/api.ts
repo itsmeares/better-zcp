@@ -409,12 +409,6 @@ function apiPost<T = any>(
   }).then((response) => handleResponse<T>(response));
 }
 
-function apiDelete<T = any>(endpoint: string): Promise<T> {
-  return fetchWithRetry(apiUrl(endpoint), { method: "DELETE" }).then(
-    (response) => handleResponse<T>(response),
-  );
-}
-
 function apiPut<T = any>(endpoint: string, body?: unknown): Promise<T> {
   return fetchWithRetry(apiUrl(endpoint), {
     method: "PUT",
@@ -637,12 +631,6 @@ export const playersApi = {
   addAllToWhitelist: () => apiRoute("POST", "/players/whitelist/addall"),
   getActivityLogs: (player?: string, limit?: number) =>
     apiRoute("GET", "/players/activity", { player, limit: limit || 100 }),
-  getNotes: () => apiRoute("GET", "/players/notes"),
-  getNote: (playerName: string) => apiRoute("GET", "/players/notes/:playerName", { playerName }),
-  saveNote: (playerName: string, note: string, tags: string[]) =>
-    apiPost("/players/notes", { playerName, note, tags }),
-  deleteNote: (playerName: string) =>
-    apiDelete(`/players/notes/${encodeURIComponent(playerName)}`),
   getStats: () => apiRoute("GET", "/players/stats"),
   getStat: (playerName: string) => apiRoute("GET", "/players/stats/:playerName", { playerName }),
 };
@@ -1196,7 +1184,7 @@ export interface DiscoveredMount {
   source: string;
   serverNames: string[];
   hasStartScript: boolean;
-  hasPanelBridge: boolean;
+  hasGameIntegration: boolean;
 }
 
 export interface ServerStatusSignal {
@@ -1211,7 +1199,7 @@ export interface ComposedServerStatus {
   state?: LifecycleState;
   host: ServerStatusSignal;
   server: ServerStatusSignal;
-  bridge: ServerStatusSignal;
+  gameIntegration: ServerStatusSignal;
   summary: string;
 }
 
@@ -1419,16 +1407,6 @@ export interface SandboxData {
   Debug?: Record<string, string | number | boolean>;
 }
 
-export interface UtilitiesChangeResult {
-  message?: string;
-  power?: boolean;
-  water?: boolean;
-  hydroPowerOn?: boolean;
-  debug?: string[];
-  persisted?: boolean;
-  persistReason?: string | null;
-}
-
 export interface ConfigBackupFile {
   filename: string;
   size: number;
@@ -1558,349 +1536,158 @@ export const serverFilesApi = {
   saveAndReload: (expectedServerId: string | number | null) =>
     apiPost("/server-files/save-and-reload", { expectedServerId }),
 
-  saveSandboxOption: (
-    name: string,
-    value: string | number | boolean,
-    expectedServerId: string | number | null,
-  ): Promise<{ success: boolean; persisted: boolean }> =>
-    apiPut("/server-files/sandbox-option", { name, value, expectedServerId }),
-
 };
 
-export interface BridgeCommandResult<T = Record<string, unknown>> {
+export interface GameIntegrationPlayer {
+  username: string;
+  displayName?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  accessLevel?: string;
+  isAlive?: boolean;
+  isAsleep?: boolean;
+  isSneaking?: boolean;
+  isRunning?: boolean;
+  godMod?: boolean;
+  invisible?: boolean;
+  noclip?: boolean;
+  hunger?: number;
+  thirst?: number;
+  fatigue?: number;
+  stats?: {
+    hunger?: number;
+    thirst?: number;
+    fatigue?: number;
+    stress?: number;
+    boredom?: number;
+    unhappiness?: number;
+    pain?: number;
+    endurance?: number;
+  };
+  health?: {
+    overallBodyHealth?: number;
+    isInfected?: boolean;
+    isBleeding?: boolean;
+    temperature?: number;
+  };
+}
+
+export type GameIntegrationPlayerDetails = GameIntegrationPlayer;
+
+export interface GameIntegrationStatus {
+  configured: boolean;
+  isRunning: boolean;
+  modConnected: boolean;
+  path: string | null;
+  modStatus: {
+    alive: boolean;
+    version: string;
+    serverName: string;
+    playerCount: number;
+    players: string[];
+    playerDetails?: GameIntegrationPlayerDetails[];
+    world?: Record<string, unknown>;
+    timestamp: number;
+    age?: number;
+    error?: string;
+  } | null;
+  connection: {
+    healthy: boolean;
+    canSendCommands: boolean;
+    summary: string;
+    issues: string[];
+  } | null;
+  localInstall: {
+    installed: boolean;
+    canAutoInstall: boolean;
+    needsUpdate: boolean;
+    restartRequired: boolean;
+  };
+}
+
+export interface GameIntegrationActionResult {
   success: boolean;
-  data?: T & { verified?: "confirmed" | "unverifiable" };
+  data?: {
+    name?: string;
+    value?: unknown;
+    applied?: boolean;
+    persisted?: boolean;
+    restartRequired?: boolean;
+    [key: string]: unknown;
+  };
   error?: string;
 }
 
-export const panelBridgeApi = {
+export const gameIntegrationApi = {
   getStatus: () =>
-    apiRoute("GET", "/panel-bridge/status") as Promise<{
-      configured: boolean;
-      bridgePath: string | null;
-      isRunning: boolean;
-      pendingCommands: number;
-      modConnected: boolean;
-      consecutiveFailures?: number;
-      hasFileWatcher?: boolean;
-      transport?: {
-        type: "local";
-        running: boolean;
-        lastSyncAt?: number | null;
-        lastLatencyMs?: number | null;
-        lastError?: string | null;
-        pollIntervalSeconds?: number | null;
-      };
-      config?: {
-        statusStaleMs: number;
-        pollIntervalMs: number;
-        statusCheckMs: number;
-      };
-      statusFile?: {
-        exists: boolean;
-        path?: string;
-        size?: number;
-        modified?: string;
-        age?: number;
-        ageSeconds?: number;
-        error?: string;
-      };
-      connection?: {
-        healthy: boolean;
-        canSendCommands: boolean;
-        summary: string;
-        issues: string[];
-        checks: {
-          bridgePathConfigured: boolean;
-          bridgePathExists: boolean;
-          bridgePathReadable: boolean;
-          bridgePathWritable: boolean;
-          commandsFilePresent: boolean;
-          commandsFileReadable: boolean;
-          resultsFilePresent: boolean;
-          resultsFileReadable: boolean;
-          statusFilePresent: boolean;
-          statusFileReadable: boolean;
-          statusFresh: boolean;
-          statusAgeMs: number | null;
-        };
-      };
-      modStatus: {
-        alive: boolean;
-        version: string;
-        serverName: string;
-        playerCount: number;
-        players: string[];
-        path: string;
-        timestamp: number;
-        age?: number;
-        error?: string;
-      } | null;
-      detectedPaths: {
-        serverName: string;
-        installPath: string;
-        zomboidDataPath: string;
-      } | null;
-    }>,
-
-  autoConfigure: (serverId?: string | number) =>
-    apiRoute("POST", "/panel-bridge/auto-configure", { serverId }) as Promise<{
+    apiRoute("GET", "/game-integration/status") as Promise<GameIntegrationStatus>,
+  install: () =>
+    apiRoute("POST", "/game-integration/install", {}) as Promise<{
       success: boolean;
       message?: string;
-      bridgePath: string;
-      serverName: string;
-      source: string;
-      hasStatus: boolean;
-      searchedPaths: Array<{
-        path: string;
-        source: string;
-        hasStatus: boolean;
-        hasInit: boolean;
-      }>;
+      data?: { restartRequired?: boolean; [key: string]: unknown };
       error?: string;
     }>,
-
-  scanForServer: (serverId: string | number) =>
-    apiRoute("GET", "/panel-bridge/scan-server/:serverId", { serverId }) as Promise<{
-      success: boolean;
-      serverName: string;
-      paths: Array<{
-        path: string;
-        source: string;
-        hasStatus: boolean;
-        hasInit: boolean;
-        exists: boolean;
-      }>;
-      recommendedPath: string | null;
-      error?: string;
-    }>,
-
-  autoDetect: (serverName: string, zomboidUserFolder?: string) =>
-    apiRoute("POST", "/panel-bridge/auto-detect", { serverName, zomboidUserFolder }),
-
-  configure: (zomboidSavePath: string) =>
-    apiRoute("POST", "/panel-bridge/configure", { zomboidSavePath }),
-
-  configureDirect: (bridgePath: string) =>
-    apiRoute("POST", "/panel-bridge/configure-direct", { bridgePath }) as Promise<{
-      success: boolean;
-      message?: string;
-      bridgePath: string;
-      error?: string;
-    }>,
-
-  start: () =>
-    apiRoute("POST", "/panel-bridge/start", {}),
-
-  stop: () =>
-    apiRoute("POST", "/panel-bridge/stop", {}),
-
-  refresh: () =>
-    apiRoute("POST", "/panel-bridge/refresh", {}),
-
-  scanPaths: () =>
-    apiRoute("GET", "/panel-bridge/scan-paths") as Promise<{
-      foundBridges: Array<{
-        path: string;
-        serverName: string;
-        baseDir: string;
-        hasStatus: boolean;
-        hasInit: boolean;
-        statusAge: number | null;
-        modVersion: string | null;
-        isActive: boolean;
-      }>;
-      scannedDirs: string[];
-      currentPath: string | null;
-      isRunning: boolean;
-      modConnected: boolean;
-    }>,
-
-  ping: () =>
-    apiRoute("GET", "/panel-bridge/ping"),
-
-  sendCommand: (
-    action: string,
-    args?: Record<string, unknown>,
-  ) =>
-    apiRoute("POST", "/panel-bridge/command", { action, args }),
-
   getServerInfo: () =>
-    apiRoute("GET", "/panel-bridge/server-info"),
-
+    apiRoute("GET", "/game-integration/server-info") as Promise<{
+      success: boolean;
+      data?: { players?: GameIntegrationPlayer[]; [key: string]: unknown };
+      error?: string;
+    }>,
   getWorldStats: () =>
-    apiRoute("GET", "/panel-bridge/world/stats") as Promise<{
+    apiRoute("GET", "/game-integration/world/stats") as Promise<{
       success: boolean;
       data: { serverName: string; map: string; zombiesInCell: number };
     }>,
-
-  saveWorld: () =>
-    apiRoute("POST", "/panel-bridge/world/save"),
-
   getAllPlayerDetails: () =>
-    apiRoute("GET", "/panel-bridge/players") as Promise<{
+    apiRoute("GET", "/game-integration/players") as Promise<{
       success: boolean;
-      data: {
-        players: Array<{
-          username: string;
-          displayName: string;
-          x: number;
-          y: number;
-          z: number;
-          accessLevel: string;
-          isAlive: boolean;
-          hunger?: number;
-          thirst?: number;
-          fatigue?: number;
-          health?: number;
-          isInfected?: boolean;
-        }>;
-      };
+      data: { players: GameIntegrationPlayerDetails[] };
     }>,
   getPlayerDetails: (username: string) =>
-    apiRoute("GET", "/panel-bridge/players/:username", { username }) as Promise<{
+    apiRoute("GET", "/game-integration/players/:username", { username }) as Promise<{
       success: boolean;
-      data: {
-        username?: string;
-        displayName?: string;
-        x?: number;
-        y?: number;
-        z?: number;
-        accessLevel?: string;
-        isAlive?: boolean;
-        isAsleep?: boolean;
-        isSneaking?: boolean;
-        isRunning?: boolean;
-        stats?: {
-          hunger?: number;
-          thirst?: number;
-          fatigue?: number;
-          stress?: number;
-          boredom?: number;
-          unhappiness?: number;
-          pain?: number;
-          endurance?: number;
-        };
-        health?: {
-          overallBodyHealth?: number;
-          isInfected?: boolean;
-          isBleeding?: boolean;
-          health?: number;
-          temperature?: number;
-          wetness?: number;
-        };
-      };
+      data: GameIntegrationPlayerDetails;
       error?: string;
     }>,
-  teleportPlayerBridge: (username: string, x: number, y: number, z?: number) =>
-    apiRoute("POST", "/panel-bridge/players/:username/teleport", { username, x, y, z }),
-
+  healPlayer: (username: string) =>
+    apiRoute("POST", "/game-integration/players/:username/heal", { username }) as Promise<GameIntegrationActionResult>,
   killPlayer: (username: string) =>
-    apiRoute("POST", "/panel-bridge/players/:username/kill", { username }),
-
-  sendServerMessage: (message: string, color?: string) =>
-    apiRoute("POST", "/panel-bridge/message", { message, color }),
-
-  getBridgeDebugStats: () =>
-    apiRoute("GET", "/panel-bridge/debug/stats") as Promise<BridgeCommandResult>,
-
-  checkBridgeApi: (object?: string, method?: string) =>
-    apiRoute("GET", "/panel-bridge/debug/api", { object, method }) as Promise<BridgeCommandResult>,
-
-  getBridgeAvailableHandlers: () =>
-    apiRoute("GET", "/panel-bridge/debug/handlers") as Promise<BridgeCommandResult>,
-
-  getBridgeDebugLog: (limit: number = 50, level: string = "DEBUG") =>
-    apiRoute("GET", "/panel-bridge/debug/log", { limit, level }) as Promise<BridgeCommandResult>,
-
-  runBridgeDebugItemScript: () =>
-    apiRoute("POST", "/panel-bridge/catalog/debug-item-script") as Promise<BridgeCommandResult>,
-
-  setBridgeDebugMode: (enabled: boolean) =>
-    apiRoute("POST", "/panel-bridge/debug/mode", { enabled }) as Promise<BridgeCommandResult>,
-
-  clearBridgeErrors: () =>
-    apiRoute("POST", "/panel-bridge/debug/clear-errors") as Promise<BridgeCommandResult>,
-
-  getSandboxOptions: () => apiGet("/panel-bridge/sandbox"),
-
-  getCommands: () =>
-    apiGet("/panel-bridge/commands") as Promise<{
-      commands: Array<{
-        action: string;
-        description: string;
-        args: Record<string, string>;
-      }>;
-    }>,
-
-  getModPath: () =>
-    apiGet("/panel-bridge/mod-path") as Promise<{
-      modPath: string;
-      exists: boolean;
-      files: string[];
-      suggestedInstallPath: string | null;
-    }>,
-
-  installModAuto: (serverId?: string | number) =>
-    apiRoute("POST", "/panel-bridge/install-mod-auto", { serverId }) as Promise<{
-      success: boolean;
-      message: string;
-      path: string;
-      serverName: string;
+    apiRoute("POST", "/game-integration/players/:username/kill", { username }) as Promise<GameIntegrationActionResult>,
+  getSandbox: () => apiRoute("GET", "/game-integration/sandbox") as Promise<{
+    values?: Record<string, unknown>;
+    [key: string]: unknown;
+  }>,
+  getSandboxOptions: () =>
+    apiRoute("GET", "/game-integration/sandbox/options") as Promise<{
+      success?: boolean;
+      data?: {
+        options: Record<string, Array<Record<string, unknown>>>;
+        groups: Array<{ name: string; count: number }>;
+        totalCount: number;
+        enumerated: boolean;
+      };
+      options?: Record<string, Array<Record<string, unknown>>>;
+      groups?: Array<{ name: string; count: number }>;
+      totalCount?: number;
+      enumerated?: boolean;
       error?: string;
     }>,
-
-  installMod: (serverLuaPath: string) =>
-    apiPost("/panel-bridge/install-mod", { serverLuaPath }),
-
-
-  getUtilitiesStatus: () =>
-    apiRoute("GET", "/panel-bridge/utilities/status") as Promise<{
-      success: boolean;
-      data: {
-        hydroPowerOn: boolean;
-        powerOn: boolean;
-        waterOn: boolean;
-        elecShut: string;
-        waterShut: string;
-        elecShutModifier: number;
-        waterShutModifier: number;
-        currentWorldDay: number;
-        nightsSurvived: number;
-      };
-    }>,
-
-  restoreUtilities: (power?: boolean, water?: boolean) =>
-    apiRoute("POST", "/panel-bridge/utilities/restore", { power: power !== false, water: water !== false }) as Promise<UtilitiesChangeResult>,
-
-  shutOffUtilities: (power?: boolean, water?: boolean) =>
-    apiRoute("POST", "/panel-bridge/utilities/shutoff", { power: power !== false, water: water !== false }) as Promise<UtilitiesChangeResult>,
-
-
+  setSandboxOption: (name: string, value: unknown) =>
+    apiRoute("PUT", "/game-integration/sandbox/options/:name", { name, value }) as Promise<GameIntegrationActionResult>,
   getCatalogItems: () =>
-    apiRoute("GET", "/panel-bridge/catalog/items") as Promise<{
-      items: Array<{
-        id: string;
-        name: string;
-        category: string;
-        weight: number;
-      }>;
+    apiRoute("GET", "/game-integration/catalog/items") as Promise<{
+      items: Array<{ id: string; name: string; category: string; weight: number }>;
       count: number;
       scannedAt: string | null;
     }>,
-
-  scanCatalogItems: () =>
-    apiRoute("POST", "/panel-bridge/catalog/scan-items") as Promise<{
-      items: Array<{
-        id: string;
-        name: string;
-        category: string;
-        weight: number;
-      }>;
+  refreshCatalogItems: () =>
+    apiRoute("POST", "/game-integration/catalog/items/refresh") as Promise<{
+      items: Array<{ id: string; name: string; category: string; weight: number }>;
       count: number;
       scannedAt: string;
     }>,
-
 };
 
 export interface BackupSettings {

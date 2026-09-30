@@ -11,8 +11,8 @@ vi.mock("../services/managedContainer.ts", () => ({
 }));
 
 const { resolveObservedServerRunning } = await import("../utils/serverStatus.ts");
-const bridge = {isModConnected: () => false};
-vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({panelBridge: bridge})}));
+const gameIntegration = {isConnected: () => false};
+vi.mock("../utils/panelRuntime.ts", () => ({getPanelRuntime: () => ({gameIntegration})}));
 const getObservedServerRunning = () => resolveObservedServerRunning(new ServerManager(), {connected: false}, {});
 const { ServerManager } = await import("../services/serverManager.ts");
 

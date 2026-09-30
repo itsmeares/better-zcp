@@ -14,9 +14,9 @@ The panel uses a Node.js and Express backend, a React, Vite, and TypeScript clie
 
 Server profiles describe a local or remote Project Zomboid installation. Legacy `isRemote` records resolve to `native` or `remote-sftp`; the server-status model also recognizes `docker-local` and `docker-managed` values so persisted profiles remain accurately labeled. Docker lifecycle control is not integrated: provider labels do not grant Docker socket access or container management.
 
-## PanelBridge
+## Game integration
 
-PanelBridge is a file-based bridge between the panel and the in-game Lua mod. The panel owns command files and reads response files; Lua only creates `.txt` files because Build 42 requires that extension. For local mounts, the panel can atomically install and verify the bundled PanelBridge Lua file when a server is activated.
+The panel ships a Build 42 server-side Lua integration and installs it through the configured server profile.
 
 ## Mount discovery
 
@@ -28,7 +28,7 @@ Templates are sparse JSON overrides for existing `server.ini` and SandboxVars se
 
 ## Status model
 
-The active-server status endpoint reports three distinct signals: host/process or container state, RCON connectivity, and PanelBridge state. Healthy signals remain neutral in the client. Remote SFTP hosts are deliberately shown as unknown when the panel cannot verify their process state.
+The active-server status endpoint reports host/process or container state, RCON connectivity, and game integration state. Healthy signals remain neutral in the client. Remote SFTP hosts are deliberately shown as unknown when the panel cannot verify their process state.
 
 ## Storage health
 
@@ -36,7 +36,7 @@ The active-server status endpoint reports three distinct signals: host/process o
 
 ## File writes
 
-Configuration and bridge installation writes use atomic temp-file replacement. `withFileLock()` serializes concurrent writes to the same path. Multi-file operations must either complete or restore earlier files from their original content.
+Configuration and integration installation writes use atomic temp-file replacement. `withFileLock()` serializes concurrent writes to the same path. Multi-file operations must either complete or restore earlier files from their original content.
 
 ## Authentication
 

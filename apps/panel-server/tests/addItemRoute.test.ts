@@ -1,15 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const logPlayerAction = vi.fn();
-const deletePlayerNote = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
-  getPlayerNotes: vi.fn(),
-  getPlayerNote: vi.fn(),
-  upsertPlayerNote: vi.fn(),
-  deletePlayerNote,
   getPlayerStats: vi.fn(),
   getPlayerStat: vi.fn(),
   getSteamIdBans: vi.fn(),

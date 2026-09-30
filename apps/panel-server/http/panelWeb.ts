@@ -138,10 +138,7 @@ const STRICT_RATE_LIMIT_PATHS = [
   "/api/server-files/raw",
   "/api/server-files/restore",
   "/api/server-files/save-and-reload",
-  "/api/panel-bridge/install-mod",
-  "/api/panel-bridge/install-local",
-  "/api/panel-bridge/character/export",
-  "/api/panel-bridge/character/import",
+  "/api/game-integration/install",
   "/api/panel/update-check",
   "/api/panel/update-download",
   "/api/panel/update-preflight",
@@ -498,8 +495,8 @@ function rateLimited(
     const result = hit("rcon", 60, { error: "Too many RCON commands, please slow down." });
     if (result) return result;
   }
-  if (pathname === "/api/panel-bridge/command") {
-    const result = hit("bridge", 60, { error: "Too many PanelBridge commands, please slow down." });
+  if (pathname.startsWith("/api/game-integration/") && !["GET", "HEAD"].includes(request.method || "GET")) {
+    const result = hit("game-integration", 60, { error: "Too many game actions, please slow down." });
     if (result) return result;
   }
   if (pathname === "/api/debug/client-errors") {

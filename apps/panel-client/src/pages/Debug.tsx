@@ -46,7 +46,6 @@ import {
   PlayCircle,
   Archive,
   FileDown,
-  ShieldAlert,
 } from 'lucide-react'
 import {
   Card,
@@ -80,18 +79,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useToast } from '@/components/ui/use-toast'
-import { useConfirm } from '@/contexts/ConfirmContext'
 import { SocketContext } from '@/contexts/SocketContext'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
-import { DisabledReason } from '@/components/DisabledReason'
-import { BridgeStatusBadge } from '@/components/BridgeStatusBadge'
-import { NumberInput } from '@/components/NumberInput'
 import { cn, copyText } from '@/lib/utils'
-import {
-  apiFetch,
-  panelBridgeApi,
-} from '@/lib/api'
+import { apiFetch, gameIntegrationApi } from '@/lib/api'
 
 interface LogEntry {
   id: string
@@ -136,7 +128,7 @@ interface HealthStatus {
 
 interface ActivityEntry {
   id: string
-  source: 'rcon' | 'bridge' | 'player' | 'server'
+  source: 'rcon' | 'gameIntegration' | 'player' | 'server'
   action: string
   args?: Record<string, unknown>
   detail: string
@@ -224,15 +216,6 @@ interface WorldMapDiagnostics {
   checks: DiagCheck[]
   durationMs: number
   tileSources: { b42: TileProbe | null }
-  bridge: {
-    configured: boolean
-    isRunning: boolean
-    modConnected: boolean
-    statusAgeMs: number | null
-    bridgePath: string | null
-    consecutiveFailures: number
-  } | null
-  handlers: string[]
   save: {
     zomboidDataPath: string | null
     savesDir: string | null
@@ -381,25 +364,12 @@ export default function Debug() {
     {},
   )
   const [probeLoading, setProbeLoading] = useState<string | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [bridgeDiagConnected, setBridgeDiagConnected] = useState(false)
-  const [bridgeDiagHealthy, setBridgeDiagHealthy] = useState(false)
-  const [bridgeDiagRunning, setBridgeDiagRunning] = useState(false)
-  const [bridgeDiagStatusLoading, setBridgeDiagStatusLoading] = useState(true)
-  const [checkApiObject, setCheckApiObject] = useState('ClimateManager')
-  const [checkApiMethod, setCheckApiMethod] = useState('')
-  const [handlerSearchQuery, setHandlerSearchQuery] = useState('')
-  const [debugLogLimit, setDebugLogLimit] = useState(50)
-  const [debugLogMinLevel, setDebugLogMinLevel] = useState<
-    'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
-  >('DEBUG')
   const activityFetchIdRef = useRef(0)
   const perfFetchIdRef = useRef(0)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logsScrollAreaRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const confirm = useConfirm()
   const socket = useContext(SocketContext)
 
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
@@ -551,7 +521,7 @@ export default function Debug() {
         }
         if (res && res.success === false) {
           const msg =
-            res.error || res.message || 'Bridge returned success=false'
+            res.error || res.message || 'Request returned success=false'
           setProbeResults((prev) => ({
             ...prev,
             [id]: {
@@ -598,7 +568,7 @@ export default function Debug() {
     () =>
       runProbe(
         'players',
-        () => panelBridgeApi.getServerInfo(),
+        () => gameIntegrationApi.getAllPlayerDetails(),
         (r: unknown) => {
           const res = r as { success?: boolean; data?: { players?: unknown } }
           const raw = res?.data?.players
@@ -613,13 +583,14 @@ export default function Debug() {
               const pp = p as {
                 name?: string
                 username?: string
+                displayName?: string
                 x?: number
                 y?: number
                 isAlive?: boolean
                 accessLevel?: string
               }
               return {
-                name: pp.name || pp.username,
+                name: pp.displayName || pp.username || pp.name,
                 x: pp.x,
                 y: pp.y,
                 alive: pp.isAlive !== false,
@@ -635,170 +606,6 @@ export default function Debug() {
   const probeAll = useCallback(async () => {
     await probePlayers()
   }, [probePlayers])
-
-  const runAction = useCallback(
-    async (
-      id: string,
-      fn: () => Promise<unknown>,
-      successTitle: string,
-      successDesc?: string,
-    ) => {
-      setActionLoading(id)
-      try {
-        await fn()
-        toast({ title: successTitle, description: successDesc })
-      } catch (error) {
-        const msg = getUserErrorMessage(error, 'Action failed')
-        toast({
-          title: 'Action failed',
-          description: msg,
-          variant: 'destructive',
-        })
-      } finally {
-        setActionLoading(null)
-      }
-    },
-    [toast],
-  )
-
-  const checkBridgeDiagStatus = useCallback(async () => {
-    setBridgeDiagStatusLoading(true)
-    try {
-      const data = await panelBridgeApi.getStatus()
-      setBridgeDiagRunning(data?.isRunning === true)
-      setBridgeDiagConnected(data?.modConnected === true)
-      setBridgeDiagHealthy(data?.connection?.canSendCommands === true)
-    } catch (error) {
-      reportClientError(
-        'Failed to check bridge status for the Bridge tab.',
-        error,
-      )
-      setBridgeDiagRunning(false)
-      setBridgeDiagHealthy(false)
-      setBridgeDiagConnected(false)
-    } finally {
-      setBridgeDiagStatusLoading(false)
-    }
-  }, [])
-
-  const probeBridgeStats = useCallback(
-    () =>
-      runProbe(
-        'bridgeStats',
-        () => panelBridgeApi.getBridgeDebugStats(),
-        (r: unknown) => {
-          const data = (r as { data?: unknown })?.data
-          return { count: null, sample: data ?? null }
-        },
-      ),
-    [runProbe],
-  )
-
-  const probeCheckApi = useCallback(
-    () =>
-      runProbe(
-        'checkApi',
-        () =>
-          panelBridgeApi.checkBridgeApi(
-            checkApiObject,
-            checkApiMethod.trim() || undefined,
-          ),
-        (r: unknown) => {
-          const data = (r as { data?: unknown })?.data
-          return { count: null, sample: data ?? null }
-        },
-      ),
-    [runProbe, checkApiObject, checkApiMethod],
-  )
-
-  const probeAvailableHandlers = useCallback(
-    () =>
-      runProbe(
-        'availableHandlers',
-        () => panelBridgeApi.getBridgeAvailableHandlers(),
-        (r: unknown) => {
-          const data = (
-            r as {
-              data?: { handlers?: string[]; count?: number; version?: string }
-            }
-          )?.data
-          return {
-            count: Array.isArray(data?.handlers) ? data.handlers.length : null,
-            sample: data ?? null,
-          }
-        },
-      ),
-    [runProbe],
-  )
-
-  const probeDebugLog = useCallback(
-    () =>
-      runProbe(
-        'debugLog',
-        () => panelBridgeApi.getBridgeDebugLog(debugLogLimit, debugLogMinLevel),
-        (r: unknown) => {
-          const data = (
-            r as {
-              data?: { entries?: unknown[]; totalEntries?: number }
-            }
-          )?.data
-          return {
-            count: Array.isArray(data?.entries) ? data.entries.length : null,
-            sample: data ?? null,
-          }
-        },
-      ),
-    [runProbe, debugLogLimit, debugLogMinLevel],
-  )
-
-  const probeSelfTest = useCallback(
-    () =>
-      runProbe(
-        'selfTest',
-        () => panelBridgeApi.runBridgeDebugItemScript(),
-        (r: unknown) => {
-          const data = (r as { data?: { probes?: unknown[] } })?.data
-          const probes = Array.isArray(data?.probes) ? data.probes : []
-          return { count: probes.length, sample: probes }
-        },
-      ),
-    [runProbe],
-  )
-
-  const toggleBridgeDebugMode = useCallback(
-    (nextEnabled: boolean) =>
-      runAction(
-        'bridgeDebugMode',
-        async () => {
-          await panelBridgeApi.setBridgeDebugMode(nextEnabled)
-          await probeBridgeStats()
-        },
-        nextEnabled
-          ? 'Bridge debug mode enabled'
-          : 'Bridge debug mode disabled',
-      ),
-    [runAction, probeBridgeStats],
-  )
-
-  const clearBridgeErrors = useCallback(async () => {
-    const ok = await confirm({
-      title: "Clear the bridge's error log?",
-      description:
-        "This clears the mod's in-memory error log. It doesn't fix anything -- just resets the count.",
-      confirmLabel: 'Clear',
-      destructive: true,
-    })
-    if (!ok) return
-    await runAction(
-      'bridgeClearErrors',
-      async () => {
-        const result = await panelBridgeApi.clearBridgeErrors()
-        await probeBridgeStats()
-        return result
-      },
-      'Error log cleared',
-    )
-  }, [confirm, runAction, probeBridgeStats])
 
   const fetchLogFiles = async () => {
     try {
@@ -1003,27 +810,6 @@ export default function Debug() {
     }, 30000)
     return () => clearInterval(interval)
   }, [activeTab, fetchWorldMapDiag])
-
-  useEffect(() => {
-    if (activeTab !== 'bridge') return
-    checkBridgeDiagStatus()
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'hidden') return
-      checkBridgeDiagStatus()
-    }, 15000)
-    return () => clearInterval(interval)
-  }, [activeTab, checkBridgeDiagStatus])
-
-  useEffect(() => {
-    if (activeTab !== 'bridge') return
-    if (!bridgeDiagConnected) return
-    probeBridgeStats()
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'hidden') return
-      probeBridgeStats()
-    }, 15000)
-    return () => clearInterval(interval)
-  }, [activeTab, bridgeDiagConnected, probeBridgeStats])
 
   useEffect(() => {
     if (activeTab !== 'worldmap') return
@@ -1412,7 +1198,7 @@ export default function Debug() {
       success: 0,
       failed: 0,
       rcon: 0,
-      bridge: 0,
+      gameIntegration: 0,
       player: 0,
       server: 0,
     }
@@ -1420,7 +1206,7 @@ export default function Debug() {
       if (e.success) stats.success++
       else stats.failed++
       if (e.source === 'rcon') stats.rcon++
-      else if (e.source === 'bridge') stats.bridge++
+      else if (e.source === 'gameIntegration') stats.gameIntegration++
       else if (e.source === 'player') stats.player++
       else if (e.source === 'server') stats.server++
     }
@@ -1535,8 +1321,8 @@ export default function Debug() {
     switch (source) {
       case 'rcon':
         return 'RCON'
-      case 'bridge':
-        return 'Bridge'
+      case 'gameIntegration':
+        return 'Game integration'
       case 'player':
         return 'Player'
       case 'server':
@@ -1639,10 +1425,6 @@ export default function Debug() {
                       {worldMapDiag.summary.fail + worldMapDiag.summary.warn}
                     </Badge>
                   )}
-              </TabsTrigger>
-              <TabsTrigger value="bridge" className="gap-2 shrink-0">
-                <Bug className="w-4 h-4" />
-                {'PanelBridge'}
               </TabsTrigger>
               <TabsTrigger value="performance" className="gap-2 shrink-0">
                 <TrendingUp className="w-4 h-4" />
@@ -2059,11 +1841,6 @@ export default function Debug() {
                 lastRunMs !== null
                   ? Math.max(0, worldMapNowTick - lastRunMs)
                   : 0
-              const liveHeartbeatAge =
-                wm?.bridge?.statusAgeMs !== null &&
-                wm?.bridge?.statusAgeMs !== undefined
-                  ? wm.bridge.statusAgeMs + sinceFetchMs
-                  : null
               const STATUS_ORDER: Record<DiagCheck['status'], number> = {
                 fail: 0,
                 warn: 1,
@@ -2131,15 +1908,6 @@ export default function Debug() {
                   lines.push(
                     `  ${k.toUpperCase()}: ${p ? (p.reachable ? `OK (${p.latencyMs}ms HTTP ${p.statusCode})` : `FAIL (${p.error || 'HTTP ' + p.statusCode})`) : '—'}`,
                   )
-                }
-                if (wm.bridge) {
-                  lines.push('')
-                  lines.push('PanelBridge:')
-                  lines.push(
-                    `  configured=${wm.bridge.configured} running=${wm.bridge.isRunning} mod=${wm.bridge.modConnected} heartbeatAge=${fmtAge(liveHeartbeatAge)}`,
-                  )
-                  if (wm.bridge.bridgePath)
-                    lines.push(`  path=${wm.bridge.bridgePath}`)
                 }
                 lines.push('')
                 lines.push(
@@ -2227,7 +1995,7 @@ export default function Debug() {
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
                                   {
-                                    'Live tile sources, PanelBridge data feed, and active save layout.'
+                                    'Live tile sources and active save layout.'
                                   }
                                 </p>
                                 {wm && (
@@ -2576,145 +2344,6 @@ export default function Debug() {
 
                       <Card>
                         <CardHeader className="pb-3">
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <Wifi className="w-4 h-4 text-primary" />
-                            {'Live data feed'}
-                          </CardTitle>
-                          <CardDescription>
-                            {
-                              'The map polls PanelBridge every 3s for player positions.'
-                            }
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {wm?.bridge ? (
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Configured'}
-                                </div>
-                                <div className="font-medium">
-                                  {wm.bridge.configured ? 'Yes' : 'No'}
-                                </div>
-                              </div>
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Service running'}
-                                </div>
-                                <div className="font-medium flex items-center gap-1">
-                                  {wm.bridge.isRunning ? (
-                                    <>
-                                      <Wifi className="w-3 h-3 text-primary" />{' '}
-                                      {'Yes'}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <WifiOff className="w-3 h-3 text-muted-foreground" />{' '}
-                                      {'No'}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Mod connected'}
-                                </div>
-                                <div className="font-medium">
-                                  {wm.bridge.modConnected ? 'Yes' : 'No'}
-                                </div>
-                              </div>
-                              {(() => {
-                                const age = liveHeartbeatAge
-                                const stale =
-                                  age !== null &&
-                                  age !== undefined &&
-                                  age > 30_000
-                                const slow =
-                                  age !== null &&
-                                  age !== undefined &&
-                                  age > 10_000
-                                const tone = stale
-                                  ? 'border-destructive/40 bg-destructive/5'
-                                  : slow
-                                    ? 'border-warning/40 bg-warning/5'
-                                    : 'bg-card'
-                                const label = stale
-                                  ? 'text-destructive'
-                                  : slow
-                                    ? 'text-warning'
-                                    : 'text-muted-foreground'
-                                return (
-                                  <div
-                                    className={cn('p-2 rounded border', tone)}
-                                  >
-                                    <div
-                                      className={cn(
-                                        'text-[10px] uppercase tracking-wide',
-                                        label,
-                                      )}
-                                    >
-                                      {'Last heartbeat'}
-                                    </div>
-                                    <div className="font-medium">
-                                      {fmtAge(age)}
-                                      {stale && ' · stale'}
-                                    </div>
-                                  </div>
-                                )
-                              })()}
-                              {wm.bridge.consecutiveFailures > 0 && (
-                                <div className="col-span-2 p-2 rounded border border-warning/30 bg-warning/5">
-                                  <div className="text-[10px] uppercase tracking-wide text-warning">
-                                    {'Consecutive failures'}
-                                  </div>
-                                  <div className="font-medium">
-                                    {wm.bridge.consecutiveFailures}
-                                  </div>
-                                </div>
-                              )}
-                              {wm.bridge.bridgePath && (
-                                <div className="col-span-2 p-2 rounded border bg-card">
-                                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
-                                    {'Bridge path'}
-                                  </div>
-                                  <CopyablePath
-                                    label={'Bridge path'}
-                                    value={wm.bridge.bridgePath}
-                                  />
-                                </div>
-                              )}
-                              <div className="col-span-2 p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Required handlers'}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground mb-1.5">
-                                  {
-                                    "The map uses PanelBridge to show live players."
-                                  }
-                                </div>
-                                <div className="flex gap-1 flex-wrap">
-                                  {wm.handlers.map((h) => (
-                                    <Badge
-                                      key={h}
-                                      variant="outline"
-                                      className="text-[10px] font-mono"
-                                    >
-                                      {h}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">
-                              {'No bridge data — not configured.'}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader className="pb-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <CardTitle className="flex items-center gap-2 text-base">
@@ -2723,7 +2352,7 @@ export default function Debug() {
                               </CardTitle>
                               <CardDescription>
                                 {
-                                  'Run the same PanelBridge calls the World Map page makes. Useful for confirming the mod is responding before troubleshooting on the map itself.'
+                                  'Check the live player data used by the World Map.'
                                 }
                               </CardDescription>
                             </div>
@@ -3066,7 +2695,7 @@ export default function Debug() {
                     </CardTitle>
                     <CardDescription>
                       {
-                        'Unified view of RCON commands, Bridge actions, player events, and server events'
+                        'Unified view of RCON commands, game integration actions, player events, and server events'
                       }
                     </CardDescription>
                   </div>
@@ -3094,10 +2723,10 @@ export default function Debug() {
                             ? ` (${activityStats.rcon})`
                             : ''}
                         </SelectItem>
-                        <SelectItem value="bridge">
-                          {'Bridge'}
-                          {activityStats.bridge > 0
-                            ? ` (${activityStats.bridge})`
+                        <SelectItem value="gameIntegration">
+                          {'Game integration'}
+                          {activityStats.gameIntegration > 0
+                            ? ` (${activityStats.gameIntegration})`
                             : ''}
                         </SelectItem>
                         <SelectItem value="player">
@@ -3378,7 +3007,7 @@ export default function Debug() {
                                   'shrink-0 text-[10px] px-1.5 py-0 uppercase font-semibold',
                                   entry.source === 'rcon' &&
                                     'border-blue-500/50 text-blue-400',
-                                  entry.source === 'bridge' &&
+                                  entry.source === 'gameIntegration' &&
                                     'border-primary/50 text-primary',
                                   entry.source === 'player' &&
                                     'border-green-500/50 text-green-400',
@@ -5123,723 +4752,6 @@ export default function Debug() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="bridge" className="space-y-4">
-            {
-              <>
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <h3 className="text-sm font-medium">
-                      {'PanelBridge mod diagnostics'}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {
-                        "Live status, stats, and self-tests for the in-game mod itself -- separate from the World Map tab's map-specific checks."
-                      }
-                    </p>
-                  </div>
-                  <BridgeStatusBadge
-                    connected={bridgeDiagConnected && bridgeDiagHealthy}
-                    running={bridgeDiagRunning}
-                    loading={bridgeDiagStatusLoading}
-                    interactive={false}
-                  />
-                </div>
-
-                {!bridgeDiagStatusLoading && !bridgeDiagConnected && (
-                  <div className="p-2.5 rounded-md border border-warning/40 bg-warning/5 text-xs flex items-start gap-2">
-                    <WifiOff className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-                    <div>
-                      {
-                        "The PanelBridge mod isn't connected. Start the PZ server with the mod installed to see live data here."
-                      }
-                    </div>
-                  </div>
-                )}
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <Activity className="w-4 h-4 text-primary" />
-                          {'Stats'}
-                        </CardTitle>
-                        <CardDescription>
-                          {
-                            'Command counts, uptime, detected build, debug mode, and the error log.'
-                          }
-                        </CardDescription>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={probeBridgeStats}
-                        disabled={
-                          !bridgeDiagConnected || probeLoading === 'bridgeStats'
-                        }
-                        className="shrink-0"
-                      >
-                        {probeLoading === 'bridgeStats' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        )}
-                        <span className="ms-1.5">{'Refresh'}</span>
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {!bridgeDiagConnected ? (
-                      <div className="text-sm text-muted-foreground">
-                        {'Bridge is offline -- no data to show.'}
-                      </div>
-                    ) : !probeResults['bridgeStats'] ? (
-                      <div className="text-sm text-muted-foreground">
-                        {'Not checked yet.'}
-                      </div>
-                    ) : !probeResults['bridgeStats'].ok ? (
-                      <div className="p-2.5 rounded-md border border-destructive/40 bg-destructive/10 text-sm flex items-start gap-2">
-                        <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
-                        <div className="text-destructive">
-                          {probeResults['bridgeStats'].error}
-                        </div>
-                      </div>
-                    ) : (
-                      (() => {
-                        const stats = probeResults['bridgeStats'].sample as {
-                          version?: string
-                          uptime?: number
-                          commandsProcessed?: number
-                          commandsSucceeded?: number
-                          commandsFailed?: number
-                          debugMode?: boolean
-                          lastError?: {
-                            timestamp?: number
-                            message?: string
-                          } | null
-                          recentErrors?: Array<{
-                            timestamp?: number
-                            message?: string
-                          }>
-                          detectedVersion?: {
-                            build?: string
-                            isB42?: boolean
-                          }
-                        }
-                        const uptimeSec = Math.max(
-                          0,
-                          Math.round(stats.uptime ?? 0),
-                        )
-                        const h = Math.floor(uptimeSec / 3600)
-                        const m = Math.floor((uptimeSec % 3600) / 60)
-                        const s = uptimeSec % 60
-                        const uptimeLabel =
-                          h > 0
-                            ? `${h}h ${m}m`
-                            : m > 0
-                              ? `${m}m ${s}s`
-                              : `${s}s`
-                        const errCount = stats.recentErrors?.length ?? 0
-                        return (
-                          <>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Mod version'}
-                                </div>
-                                <div className="font-medium font-mono">
-                                  {stats.version ?? 'N/A'}
-                                </div>
-                              </div>
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Uptime'}
-                                </div>
-                                <div className="font-medium">{uptimeLabel}</div>
-                              </div>
-                              <div className="p-2 rounded border bg-card">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Commands OK / total'}
-                                </div>
-                                <div className="font-medium">
-                                  {stats.commandsSucceeded ?? 0} /{' '}
-                                  {stats.commandsProcessed ?? 0}
-                                </div>
-                              </div>
-                              <div
-                                className={cn(
-                                  'p-2 rounded border',
-                                  (stats.commandsFailed ?? 0) > 0
-                                    ? 'border-warning/40 bg-warning/5'
-                                    : 'bg-card',
-                                )}
-                              >
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                  {'Commands failed'}
-                                </div>
-                                <div className="font-medium">
-                                  {stats.commandsFailed ?? 0}
-                                </div>
-                              </div>
-                            </div>
-
-                            {stats.detectedVersion && (
-                              <div className="p-2 rounded border bg-card text-sm">
-                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                                  {'Detected build'}
-                                </div>
-                                <div className="font-mono">
-                                  {stats.detectedVersion.build ?? 'N/A'}
-                                  {' · '}
-                                  {stats.detectedVersion.isB42
-                                    ? 'B42'
-                                    : 'N/A'}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground mt-1">
-                                  {
-                                    "Determined from the mod's build-string parse -- its reliable primary detection path, not a fallback. Live weather-feature flags (blizzard/tropical) can't be safely confirmed without actually triggering a real weather event, so they're left out entirely here rather than shown as a possibly-wrong false."
-                                  }
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="flex items-center justify-between gap-2 p-2 rounded border bg-card">
-                              <div>
-                                <div className="text-sm font-medium">
-                                  {'Debug mode'}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground">
-                                  {
-                                    'Verbose logging on the mod side. Safe to toggle -- affects log volume only.'
-                                  }
-                                </div>
-                              </div>
-
-                              <Switch
-                                checked={stats.debugMode === true}
-                                disabled={actionLoading === 'bridgeDebugMode'}
-                                onCheckedChange={(checked) =>
-                                  toggleBridgeDebugMode(checked)
-                                }
-                              />
-                            </div>
-
-                            <div className="p-2 rounded border bg-card">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm font-medium">
-                                  {Number(errCount) === 1
-                                    ? String(errCount) + ' recent error'
-                                    : String(errCount) + ' recent errors'}
-                                </div>
-                                <DisabledReason
-                                  reason={
-                                    errCount === 0
-                                      ? 'No errors to clear.'
-                                      : null
-                                  }
-                                >
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={clearBridgeErrors}
-                                    disabled={
-                                      errCount === 0 ||
-                                      actionLoading === 'bridgeClearErrors'
-                                    }
-                                  >
-                                    {actionLoading === 'bridgeClearErrors' ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    )}
-                                    <span className="ms-1.5">
-                                      {'Clear error log'}
-                                    </span>
-                                  </Button>
-                                </DisabledReason>
-                              </div>
-                              {stats.lastError?.message && (
-                                <div className="text-[11px] text-destructive mt-1.5 font-mono break-all">
-                                  {stats.lastError.message}
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )
-                      })()
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Search className="w-4 h-4 text-primary" />
-                      {'Check API'}
-                    </CardTitle>
-                    <CardDescription>
-                      {
-                        'Probe whether a specific game object -- and optionally one of its methods -- is available on this build.'
-                      }
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-end gap-2 flex-wrap">
-                      <div className="space-y-1">
-                        <Label className="text-xs">{'Object'}</Label>
-                        <Select
-                          value={checkApiObject}
-                          onValueChange={setCheckApiObject}
-                        >
-                          <SelectTrigger className="h-8 w-44 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ClimateManager">
-                              ClimateManager
-                            </SelectItem>
-                            <SelectItem value="GameTime">GameTime</SelectItem>
-                            <SelectItem value="World">World</SelectItem>
-                            <SelectItem value="ChatServer">
-                              ChatServer
-                            </SelectItem>
-                            <SelectItem value="SandboxOptions">
-                              SandboxOptions
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1 flex-1 min-w-[10rem]">
-                        <Label className="text-xs">{'Method (optional)'}</Label>
-                        <Input
-                          className="h-8 text-xs font-mono"
-                          placeholder={'e.g. getTemperature'}
-                          value={checkApiMethod}
-                          onChange={(e) => setCheckApiMethod(e.target.value)}
-                        />
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={probeCheckApi}
-                        disabled={
-                          !bridgeDiagConnected || probeLoading === 'checkApi'
-                        }
-                      >
-                        {probeLoading === 'checkApi' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <PlayCircle className="w-3.5 h-3.5" />
-                        )}
-                        <span className="ms-1.5">{'Check'}</span>
-                      </Button>
-                    </div>
-
-                    {probeResults['checkApi'] &&
-                      (!probeResults['checkApi'].ok ? (
-                        <div className="text-sm text-destructive">
-                          {probeResults['checkApi'].error}
-                        </div>
-                      ) : (
-                        (() => {
-                          const r = probeResults['checkApi'].sample as {
-                            object?: string
-                            available?: boolean
-                            type?: string
-                            method?: string
-                            methodAvailable?: boolean
-                            methods?: string[]
-                            methodsError?: string
-                          }
-                          return (
-                            <div className="p-2.5 rounded border bg-card text-sm space-y-1.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge
-                                  variant={
-                                    r.available ? 'outline' : 'destructive'
-                                  }
-                                >
-                                  {r.available ? 'Available' : 'Not available'}
-                                </Badge>
-                                {r.method && (
-                                  <Badge
-                                    variant={
-                                      r.methodAvailable
-                                        ? 'outline'
-                                        : 'destructive'
-                                    }
-                                    className="font-mono"
-                                  >
-                                    {r.method}: {r.methodAvailable ? '✓' : '✗'}
-                                  </Badge>
-                                )}
-                              </div>
-                              {r.methods && r.methods.length > 0 && (
-                                <div className="flex flex-wrap gap-1 pt-1">
-                                  {r.methods.map((m) => (
-                                    <Badge
-                                      key={m}
-                                      variant="outline"
-                                      className="text-[10px] font-mono"
-                                    >
-                                      {m}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                              {r.methodsError && (
-                                <div className="text-[11px] text-muted-foreground">
-                                  {r.methodsError}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })()
-                      ))}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <Terminal className="w-4 h-4 text-primary" />
-                          {'Available handlers'}
-                        </CardTitle>
-                        <CardDescription>
-                          {
-                            'Every command this build of the mod currently registers.'
-                          }
-                        </CardDescription>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={probeAvailableHandlers}
-                        disabled={
-                          !bridgeDiagConnected ||
-                          probeLoading === 'availableHandlers'
-                        }
-                        className="shrink-0"
-                      >
-                        {probeLoading === 'availableHandlers' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        )}
-                        <span className="ms-1.5">{'Load handlers'}</span>
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {!probeResults['availableHandlers'] ? (
-                      <div className="text-sm text-muted-foreground">
-                        {'Not checked yet.'}
-                      </div>
-                    ) : !probeResults['availableHandlers'].ok ? (
-                      <div className="text-sm text-destructive">
-                        {probeResults['availableHandlers'].error}
-                      </div>
-                    ) : (
-                      (() => {
-                        const data = probeResults['availableHandlers']
-                          .sample as {
-                          handlers?: string[]
-                          count?: number
-                        }
-                        const all = data.handlers ?? []
-                        const q = handlerSearchQuery.trim().toLowerCase()
-                        const filtered = q
-                          ? all.filter((h) => h.toLowerCase().includes(q))
-                          : all
-                        return (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <Input
-                                className="h-8 text-xs"
-                                placeholder={'Filter handlers…'}
-                                value={handlerSearchQuery}
-                                onChange={(e) =>
-                                  setHandlerSearchQuery(e.target.value)
-                                }
-                              />
-                              <span className="text-[11px] text-muted-foreground shrink-0">
-                                {String(filtered.length) +
-                                  ' / ' +
-                                  String(data.count ?? all.length)}
-                              </span>
-                            </div>
-                            <ScrollArea className="h-48 rounded border bg-card p-2">
-                              <div className="flex flex-wrap gap-1">
-                                {filtered.map((h) => (
-                                  <Badge
-                                    key={h}
-                                    variant="outline"
-                                    className="text-[10px] font-mono"
-                                  >
-                                    {h}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </>
-                        )
-                      })()
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <FileText className="w-4 h-4 text-primary" />
-                      {'Debug log'}
-                    </CardTitle>
-                    <CardDescription>
-                      {
-                        "Recent entries from the mod's own ring-buffer log, newest first."
-                      }
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-end gap-2 flex-wrap">
-                      <div className="space-y-1">
-                        <Label className="text-xs">{'Limit'}</Label>
-                        <NumberInput
-                          className="h-8 w-24 text-xs"
-                          value={debugLogLimit}
-                          min={1}
-                          max={200}
-                          clamp={(v) =>
-                            Math.min(200, Math.max(1, Math.round(v)))
-                          }
-                          onChange={(v) =>
-                            setDebugLogLimit(Number.isFinite(v) ? v : 50)
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">{'Min level'}</Label>
-                        <Select
-                          value={debugLogMinLevel}
-                          onValueChange={(v) =>
-                            setDebugLogMinLevel(v as typeof debugLogMinLevel)
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-32 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="DEBUG">{'Debug'}</SelectItem>
-                            <SelectItem value="INFO">{'Info'}</SelectItem>
-                            <SelectItem value="WARN">{'Warn'}</SelectItem>
-                            <SelectItem value="ERROR">{'Error'}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={probeDebugLog}
-                        disabled={
-                          !bridgeDiagConnected || probeLoading === 'debugLog'
-                        }
-                      >
-                        {probeLoading === 'debugLog' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <PlayCircle className="w-3.5 h-3.5" />
-                        )}
-                        <span className="ms-1.5">{'Fetch log'}</span>
-                      </Button>
-                    </div>
-
-                    {probeResults['debugLog'] &&
-                      (!probeResults['debugLog'].ok ? (
-                        <div className="text-sm text-destructive">
-                          {probeResults['debugLog'].error}
-                        </div>
-                      ) : (
-                        (() => {
-                          const data = probeResults['debugLog'].sample as {
-                            entries?: Array<{
-                              timestamp?: number
-                              level?: string
-                              message?: string
-                            }>
-                            totalEntries?: number
-                          }
-                          const entries = data.entries ?? []
-                          return (
-                            <>
-                              <div className="text-[11px] text-muted-foreground">
-                                {String(entries.length) +
-                                  ' of ' +
-                                  String(data.totalEntries ?? entries.length) +
-                                  ' total entries'}
-                              </div>
-                              <ScrollArea className="h-64 rounded border bg-card">
-                                <div className="divide-y divide-border/40">
-                                  {entries.length === 0 ? (
-                                    <div className="p-3 text-sm text-muted-foreground">
-                                      {'No entries at this level.'}
-                                    </div>
-                                  ) : (
-                                    entries
-                                      .slice()
-                                      .reverse()
-                                      .map((logEntry, i) => (
-                                        <div
-                                          key={i}
-                                          className="p-2 text-xs font-mono flex items-start gap-2"
-                                        >
-                                          <Badge
-                                            variant={
-                                              logEntry.level === 'ERROR'
-                                                ? 'destructive'
-                                                : 'outline'
-                                            }
-                                            className="text-[9px] shrink-0"
-                                          >
-                                            {logEntry.level}
-                                          </Badge>
-                                          <span className="text-muted-foreground shrink-0">
-                                            {logEntry.timestamp
-                                              ? new Date(
-                                                  logEntry.timestamp,
-                                                ).toLocaleTimeString()
-                                              : ''}
-                                          </span>
-                                          <span className="break-all">
-                                            {logEntry.message}
-                                          </span>
-                                        </div>
-                                      ))
-                                  )}
-                                </div>
-                              </ScrollArea>
-                            </>
-                          )
-                        })()
-                      ))}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <ShieldAlert className="w-4 h-4 text-primary" />
-                          {'Run bridge self-test'}
-                        </CardTitle>
-                        <CardDescription>
-                          {
-                            "Probes a fixed set of engine methods against the first 3 items in the catalog -- a quick read of whether this build still speaks the mod's language. Read-only, no input needed."
-                          }
-                        </CardDescription>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={probeSelfTest}
-                        disabled={
-                          !bridgeDiagConnected || probeLoading === 'selfTest'
-                        }
-                        className="shrink-0"
-                      >
-                        {probeLoading === 'selfTest' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <PlayCircle className="w-3.5 h-3.5" />
-                        )}
-                        <span className="ms-1.5">{'Run self-test'}</span>
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {!probeResults['selfTest'] ? (
-                      <div className="text-sm text-muted-foreground">
-                        {'Not checked yet.'}
-                      </div>
-                    ) : !probeResults['selfTest'].ok ? (
-                      <div className="text-sm text-destructive">
-                        {probeResults['selfTest'].error}
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="text-start p-1.5 font-medium">
-                                {'Item'}
-                              </th>
-                              {[
-                                'getTypeString',
-                                'getType',
-                                'getCategory',
-                                'getDisplayCategory',
-                                'getBodyLocation',
-                                'getSubCategory',
-                                'getCategories',
-                                'getTypeToItem',
-                                'getScriptObjectType',
-                              ].map((m) => (
-                                <th
-                                  key={m}
-                                  className="text-start p-1.5 font-mono font-medium whitespace-nowrap"
-                                >
-                                  {m}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(
-                              probeResults['selfTest'].sample as Array<
-                                Record<string, string>
-                              >
-                            ).map((probe, i) => (
-                              <tr key={i} className="border-b border-border/30">
-                                <td className="p-1.5 font-mono">{probe.id}</td>
-                                {[
-                                  'getTypeString',
-                                  'getType',
-                                  'getCategory',
-                                  'getDisplayCategory',
-                                  'getBodyLocation',
-                                  'getSubCategory',
-                                  'getCategories',
-                                  'getTypeToItem',
-                                  'getScriptObjectType',
-                                ].map((m) => (
-                                  <td
-                                    key={m}
-                                    className={cn(
-                                      'p-1.5 font-mono whitespace-nowrap',
-                                      probe[m] === 'nil'
-                                        ? 'text-muted-foreground'
-                                        : probe[m]?.startsWith('ERROR')
-                                          ? 'text-destructive'
-                                          : 'text-primary',
-                                    )}
-                                  >
-                                    {probe[m]}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
-            }
-          </TabsContent>
         </Tabs>
       }
     </div>

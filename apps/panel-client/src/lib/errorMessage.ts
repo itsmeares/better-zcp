@@ -67,8 +67,8 @@ export function getRecoveryUrl(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error || '')
   if (/rcon|connection refused|authentication failed/i.test(message))
     return '/servers'
-  if (/panelbridge|bridge not running|bridge not configured/i.test(message))
-    return '/settings?tab=bridge'
+  if (/game integration|game-integration|integration not running|integration not configured/i.test(message))
+    return '/settings?tab=game-integration'
   if (/no active server|no server configured/i.test(message)) return '/servers'
   if (/eacces|permission denied/i.test(message)) return '/servers'
   return null

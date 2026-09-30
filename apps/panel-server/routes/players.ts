@@ -1,15 +1,10 @@
-import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import { Router, type Request } from "../http/apiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {
   logPlayerAction,
   getPlayerLogs,
-  getPlayerNotes,
-  getPlayerNote,
-  upsertPlayerNote,
-  deletePlayerNote,
   getPlayerStats,
   getPlayerStat,
   getSteamIdBans,
@@ -103,25 +98,6 @@ function requireBooleanToggle(value: unknown): value is boolean {
 
 export function normalizePlayerLogLimit(value: unknown): number {
   return parseClampedInteger(value, 100, 1, 500);
-}
-
-async function setPlayerMode(
-  req: Request,
-  bridgeAction: string,
-  rconMethod: string,
-  username: string,
-  enabled: boolean,
-) {
-  if (getPanelRuntime().panelBridge.isRunning) {
-    const result = await getPanelRuntime().panelBridge.sendCommand(bridgeAction, { username, enabled: enabled === true });
-    return { ...result, via: 'bridge' };
-  }
-  const result = await req.app.get('rconService')[rconMethod](username, enabled);
-  return {
-    ...result,
-    via: 'rcon',
-    warning: 'PanelBridge is offline; this was sent via RCON instead, which reports less detail about the result.',
-  };
 }
 
 router.get('/activity', async (req, res) => {
@@ -360,18 +336,15 @@ router.post('/teleport', async (req, res) => {
 
     let result;
     if (x !== undefined && y !== undefined && z !== undefined) {
-      if (!isValidNumber(x, 0, 24000) || !isValidNumber(y, 0, 24000) || !isValidNumber(z, 0, 8)) {
-        return res.status(400).json({ error: 'Invalid coordinates (x/y: 0 to 24000, z: 0 to 8)', code: ErrorCode.PLAYERS_TELEPORT_INVALID_COORDINATES });
+      if (!isValidNumber(x, -1000000, 1000000) || !isValidNumber(y, -1000000, 1000000) || !isValidNumber(z, -32, 31) || !Number.isInteger(Number(z))) {
+        return res.status(400).json({ error: 'Invalid coordinates (x/y: -1000000 to 1000000, z: -32 to 31 integer)', code: ErrorCode.PLAYERS_TELEPORT_INVALID_COORDINATES });
       }
       if (player1) {
-        log.info(`POST /teleport: ${player1} → coords(${x}, ${y}, ${z}) via PanelBridge`);
+        log.info(`POST /teleport: ${player1} → coords(${x}, ${y}, ${z}) via RCON`);
         if (!isValidUsername(player1)) {
           return res.status(400).json({ error: 'Invalid player1 username format', code: ErrorCode.PLAYERS_TELEPORT_INVALID_PLAYER1 });
         }
-        if (!getPanelRuntime().panelBridge.isRunning) {
-          return res.status(503).json({ error: 'PanelBridge is not running — cannot teleport a player to coordinates without it', code: ErrorCode.PLAYERS_TELEPORT_BRIDGE_OFFLINE });
-        }
-        result = await getPanelRuntime().panelBridge.teleportPlayer(player1, Number(x), Number(y), Number(z));
+        result = await rconService.teleportTo(Number(x), Number(y), Number(z), player1);
       } else {
         result = await rconService.teleportTo(x, y, z);
       }
@@ -486,8 +459,8 @@ router.post('/godmode', async (req, res) => {
       return res.status(400).json({ error: 'enabled must be a boolean', code: ErrorCode.PLAYERS_INVALID_ENABLED_FLAG });
     }
 
-    const result = await setPlayerMode(req, 'setGodMode', 'setGodMode', username, enabled);
-    log.info(`POST /godmode: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
+    const result = await req.app.get("rconService").setGodMode(username, enabled);
+    log.info(`POST /godmode: ${username} → ${enabled ? 'ON' : 'OFF'} via RCON`);
     if (result?.success) {
       await recordPlayerAction(username, 'godmode', enabled ? 'enabled' : 'disabled');
     }
@@ -513,8 +486,8 @@ router.post('/invisible', async (req, res) => {
       return res.status(400).json({ error: 'enabled must be a boolean', code: ErrorCode.PLAYERS_INVALID_ENABLED_FLAG });
     }
 
-    const result = await setPlayerMode(req, 'setInvisible', 'setInvisible', username, enabled);
-    log.info(`POST /invisible: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
+    const result = await req.app.get("rconService").setInvisible(username, enabled);
+    log.info(`POST /invisible: ${username} → ${enabled ? 'ON' : 'OFF'} via RCON`);
     if (result?.success) {
       await recordPlayerAction(username, 'invisible', enabled ? 'enabled' : 'disabled');
     }
@@ -540,8 +513,8 @@ router.post('/noclip', async (req, res) => {
       return res.status(400).json({ error: 'enabled must be a boolean', code: ErrorCode.PLAYERS_INVALID_ENABLED_FLAG });
     }
 
-    const result = await setPlayerMode(req, 'setNoclip', 'setNoclip', username, enabled);
-    log.info(`POST /noclip: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
+    const result = await req.app.get("rconService").setNoclip(username, enabled);
+    log.info(`POST /noclip: ${username} → ${enabled ? 'ON' : 'OFF'} via RCON`);
     if (result?.success) {
       await recordPlayerAction(username, 'noclip', enabled ? 'enabled' : 'disabled');
     }
@@ -764,78 +737,6 @@ router.get('/whitelist', async (req, res) => {
     });
   } catch (error: unknown) {
     log.error(`Failed to list whitelist accounts: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-
-router.get('/notes', async (req, res) => {
-  try {
-    const notes = await getPlayerNotes();
-    res.json({ success: true, notes });
-  } catch (error: unknown) {
-    log.error(`Failed to get player notes: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.get('/notes/:playerName', async (req, res) => {
-  try {
-    const note = await getPlayerNote(String(req.params.playerName));
-    res.json({ success: true, note });
-  } catch (error: unknown) {
-    log.error(`Failed to get player note: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.post('/notes', async (req, res) => {
-  try {
-    const { playerName, note } = req.body || {};
-    const tags = req.body.tags || [];
-
-    if (!playerName) {
-      return res.status(400).json({ error: 'Player name is required', code: ErrorCode.PLAYERS_NOTE_PLAYER_NAME_REQUIRED });
-    }
-    if (!isValidUsername(playerName)) {
-      return res.status(400).json({ error: 'Invalid player name format', code: ErrorCode.PLAYERS_INVALID_NOTE_PLAYER_NAME });
-    }
-
-    if (note !== undefined && note !== null && typeof note !== 'string') {
-      return res.status(400).json({ error: 'Note must be text', code: ErrorCode.PLAYERS_NOTE_MUST_BE_TEXT });
-    }
-    if (typeof note === 'string' && note.length > 10000) {
-      return res.status(400).json({ error: 'Note too long (max 10000 characters)', code: ErrorCode.PLAYERS_NOTE_TOO_LONG });
-    }
-
-    if (!Array.isArray(tags)) {
-      return res.status(400).json({ error: 'Tags must be an array', code: ErrorCode.PLAYERS_NOTE_TAGS_MUST_BE_ARRAY });
-    }
-    if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
-      return res.status(400).json({ error: 'Tags must be strings (max 50 chars each)', code: ErrorCode.PLAYERS_NOTE_INVALID_TAGS });
-    }
-
-    const result = await upsertPlayerNote(String(playerName), note, tags);
-    res.json({ success: true, note: result });
-  } catch (error: unknown) {
-    log.error(`Failed to save player note: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.delete('/notes/:playerName', async (req, res) => {
-  try {
-    const success = await deletePlayerNote(String(req.params.playerName));
-    if (!success) {
-      return res.status(404).json({
-        success: false,
-        error: 'Player note not found',
-        code: ErrorCode.PLAYERS_NOTE_NOT_FOUND,
-      });
-    }
-    res.json({ success });
-  } catch (error: unknown) {
-    log.error(`Failed to delete player note: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });

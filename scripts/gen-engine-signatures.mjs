@@ -14,7 +14,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const LUA_PATH = path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
+const LUA_PATH = path.join(ROOT, 'integrations/argus/Argus/media/lua/server/Argus.lua');
 const MANIFEST_PATH = path.join(__dirname, 'engine-signatures.manifest.json');
 
 const MIN_SEED_FINGERPRINT_COVERAGE = 0.7;
@@ -226,7 +226,7 @@ function classProvider(className, methodName) {
 
 function computeSeedFingerprint(cleanedSrc, seedFnName) {
   const varNames = new Set();
-  const assignRe = new RegExp(`(?:local\\s+)?([A-Za-z_]\\w*)\\s*=\\s*${seedFnName}\\s*\\(`, 'g');
+  const assignRe = new RegExp(`(?:local\\s+)?([A-Za-z_]\\w*)\\s*=[^\\n;]*?\\b${seedFnName}\\s*\\(`, 'g');
   let m;
   while ((m = assignRe.exec(cleanedSrc))) varNames.add(m[1]);
 
@@ -234,10 +234,7 @@ function computeSeedFingerprint(cleanedSrc, seedFnName) {
   for (const varName of varNames) {
     const directRe = new RegExp(`\\b${varName}\\s*:\\s*([A-Za-z_]\\w*)\\s*\\(`, 'g');
     while ((m = directRe.exec(cleanedSrc))) methodNames.add(m[1]);
-    const helperRe = new RegExp(
-      `PanelBridge\\.(?:invoke|hasMethod|safeCall|safeGet|tryGet)\\(\\s*${varName}\\s*,\\s*["']([A-Za-z_]\\w*)["']`,
-      'g',
-    );
+    const helperRe = new RegExp(`\\b(?:call|get|safeString)\\(\\s*${varName}\\s*,\\s*["']([A-Za-z_]\\w*)["']`, 'g');
     while ((m = helperRe.exec(cleanedSrc))) methodNames.add(m[1]);
   }
   return { varNames, methodNames };
@@ -341,9 +338,6 @@ const touchedClasses = new Set();
 for (const site of callSites) {
   if (site.receiverType) touchedClasses.add(site.receiverType);
 }
-for (const [className, info] of javapCache) {
-  if (info.exists) touchedClasses.add(className);
-}
 
 const resolvedCount = callSites.filter((s) => s.resolved).length;
 const absentFindings = callSites.filter((s) => s.resolved && s.methodInfo && s.methodInfo.exists === false);
@@ -358,7 +352,7 @@ if (absentFindings.length > 0) {
   console.log('');
   console.log('  Definitively absent (javap confirms no such method anywhere in the class chain):');
   for (const f of absentFindings) {
-    console.log(`    PanelBridge.lua:${f.line}  ${f.receiverExpr} (${f.receiverType}) has no ${f.methodName}()`);
+    console.log(`    Argus.lua:${f.line}  ${f.receiverExpr} (${f.receiverType}) has no ${f.methodName}()`);
   }
 }
 
@@ -372,7 +366,12 @@ for (const className of [...touchedClasses].sort()) {
   const info = javapCache.get(className);
   if (!info || !info.exists) continue;
   const methods = {};
-  for (const [name, sigs] of info.methods) {
+  const calledNames = new Set(
+    callSites.filter((site) => site.receiverType === className).map((site) => site.methodName),
+  );
+  for (const name of calledNames) {
+    const sigs = info.methods.get(name);
+    if (!sigs) continue;
     methods[name] = sigs.map((s) => ({
       returns: s.returns,
       returnClass: s.returnClass,
@@ -392,7 +391,7 @@ try {
 
 const manifest = {
   generatedAt: new Date().toISOString(),
-  generatorNote: 'Run `node scripts/gen-engine-signatures.mjs` to regenerate after PanelBridge.lua or the game jar changes.',
+  generatorNote: 'Run `node scripts/gen-engine-signatures.mjs` to regenerate after Argus.lua or the game jar changes.',
   javapVersion,
   jarBasename: path.basename(JAR_PATH),
   sourceFile: path.relative(ROOT, LUA_PATH).replace(/\\/g, '/'),

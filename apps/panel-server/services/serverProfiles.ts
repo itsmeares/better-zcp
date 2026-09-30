@@ -27,6 +27,7 @@ import {
 import { resolveLaunchMode, ServerManager } from "./serverManager.ts";
 import { applyUpnpToIni } from "../utils/upnpConfig.ts";
 import { resolveEnvRconHost } from "./rcon.ts";
+import { getServerName } from "./sandboxPersistence.ts";
 import { getDockerClient, isBundledGameProfile, removeBundledGameContainer, resolveDockerHostSignal } from "./managedContainer.ts";
 import {
   buildLifecycleTemplate,
@@ -78,8 +79,8 @@ export type ServerProfileRuntime = {
   io?: JsonRecord | null;
   refreshWorkshopChecker?: (modChecker: JsonRecord) => Promise<unknown>;
   logTailer?: { reloadConfig?: () => Promise<unknown> } | null;
+  gameIntegration?: { start: (directory: string, serverName: string) => unknown; stop: () => unknown } | null;
   stop?: () => Promise<unknown>;
-  autoInstallBridgeIfNeeded?: (server: JsonRecord) => void;
 };
 
 export class ServerProfileError extends Error {
@@ -547,6 +548,35 @@ export async function updateServerProfile(
 
     const reloadWarnings: string[] = [];
     {
+      if (
+        runtime.gameIntegration &&
+        ["serverName", "zomboidDataPath"].some((key) =>
+          Object.prototype.hasOwnProperty.call(updates, key),
+        )
+      ) {
+        try {
+          if (server.zomboidDataPath && server.serverName) {
+            const serverName = await getServerName(server);
+            await runtime.gameIntegration.start(
+              path.join(
+                server.zomboidDataPath,
+                "Lua",
+                "argus",
+                serverName,
+              ),
+              serverName,
+            );
+          } else {
+            await runtime.gameIntegration.stop();
+          }
+        } catch (error: unknown) {
+          log.warn(`Game integration reload failed after profile update: ${errorMessage(error)}`);
+          reloadWarnings.push(
+            "Game integration failed to reload after the profile update; restart the panel to retry",
+          );
+        }
+      }
+
       const rconFieldsChanged = ["rconHost", "rconPort", "rconPassword"].some(
         (key) => Object.prototype.hasOwnProperty.call(updates, key),
       );

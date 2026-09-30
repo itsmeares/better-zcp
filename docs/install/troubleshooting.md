@@ -48,13 +48,12 @@ network — the panel can't discover them for you.
    [Panel will not start / port in use](#panel-will-not-start--port-in-use)
    below before you're surprised by it.
 
-5. **`DoLuaChecksum=false`** in the PZ server `.ini` — only if you want
-   PanelBridge (teleport, heal, god mode, and other
-   player actions that RCON cannot reach). Skip this if you don't plan to use
-   PanelBridge.
+5. **`DoLuaChecksum=false`** in the PZ server `.ini` — only if you want the
+   game integration's live player details, heal, kill, coordinate teleport,
+   and live mod settings. Skip this if you don't plan to use those features.
 
 If you're installing through Docker and the panel will also read or write
-PZ's own files (config editing, local backups, and PanelBridge),
+PZ's own files (config editing, local backups, and game integration),
 also note the **numeric UID/GID that owns your PZ folders** (`id -u` /
 `id -g` on the host) — you'll need it for `PUID`/`PGID` in `.env`. See
 [Permission denied on mounted PZ folders](#permission-denied-on-mounted-pz-folders)
@@ -257,11 +256,6 @@ UTF-8.
   generated startup script, you can instead add `-Dfile.encoding=UTF-8` to
   the `java` command line that starts `zombie.network.GameServer` — same
   effect, scoped to that one process instead of the whole machine.
-- If neither helps, try sending the same text through a different broadcast
-  method (for example PanelBridge's in-game chat action instead of RCON
-  `servermsg`, where available) to see whether the problem is specific to
-  RCON or affects every broadcast path — that narrows down whether this is
-  an RCON-decode issue or something in PZ's text rendering more generally.
 
 ---
 
@@ -392,31 +386,26 @@ folder permissions to) an account that can read the path.
 
 ---
 
-### PanelBridge shows disconnected
+### Game integration shows offline
 
-**What you see:** the PanelBridge status badge reads **"Bridge offline"**
-(hint: *"Go to Settings → Bridge to configure"*) or **"Bridge waiting"**
-(hint: *"Watching for PZ mod — start/restart the server"*).
+**What you see:** the game integration status is offline or waiting for the
+server to start.
 
 **What it means:**
-- **"Bridge waiting"** means the PZ server process is running, but the
-  panel hasn't seen the mod check in yet. This is normal for the first
-  minute or so after a (re)start while the mod initializes.
-- **"Bridge offline"** means either the server isn't running, or
-  PanelBridge isn't configured/installed at all.
+- A running server with no integration response usually means the Lua file
+  has not loaded yet or was rejected by the server.
+- An uninstalled integration means the panel could not write to the server's
+  `media/lua/server` folder.
 
 **What to do:**
-1. Confirm `PanelBridge.lua` is actually installed in the server's
-   `Install/media/lua/server/` folder (the panel does this for you when you
-   enable it from **Settings → PanelBridge**).
-2. Confirm `DoLuaChecksum=false` is set in the PZ server `.ini` — if it's
-   still `true`, PZ will refuse to load the modded file.
-3. Fully restart the PZ server (not just save/reload) — the mod only loads
-   on boot.
-4. If it's been well over a minute since restart and it's still stuck on
-   "Bridge waiting," check the PZ server's own console/log for a Lua error
-   from PanelBridge, and check the panel's log for whether it's still
-   watching for the mod's status file at all.
+1. Open **Settings → Game integration** and check whether the integration is
+   installed. Use **Install** if the panel reports a missing file.
+2. Confirm `DoLuaChecksum=false` is set in the PZ server `.ini` if you plan
+   to use the integration.
+3. Fully restart the PZ server (not just save/reload) so it loads the Lua
+   file.
+4. If it still does not connect, check the PZ server console for a Lua
+   error and check the panel log for installation or connection errors.
 
 ---
 
@@ -424,8 +413,8 @@ folder permissions to) an account that can read the path.
 
 **What you see:** the map area shows one of:
 - **"No players on the map"** (subtitle: *"Player positions appear when
-  PanelBridge is connected"*) — this isn't a map failure at all; it means
-  no player position data is flowing, which needs PanelBridge connected
+  game integration is connected"*) — this isn't a map failure at all; it means
+  no player position data is flowing, which needs game integration connected
   (see the section above).
 - **"Map tiles aren't loading"** (*"Panel can't reach tiles.pzmap.org. Check
   outbound HTTPS access and try Refresh."*) — the panel's own server

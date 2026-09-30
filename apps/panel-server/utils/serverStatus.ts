@@ -9,7 +9,7 @@ import {
 interface ObservedSignals {
   processRunning?: boolean;
   rconConnected?: boolean;
-  bridgeConnected?: boolean;
+  gameIntegrationConnected?: boolean;
   processScanFailed?: boolean;
   hostStateAuthoritative?: boolean;
 }
@@ -38,15 +38,15 @@ interface ActiveServerLike {
 export function isServerObservedRunning({
   processRunning = false,
   rconConnected = false,
-  bridgeConnected = false,
+  gameIntegrationConnected = false,
   processScanFailed = false,
   hostStateAuthoritative = false,
 }: ObservedSignals = {}): boolean | null {
   if (hostStateAuthoritative && !processScanFailed) {
     return Boolean(processRunning);
   }
-  if (processScanFailed && !rconConnected && !bridgeConnected) return null;
-  return Boolean(processRunning || rconConnected || bridgeConnected);
+  if (processScanFailed && !rconConnected && !gameIntegrationConnected) return null;
+  return Boolean(processRunning || rconConnected || gameIntegrationConnected);
 }
 
 export async function resolveObservedServerRunning(
@@ -61,7 +61,7 @@ export async function resolveObservedServerRunning(
     return isServerObservedRunning({
       processRunning: dockerSignal.running,
       rconConnected: rconService?.connected,
-      bridgeConnected: getPanelRuntime().panelBridge.isModConnected(),
+      gameIntegrationConnected: getPanelRuntime().gameIntegration.isConnected(),
       processScanFailed: dockerSignal.scanFailed,
       hostStateAuthoritative: !dockerSignal.scanFailed,
     });
@@ -75,7 +75,7 @@ export async function resolveObservedServerRunning(
   return isServerObservedRunning({
     processRunning: processDetails?.running,
     rconConnected: rconService?.connected,
-    bridgeConnected: getPanelRuntime().panelBridge.isModConnected(),
+    gameIntegrationConnected: getPanelRuntime().gameIntegration.isConnected(),
     processScanFailed: !processDetails || processDetails.scanFailed,
     hostStateAuthoritative:
       Boolean(processDetails) &&

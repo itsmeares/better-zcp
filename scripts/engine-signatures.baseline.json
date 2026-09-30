@@ -1,36 +1,66 @@
 {
-  "note": "Reviewed Build 42 method findings that remain in the retained PanelBridge handlers. Entries are keyed by class and method; guarded absent calls and static-type false positives are documented individually.",
+  "note": "Reviewed Build 42 findings keyed by static receiver class and method. The remaining findings arise from SandboxOptions returning a runtime subtype through an interface.",
   "keyedBy": "class+method",
   "entries": [
     {
-      "class": "zombie.characters.IsoPlayer",
-      "method": "setNetworkTeleportEnabled",
-      "category": "harmless-dead-code",
-      "reason": "Already documented in PanelBridge.lua (2026-08-23): confirmed absent from the real B42 IsoPlayer/IsoGameCharacter hierarchy by grepping the shipped jar for \"NetworkTeleport\" (zero hits). Deliberately left as a harmless no-op pcall in case a future PZ build re-adds it."
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getClass",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
     },
     {
-      "class": "zombie.characters.IsoPlayer",
-      "method": "setLx",
-      "category": "harmless-dead-code",
-      "reason": "Not a field or method anywhere in the IsoPlayer/IsoMovingObject chain (lx isn't even a private field; ly/lz are, with no public setter). Guarded 'belt-and-braces' call inside the teleport handler's `if PanelBridge.invoke(player, \"setLx\", x) then ... end` -- always a silent no-op. First identified by this checker 2026-08-30 (not previously documented), but harmless: the primary teleportTo()/setX()/setY()/setZ() path already does the real work regardless."
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getDefaultValue",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
     },
     {
-      "class": "zombie.characters.IsoPlayer",
-      "method": "setLy",
-      "category": "harmless-dead-code",
-      "reason": "Same finding as IsoPlayer.setLx above (ly is a private IsoMovingObject field with no public setter). Guarded, always a no-op, harmless."
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getMax",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
     },
     {
-      "class": "zombie.characters.IsoPlayer",
-      "method": "setLz",
-      "category": "harmless-dead-code",
-      "reason": "Same finding as IsoPlayer.setLx above (lz is a private IsoMovingObject field with no public setter). Guarded, always a no-op, harmless."
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getMin",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
+    },
+    {
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getName",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
+    },
+    {
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getNumValues",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
+    },
+    {
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getValue",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
+    },
+    {
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getValueTranslationByIndex",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
+    },
+    {
+      "class": "zombie.SandboxOptions$SandboxOption",
+      "method": "getValueTranslationByIndexOrNull",
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
     },
     {
       "class": "zombie.SandboxOptions$SandboxOption",
       "method": "setValue",
-      "category": "tool-limitation",
-      "reason": "getOptionByName() is statically declared to return the SandboxOption INTERFACE, which has no setValue -- but the real object handed back at runtime is always a concrete subtype (e.g. IntegerSandboxOption), which inherits setValue(int) from an entirely different class, zombie.config.IntegerConfigOption (verified directly via javap on the concrete type). This checker only resolves a receiver's statically declared type, never the runtime concrete type, so it cannot see past the interface here. The call site already works; do not \"fix\" it."
+      "category": "runtime-dispatch",
+      "reason": "Build 42 declares getOptionByName/getOptionByIndex as returning the SandboxOption interface, while Lua receives concrete BooleanSandboxOption, IntegerSandboxOption, DoubleSandboxOption, EnumSandboxOption, or StringSandboxOption instances. This checker cannot model that runtime subtype dispatch. The jar confirms the config-option implementations supply these accessors, enum translations are on EnumSandboxOption, and getClass is inherited from java.lang.Object; the callers use the option APIs according to the detected type."
     }
   ]
 }

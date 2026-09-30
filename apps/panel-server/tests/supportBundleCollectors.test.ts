@@ -313,10 +313,10 @@ describe("support bundle: sandbox-options diagnostics", () => {
       path.join(dataDir, "server-console.txt"),
       [
         "version=42.20.4 b0bbce05d5 demo=false",
-        "[PanelBridge] Initializing v1.7.57",
+        "[Argus] Initializing v1.0.0",
         "POST /command: action=getAllSandboxOptions args={}",
         "java.lang.ArrayIndexOutOfBoundsException at SandboxOptions$EnumSandboxOption.getValueTranslationByIndexOrNull(SandboxOptions.java:1270).",
-        "Lua(Vanilla).getAllSandboxOptions(PanelBridge.lua:4864)",
+        "Lua(Vanilla).getAllSandboxOptions(Argus.lua:4864)",
       ].join("\n"),
     );
     fs.writeFileSync(
@@ -346,7 +346,7 @@ describe("support bundle: sandbox-options diagnostics", () => {
 
     expect(result.detected).toBe(true);
     expect(result.pzVersion).toBe("42.20.4");
-    expect(result.panelBridgeVersion).toBe("1.7.57");
+    expect(result.gameIntegrationVersion).toBe("1.0.0");
     expect(result.error.javaMethod).toContain(
       "getValueTranslationByIndexOrNull",
     );

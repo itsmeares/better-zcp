@@ -14,7 +14,7 @@ function argValue(flag) {
   return idx !== -1 ? process.argv[idx + 1] : null;
 }
 
-const LUA_PATH = argValue('--lua') || path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
+const LUA_PATH = argValue('--lua') || path.join(ROOT, 'integrations/argus/Argus/media/lua/server/Argus.lua');
 const MANIFEST_PATH = argValue('--manifest') || path.join(__dirname, 'engine-signatures.manifest.json');
 const BASELINE_PATH = argValue('--baseline') || path.join(__dirname, 'engine-signatures.baseline.json');
 
@@ -62,13 +62,25 @@ const resolved = callSites.filter((s) => s.resolved);
 const unresolved = callSites.filter((s) => !s.resolved);
 const absent = resolved.filter((s) => s.methodInfo && s.methodInfo.exists === false);
 const staleClassLookups = resolved.filter((s) => s.methodInfo === null);
+const requiredApiCalls = [
+  ['zombie.characters.IsoPlayer', 'getBodyDamage'],
+  ['zombie.characters.IsoPlayer', 'isGodMod'],
+  ['zombie.characters.BodyDamage.BodyDamage', 'RestoreToFullHealth'],
+  ['zombie.SandboxOptions', 'getOptionByName'],
+  ['zombie.scripting.ScriptManager', 'getAllItems'],
+  ['zombie.scripting.objects.Item', 'getFullName'],
+];
+const missingRequiredApiCalls = requiredApiCalls.filter(([receiverType, methodName]) =>
+  !resolved.some((site) => site.receiverType === receiverType && site.methodName === methodName && site.methodInfo?.exists),
+);
 
 const skipReasonCounts = new Map();
 for (const s of unresolved) {
   skipReasonCounts.set(s.skipReason, (skipReasonCounts.get(s.skipReason) || 0) + 1);
 }
 
-const MIN_CALL_SITES = 120;
+const MIN_CALL_SITES = 90;
+const MIN_RESOLVED_CALL_SITES = 75;
 if (callSites.length < MIN_CALL_SITES) {
   console.error(
     `ERROR: found only ${callSites.length} engine call site(s) in ${path.relative(ROOT, LUA_PATH)} ` +
@@ -85,7 +97,7 @@ console.log(`source:                ${path.relative(ROOT, LUA_PATH)}`);
 const currentSha = crypto.createHash('sha256').update(rawSrc).digest('hex');
 if (manifest.sourceFileSha256 && manifest.sourceFileSha256 !== currentSha) {
   console.log('');
-  console.log('WARNING: PanelBridge.lua has changed since the manifest was generated.');
+  console.log('WARNING: Argus.lua has changed since the manifest was generated.');
   console.log('  This does NOT fail the gate (regenerating needs a local JDK + the game jar, not');
   console.log('  available in CI) -- it means any NEW call site this edit introduced is checked only');
   console.log('  if it happens to reuse a class already in the manifest. Run');
@@ -102,6 +114,20 @@ for (const [reason, count] of [...skipReasonCounts.entries()].sort((a, b) => b[1
   console.log(`  ${String(count).padStart(4)}  ${reason}`);
 }
 console.log(`ABSENT methods found:  ${absent.length}`);
+
+if (resolved.length < MIN_RESOLVED_CALL_SITES) {
+  console.error(`ERROR: only ${resolved.length} engine call site(s) resolved (expected at least ${MIN_RESOLVED_CALL_SITES}); the signature check is not covering enough Build 42 methods.`);
+  process.exit(1);
+}
+if (staleClassLookups.length > 0) {
+  console.error(`ERROR: ${staleClassLookups.length} resolved call site(s) use receiver classes missing from the signature manifest; regenerate and review the manifest before treating the check as green.`);
+  process.exit(1);
+}
+if (missingRequiredApiCalls.length > 0) {
+  console.error('ERROR: required Build 42 engine API calls are not resolved from Argus.lua and the manifest:');
+  for (const [receiverType, methodName] of missingRequiredApiCalls) console.error(`  ${receiverType}#${methodName}`);
+  process.exit(1);
+}
 
 const baselined = [];
 const newAbsent = [];
@@ -128,7 +154,7 @@ if (baselined.length > 0) {
   for (const [category, items] of byCategory) {
     console.log(`  ${category} (${items.length} site(s)):`);
     for (const { finding, entry } of items) {
-      console.log(`    PanelBridge.lua:${finding.line}  ${finding.receiverExpr} (${finding.receiverType}) has no ${finding.methodName}() -- ${entry.reason}`);
+      console.log(`    Argus.lua:${finding.line}  ${finding.receiverExpr} (${finding.receiverType}) has no ${finding.methodName}() -- ${entry.reason}`);
     }
   }
 }
@@ -146,10 +172,10 @@ if (newAbsent.length > 0) {
   console.log('');
   console.log('NEW (not in the baseline) -- javap confirms no such method anywhere in the class chain:');
   for (const f of newAbsent) {
-    console.log(`  PanelBridge.lua:${f.line}  ${f.receiverExpr} (${f.receiverType}) has no ${f.methodName}()`);
+  console.log(`  Argus.lua:${f.line}  ${f.receiverExpr} (${f.receiverType}) has no ${f.methodName}()`);
   }
   console.log('');
-  console.log(`FAIL: ${newAbsent.length} newly-absent engine method call(s), not covered by the reviewed baseline. Either this is a real regression (fix PanelBridge.lua), or it's a call site worth the same review the rest of ${path.relative(ROOT, BASELINE_PATH)} got (add it there with a reason, in the right category) -- never add an entry just to make the gate pass. See scripts/engine-signatures.manifest.json for the source of truth, and scripts/gen-engine-signatures.mjs's header for what "definitely absent" does and does not prove.`);
+  console.log(`FAIL: ${newAbsent.length} newly-absent engine method call(s), not covered by the reviewed baseline. Either this is a real regression (fix Argus.lua), or it's a call site worth the same review the rest of ${path.relative(ROOT, BASELINE_PATH)} got (add it there with a reason, in the right category) -- never add an entry just to make the gate pass. See scripts/engine-signatures.manifest.json for the source of truth, and scripts/gen-engine-signatures.mjs's header for what "definitely absent" does and does not prove.`);
   process.exit(1);
 }
 

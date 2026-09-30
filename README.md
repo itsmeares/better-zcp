@@ -22,7 +22,7 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 
 ![Dashboard](docs/assets/screenshots/screenshot-dashboard-v2.png)
 
-> **At a glance** — server status, RCON & PanelBridge connection state, live player activity, host telemetry, disk headroom, the next scheduled maintenance action, console error count, backup readiness, and quick actions. One screen covers 80% of routine admin work.
+> **At a glance** — server status, RCON and game integration state, live player activity, host telemetry, disk headroom, the next scheduled maintenance action, console error count, backup readiness, and quick actions. One screen covers 80% of routine admin work.
 
 ## ✨ Feature tour
 
@@ -41,7 +41,7 @@ Real-time player positions on Knox County. Multi-floor support, zoom and pan. Ri
 <td width="50%" valign="top">
 
 ### 👥 Player Management
-Roster with online / offline / banned tabs. Per-player dossier with moderation, spawn loadout, powers (heal, teleport, god mode), notes & history. Voice ban, SteamID ban, manual targeting.
+Roster with online / offline / banned tabs. Per-player dossier with moderation, spawn loadout, live status, recent sessions, and lifelong playtime and deaths. Voice ban, SteamID ban, manual targeting.
 
 <img src="docs/assets/screenshots/screenshot-players-v2.png" alt="Players" />
 
@@ -67,7 +67,7 @@ Scans your mod list for known incompatibilities, missing dependencies, and load-
 <td width="50%" valign="top">
 
 ### ⚙️ Server Configuration
-Full in-browser INI editor for sandbox options, spawn regions, mod settings, and server flags. Searchable, structured view + raw view for power users. No more notepad-and-restart. Mod Settings edits apply live through PanelBridge while the server is running, and now save to disk correctly too — no need to stop the server just to make an edit stick.
+Full in-browser INI editor for sandbox options, spawn regions, mod settings, and server flags. Searchable, structured view + raw view for power users. No more notepad-and-restart. Mod settings edits apply live through game integration while the server is running and save to disk.
 
 <img src="docs/assets/screenshots/screenshot-config-v2.png" alt="Server Configuration" />
 
@@ -95,7 +95,7 @@ Host RAM and CPU graphs, PZ process memory, player count history. The last 24 ho
 <td width="50%" valign="top">
 
 ### 🐛 Crash Logs & Diagnostics
-Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus a Diagnostics tab that checks the panel, server, and PanelBridge and points to the setting that needs attention.
+Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus diagnostics for the panel, server, and world map.
 
 <img src="docs/assets/screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
 
@@ -120,7 +120,7 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Setup](#setup)
-- [PanelBridge](#panelbridge-optional)
+- [Game Integration](#game-integration-optional)
 - [Remote Access](#remote-access)
 - [Security](#security)
 - [Development](#development)
@@ -139,13 +139,13 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
 - **Account recovery** — Reset the admin password with a local-only token file or the `--reset-password` CLI flag run directly on the server.
 
 ### Observe
-- **Players** — Online list, activity history, kick/ban/unban, access levels, notes and tags.
+- **Players** — Online list, activity history, kick/ban/unban, access levels, recent sessions, and lifelong playtime and deaths.
 - **World map** — Live player positions on Knox County with right-click actions.
 - **Mod manager** — Track Workshop mods and detect updates, decide server membership from your Steam collection, auto-sort load order by declared dependencies, and scan for conflicts. Collection sync adds what's missing without deleting the optional mods you keep on the side.
 - **Server config** — Full INI editor with structured and raw views. Sandbox, spawn points, mod settings — searchable and editable in-browser.
 
 ### Extend
-- **PanelBridge** — Server-side Lua mod for actions RCON can't reach: teleport, heal, god mode, and inventory actions.
+- **Game integration** — Server-side Lua for live player positions and details, heal, kill, coordinate teleport, and live sandbox and mod settings. RCON handles moderation, player powers, item delivery, and XP.
 - **Single sign-on (SSO)** — OpenID Connect login, with ready-made presets for Google, Authentik, Keycloak, Azure AD, Okta, and Auth0, or any other compliant provider entered by hand. Full discovery + PKCE + state/nonce flow, with a one-click credential test before you commit to it.
 - **Multi-server** — Manage multiple PZ servers from one panel.
 - **Auto-update** — Checks for new releases, downloads and applies them.
@@ -162,7 +162,7 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
   RCONPassword=choose-a-strong-password
   DoLuaChecksum=false
   ```
-  Use the actual RCON port and password configured for your server. `DoLuaChecksum=false` is needed only for PanelBridge features.
+  Use the actual RCON port and password configured for your server. `DoLuaChecksum=false` is needed only for game integration features.
 - **`curl`** for World Map build detection (Docker, Windows, and macOS already have it; a bare-metal Linux tarball install might not). Without it, the map still works — it just falls back to a fixed build and stops tracking new Project Zomboid map releases, which Debug > World Map will flag.
 
 The packaged binary includes its own runtime — no Node.js, Python, or Java install needed on the panel host.
@@ -231,7 +231,7 @@ building from source.
 1. Open the panel and create your admin account.
 2. In **Settings**, set your server install path and Zomboid data path.
 3. Configure RCON (host, port `27015`, password from your server `.ini`).
-4. Optionally install PanelBridge for advanced features.
+4. Optionally install the game integration for live player details, coordinate teleport, and live mod settings.
 
 If you installed a brand-new server with the Setup Wizard, steps 2 and 3 are already done — the wizard fills them in as part of installing.
 
@@ -246,11 +246,11 @@ This rebuild starts with a fresh panel database. Older `db.json` and
 existing servers again using their installation and Zomboid data paths.
 This does not reset their saves, game accounts, or configuration files.
 
-### PanelBridge (Optional)
+### Game Integration (Optional)
 
-PanelBridge is a server-side Lua drop-in that enables features RCON can't reach — teleport, heal, god mode, and item actions.
+Game integration adds live player positions and details, heal, kill, coordinate teleport, and live sandbox and mod settings. RCON handles player powers, moderation, item delivery, and XP.
 
-There is no client-side component. Players don't install anything. The panel copies `PanelBridge.lua` into your server's `Install/media/lua/server/` folder, then you set `DoLuaChecksum=false` in the server INI, restart the PZ server, and enable it in **Settings → PanelBridge**.
+The panel installs the server-side Lua integration before starting or restarting a configured server. If permissions prevent installation, open **Settings → Game integration** and use **Install** after correcting the server path.
 
 ---
 
