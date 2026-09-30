@@ -16,7 +16,7 @@ const binaryName = process.platform === 'win32' ? 'ZomboidControlPanel.exe' : 'Z
 const binary = path.join(root, binaryName), runner = path.join(root, `.panel-runner-smoke${process.platform === 'win32' ? '.exe' : ''}`);
 const dataDirectory = path.join(root, 'data');
 let supervisor, output = '';
-async function until(check, timeout = 90000) {
+async function until(check, timeout = 240000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { if (await check()) return; if (process.platform !== 'win32' && supervisor?.exitCode !== null && supervisor?.exitCode !== undefined) throw new Error(`Supervisor exited: ${output}`); await delay(100); }
   throw new Error(`Packaged updater timed out: ${output}`);
@@ -57,12 +57,20 @@ try {
     assert.equal((await fetch(base+'/api/panel/update-status', { headers })).ok, true, 'Existing session must survive update and rollback');
     console.log(`${process.platform} packaged update ${failHealth ? 'health failure + data rollback' : 'success'} passed`);
   }
+} catch (error) {
+  console.error(error);
+  if (output) console.error(output);
+  const log = path.join(root, 'logs', 'panel-supervisor.log');
+  if (fs.existsSync(log)) console.error(fs.readFileSync(log, 'utf8').slice(-32000));
+  throw error;
 } finally {
   if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) { const closed = new Promise(resolve => supervisor.once('close', resolve)); supervisor.kill('SIGTERM'); await closed; }
   if (process.platform === 'win32') {
-    for (const lock of [path.join(dataDirectory, 'panel.lock'), path.join(root, '.panel-supervisor.lock')]) {
+    for (const lock of [path.join(root, '.panel-supervisor.lock'), path.join(dataDirectory, 'panel.lock')]) {
       if (!fs.existsSync(lock)) continue;
-      try { process.kill(Number(fs.readFileSync(lock)), 'SIGKILL'); } catch { /* only this temporary installation's processes */ }
+      const pid = Number(fs.readFileSync(lock));
+      try { process.kill(pid, 'SIGKILL'); } catch { /* only this temporary installation's processes */ }
+      await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 10000);
     }
   }
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });

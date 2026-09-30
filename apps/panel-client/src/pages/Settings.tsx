@@ -908,10 +908,11 @@ export default function Settings() {
       const pre = await fetchPanelUpdatePreflight()
       if (!pre?.ok) throw new Error(pre?.blockers[0] || 'Update blocked by preflight check.')
       const previous = await fetch('/api/health').then(response => response.json())
+      const previousResult = (await panelUpdateApi.getStatus()).lastApplyResult?.at
       await panelUpdateApi.install()
       setRestarting(true)
       toast({ title: 'Updating panel', description: 'Backing up panel data and restarting. Game servers remain online.' })
-      const deadline = Date.now() + 120000
+      const deadline = Date.now() + 300000
       while (Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 1000))
         try {
@@ -919,6 +920,8 @@ export default function Settings() {
           if (response.ok) {
             const health = await response.json()
             if (health.status === 'ok' && health.instanceId && health.instanceId !== previous.instanceId) {
+              const result = (await panelUpdateApi.getStatus()).lastApplyResult
+              if (!result?.at || result.at === previousResult) continue
               window.location.reload()
               return
             }
