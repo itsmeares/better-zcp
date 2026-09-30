@@ -52,6 +52,27 @@ type PlayerRecord = AnyRecord & { name: string };
 type SwapSnapshot = { total: number; used: number };
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+export async function findPanelBridgePath() {
+  const server = await getCurrentServer();
+  if (!server) return { error: "No server configured" };
+  const serverName = server.serverName || server.name;
+  if (!serverName) return { error: "Server name not configured" };
+  const settings = await getAllSettings();
+  const savedPath = settings?.panelBridge?.bridgePath;
+  const dataPath =
+    server.zomboidDataPath ||
+    process.env.PZ_SAVE_PATH ||
+    path.join(os.homedir(), "Zomboid");
+  const bridgePath =
+    savedPath || path.join(dataPath, "Lua", "panelbridge", serverName);
+  return {
+    path: bridgePath,
+    source: savedPath ? "database (saved)" : "server cachedir/Lua",
+    serverName,
+    notCreated: !fs.existsSync(bridgePath),
+  };
+}
+
 async function initializeServerRuntime(
   serverId: string | number,
   sockets: Server,
@@ -77,117 +98,6 @@ async function initializeServerRuntime(
     rconService.setServerManager(serverManager);
     scheduler.setBackupService(backupService);
     scheduler.setIo(io);
-    async function findPanelBridgePath() {
-      const activeServer = await getCurrentServer();
-      if (!activeServer) {
-        return { error: "No active server configured" };
-      }
-
-      const serverName = activeServer.serverName || activeServer.name;
-      if (!serverName) {
-        return { error: "Server name not configured" };
-      }
-
-      const settings = await getAllSettings();
-      if (settings?.panelBridge?.bridgePath) {
-        const savedPath = settings.panelBridge.bridgePath;
-        const statusFile = path.join(savedPath, "status.json");
-        if (fs.existsSync(statusFile)) {
-          return { path: savedPath, source: "database (saved)", serverName };
-        }
-      }
-
-      const possiblePaths: Array<{
-        p: string;
-        source: string;
-        priority: number;
-      }> = [];
-
-      const safeReadDir = (dirPath: string): string[] => {
-        try {
-          return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
-        } catch (e: any) {
-          return [];
-        }
-      };
-
-      if (activeServer.zomboidDataPath) {
-        possiblePaths.push({
-          p: path.join(
-            activeServer.zomboidDataPath,
-            "Lua",
-            "panelbridge",
-            serverName,
-          ),
-          source: "zomboidDataPath/Lua (cachedir)",
-          priority: 1,
-        });
-      }
-
-      if (activeServer.installPath) {
-        const parentDir = path.dirname(activeServer.installPath);
-        const parentContents = safeReadDir(parentDir);
-        for (const item of parentContents) {
-          if (item.startsWith("Server_files") || item.match(/Server.*files/i)) {
-            possiblePaths.push({
-              p: path.join(parentDir, item, "Lua", "panelbridge", serverName),
-              source: `${item}/Lua`,
-              priority: 2,
-            });
-          }
-        }
-      }
-
-      if (activeServer.installPath) {
-        possiblePaths.push({
-          p: path.join(
-            activeServer.installPath,
-            "Lua",
-            "panelbridge",
-            serverName,
-          ),
-          source: "installPath/Lua",
-          priority: 3,
-        });
-      }
-
-      for (const { p, source } of possiblePaths) {
-        const statusFile = path.join(p, "status.json");
-        if (fs.existsSync(statusFile)) {
-          return { path: p, source, serverName };
-        }
-      }
-
-      for (const { p, source } of possiblePaths) {
-        const initFile = path.join(p, ".init");
-        if (fs.existsSync(initFile)) {
-          return { path: p, source: `${source} (.init)`, serverName };
-        }
-      }
-
-      for (const { p, source } of possiblePaths) {
-        if (fs.existsSync(p)) {
-          return { path: p, source: `${source} (exists)`, serverName };
-        }
-      }
-
-      if (possiblePaths.length > 0) {
-        possiblePaths.sort((a, b) => a.priority - b.priority);
-        const bestPath = possiblePaths[0];
-        return {
-          path: bestPath.p,
-          source: `${bestPath.source} (expected)`,
-          serverName,
-          notCreated: true,
-        };
-      }
-
-      return {
-        error: "No valid bridge path could be determined",
-        searchedPaths: possiblePaths.map((x) => x.p),
-        serverName,
-      };
-    }
 
     async function tryStartPanelBridge(
       trigger: string = "unknown",
