@@ -136,9 +136,8 @@ async function gracefulShutdown(signal: string, exitCode = 0, respawn = false) {
     panelUpdateChecker.stop();
     closeDatabase();
 
-    io.disconnectSockets(true);
-    httpServer.closeIdleConnections();
-    httpServer.close(() => {
+    // Close Engine.IO transports too, including clients not yet in a namespace.
+    void io.close(() => {
       log.info("HTTP server closed");
       if (respawn) spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: "ignore", cwd: process.cwd(), env: process.env }).unref();
       process.exit(exitCode);

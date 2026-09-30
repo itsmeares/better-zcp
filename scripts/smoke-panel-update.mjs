@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { stageUpdateBundle } from '../apps/panel-server/services/updateBundle.ts';
@@ -16,6 +16,7 @@ const binaryName = process.platform === 'win32' ? 'ZomboidControlPanel.exe' : 'Z
 const binary = path.join(root, binaryName), runner = path.join(root, `.panel-runner-smoke${process.platform === 'win32' ? '.exe' : ''}`);
 const dataDirectory = path.join(root, 'data');
 let supervisor, output = '';
+const sockets = [];
 async function until(check, timeout = 240000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { if (await check()) return; if (process.platform !== 'win32' && supervisor?.exitCode !== null && supervisor?.exitCode !== undefined) throw new Error(`Supervisor exited: ${output}`); await delay(100); }
@@ -27,7 +28,7 @@ try {
   fs.copyFileSync(path.join(release, binaryName), binary); fs.copyFileSync(binary, runner); if (process.platform !== 'win32') { fs.chmodSync(binary, 0o755); fs.chmodSync(runner, 0o755); }
   const pathsConfig = path.join(root, 'paths.json'); fs.writeFileSync(pathsConfig, JSON.stringify({ dataDir: dataDirectory, logsDir: path.join(root, 'logs') }));
   const port = await freePort(), base = `http://127.0.0.1:${port}`;
-  supervisor = spawn(process.platform === 'win32' ? binary : runner, process.platform === 'win32' ? [] : ['--panel-supervisor'], { cwd: root, env: { ...process.env, PANEL_PATHS_CONFIG_PATH: pathsConfig, PZ_SAVE_PATH: path.join(root, 'zomboid'), PORT: String(port), AUTO_OPEN_BROWSER: 'false', SETUP_TOKEN: 'packaged-update-fixture-token' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  supervisor = spawn(process.platform === 'win32' ? binary : runner, process.platform === 'win32' ? [] : ['--panel-supervisor'], { cwd: root, env: { ...process.env, PANEL_PATHS_CONFIG_PATH: pathsConfig, PZ_SAVE_PATH: path.join(root, 'zomboid'), PORT: String(port), PANEL_AUTO_OPEN_BROWSER: 'false', SETUP_TOKEN: 'packaged-update-fixture-token' }, stdio: ['ignore', 'pipe', 'pipe'] });
   supervisor.stdout.on('data', chunk => output = (output + chunk).slice(-32000)); supervisor.stderr.on('data', chunk => output = (output + chunk).slice(-32000));
   await until(async () => { try { return (await fetch(base+'/api/health')).ok; } catch { return false; } });
   const response = await fetch(base+'/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'updateadmin', password: 'PackagedUpdateFixture!42', rememberMe: true, panelPort: port, setupToken: 'packaged-update-fixture-token' }) });
@@ -41,8 +42,13 @@ try {
     fs.writeFileSync(path.join(incoming, 'build-info.json'), JSON.stringify(expected));
     const stagedBinary = path.join(root, 'incoming-binary'); fs.copyFileSync(path.join(release, binaryName), stagedBinary);
     stageUpdateBundle({ installDir: root, version: expected.panelVersion, binaryPath: binary, stagedBinaryPath: stagedBinary, liveClientPath: path.join(root, 'client/dist'), incomingClientPath: incoming, metadata: expected });
+    // A connected transport awaiting namespace/auth must not block panel shutdown.
+    const socket = new WebSocket(base.replace('http:', 'ws:') + '/socket.io/?EIO=4&transport=websocket');
+    sockets.push(socket);
+    await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
     const resultFile = path.join(root, 'panel-update-result.json'); const previousResult = fs.existsSync(resultFile) ? fs.readFileSync(resultFile, 'utf8') : '';
     const install = await fetch(base+'/api/panel/update', { method: 'POST', headers, body: '{}' }); assert.equal(install.ok, true, await install.text());
+    await until(() => socket.readyState === WebSocket.CLOSED, 15000);
     if (failHealth) {
       await until(async () => { try { const health = await fetch(base+'/api/health').then(r => r.json()); return health.instanceId !== before.instanceId; } catch { return false; } });
       // Simulate data written by a new version in this temporary installation.
@@ -64,12 +70,13 @@ try {
   if (fs.existsSync(log)) console.error(fs.readFileSync(log, 'utf8').slice(-32000));
   throw error;
 } finally {
+  for (const socket of sockets) socket.close();
   if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) { const closed = new Promise(resolve => supervisor.once('close', resolve)); supervisor.kill('SIGTERM'); await closed; }
   if (process.platform === 'win32') {
     for (const lock of [path.join(root, '.panel-supervisor.lock'), path.join(dataDirectory, 'panel.lock')]) {
       if (!fs.existsSync(lock)) continue;
       const pid = Number(fs.readFileSync(lock));
-      try { process.kill(pid, 'SIGKILL'); } catch { /* only this temporary installation's processes */ }
+      try { execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* only this temporary installation's process tree */ }
       await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 10000);
     }
   }
