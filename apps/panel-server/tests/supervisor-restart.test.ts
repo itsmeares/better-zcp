@@ -10,8 +10,7 @@ import { writePanelRestartRequest } from "../services/panelSupervisor.ts";
 
 const metadata = { panelVersion: "2.0.1", buildSha: "new", apiContractVersion: 1 };
 const old = { panelVersion: "2.0.0", buildSha: "old", apiContractVersion: 1 };
-let root: string, supervisor: ChildProcess | undefined;
-const gamePids: number[] = [];
+let root: string, supervisor: ChildProcess | undefined, gameChild: ChildProcess | undefined;
 async function until(check: () => boolean, timeout = 15000) { const deadline = Date.now() + timeout; while (Date.now() < deadline) { if (check()) return; await delay(50); } throw new Error("Fixture did not reach the expected state."); }
 function write(name: string, value: string) { const file = path.join(root, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, value); return file; }
 async function prepare(failHealth = false) {
@@ -23,10 +22,12 @@ async function prepare(failHealth = false) {
   write("incoming/build-info.json", JSON.stringify(metadata)); write("incoming/index.html", failHealth ? "fail-health" : "new-client");
   fs.copyFileSync(binary, path.join(root, "incoming-binary"));
   const journal = stageUpdateBundle({ installDir: root, version: metadata.panelVersion, binaryPath: binary, stagedBinaryPath: path.join(root, "incoming-binary"), liveClientPath: path.join(root, "client/dist"), incomingClientPath: path.join(root, "incoming"), metadata, managedFiles: { "start.sh": write("incoming-start.sh", "new-launcher") } });
-  const game = write("game.cjs", `require('fs').writeFileSync(process.argv[2],String(process.pid));setInterval(()=>{},1000);`);
+  const game = write("game.cjs", `setInterval(()=>{},1000);`);
+  gameChild = spawn(process.execPath, [game], { cwd: root, stdio: "ignore" });
+  await new Promise<void>((resolve, reject) => { gameChild!.once("spawn", resolve); gameChild!.once("error", reject); });
+  write("game.pid", String(gameChild.pid));
   const panel = write("panel.cjs", `
-const fs=require('fs'),http=require('http'),{spawn}=require('child_process');
-if(!fs.existsSync('game.pid')){const game=spawn(${JSON.stringify(process.execPath)},[${JSON.stringify(game)},'game.pid'],{detached:true,stdio:'ignore'});game.unref();}
+const fs=require('fs'),http=require('http');
 const metadata=JSON.parse(fs.readFileSync('client/dist/build-info.json'));
 if(metadata.panelVersion==='2.0.1'){fs.writeFileSync('data/panel.sqlite','migrated-data');fs.writeFileSync('data/jwt.secret','migrated-key');}
 const fail=fs.readFileSync('client/dist/index.html','utf8')==='fail-health';
@@ -46,11 +47,10 @@ process.on('message',message=>{if(message?.type==='panel:shutdown')server.close(
 function launch(harness: string) { supervisor = spawn(process.execPath, ["--experimental-strip-types", harness], { cwd: root, stdio: ["ignore", "pipe", "pipe", "ipc"] }); supervisor.stdout?.on("data", () => {}); supervisor.stderr?.on("data", () => {}); }
 afterEach(async () => {
   if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) { const done = new Promise(r => supervisor!.once("close", r)); if (supervisor.connected) supervisor.send({ type: "fixture:shutdown" }); else supervisor.kill("SIGTERM"); await done; }
-  if (process.platform === "win32" && root && fs.existsSync(path.join(root, "panel.pid"))) {
-    try { process.kill(Number(fs.readFileSync(path.join(root, "panel.pid"))), "SIGKILL"); } catch { /* only this fixture's panel child */ }
+  if (gameChild && gameChild.exitCode === null && gameChild.signalCode === null) {
+    const done = new Promise(resolve => gameChild!.once("close", resolve)); gameChild.kill("SIGKILL"); await done;
   }
-  if (root && fs.existsSync(path.join(root, "game.pid"))) gamePids.push(Number(fs.readFileSync(path.join(root, "game.pid"))));
-  for (const pid of gamePids.splice(0)) { try { process.kill(pid, "SIGKILL"); } catch { /* fixture already exited */ } }
+  gameChild = undefined;
   if (root) fs.rmSync(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
   supervisor = undefined;
 });
