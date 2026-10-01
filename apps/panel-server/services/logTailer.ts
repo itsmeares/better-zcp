@@ -159,8 +159,9 @@ export class LogTailer extends EventEmitter {
       }
 
       const data = await this.readChunk(this.userLogPath, this.userLogSize, stats.size);
+      if (data === null) return;
       this.userLogSize = stats.size;
-      if (data) this.processUserLogData(data);
+      this.processUserLogData(data);
     } catch (error) {
       log.debug(`LogTailer: user log polling error: ${errorMessage(error)}`);
     }

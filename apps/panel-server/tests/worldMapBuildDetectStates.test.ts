@@ -2,23 +2,8 @@ import { setPanelRuntime, setServerRuntime } from "../utils/panelRuntime.ts";
 import { requireServerId } from "../utils/serverScope.ts";
 import { scopedTests } from "./helpers/serverScope.ts";
 import { createServer } from "../database/init.ts";
-const it = scopedTests(async () => (await createServer({serverName: "test"})).id);
+const it = scopedTests(async () => (await createServer({ serverName: "test" })).id);
 import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
-
-
-
-vi.mock("../database/init.ts", async () => {
-  const actual = await vi.importActual("../database/init.ts");
-  return actual;
-});
-
-const getB42ResolutionStatus = vi.fn();
-const getB42Dir = vi.fn();
-const getB42TopFormat = vi.fn();
-vi.mock("../routes/mapProxy.ts", async () => {
-  const actual = await vi.importActual("../routes/mapProxy.ts");
-  return { ...actual, getB42ResolutionStatus, getB42Dir, getB42TopFormat };
-});
 
 const { default: debugRouter } = await import("../routes/debug.ts");
 const gameIntegration = {
@@ -33,8 +18,6 @@ const gameIntegration = {
 
 let originalFetch;
 beforeEach(() => {
-  getB42Dir.mockResolvedValue("42.20.0");
-  getB42TopFormat.mockResolvedValue("jpg");
   originalFetch = global.fetch;
   global.fetch = vi.fn(async () => {
     throw new Error("network disabled for this test");
@@ -97,61 +80,28 @@ function adminReq(overrides = {}) {
 }
 
 function findCheck(body, id) {
-  return body.checks?.find((c) => c.id === id);
+  return body.checks?.find((check) => check.id === id);
 }
 
-describe("GET /debug/worldmap: worldmap.tiles.buildDetect reports both getB42ResolutionStatus() sources distinctly", () => {
-  it("source: 'dynamic' -> status ok, with a hint that this depends on an upstream heuristic and isn't permanent", async () => {
-    getB42ResolutionStatus.mockReturnValue({
-      source: "dynamic",
-      directory: "42.20.0",
-      reason: null,
+describe("GET /debug/worldmap provider diagnostics", () => {
+  it("reports provider outages as warnings and keeps the direct tile delivery DTO", async () => {
+    const response = await runRoute("/worldmap", "get", adminReq());
+
+    expect(response.getStatusCode()).toBe(200);
+    expect(findCheck(response.getBody(), "worldmap.tiles.provider")).toMatchObject({
+      status: "warn",
+      label: "PZMap metadata provider unavailable",
     });
-
-    const res = await runRoute("/worldmap", "get", adminReq());
-
-    expect(res.getStatusCode()).toBe(200);
-    const check = findCheck(res.getBody(), "worldmap.tiles.buildDetect");
-    expect(check).toBeTruthy();
-    expect(check.status).toBe("ok");
-    expect(check.message).toContain("42.20.0");
-    expect(check.params).toEqual({ build: "42.20.0" });
-    expect(check.hint).toBeTruthy();
-    expect(check.hint.toLowerCase()).toContain("heuristic");
-    expect(check.hint.toLowerCase()).toContain("not permanently solved");
-  });
-
-  it("source: 'fallback' -> status warn", async () => {
-    getB42ResolutionStatus.mockReturnValue({
-      source: "fallback",
-      directory: "42.19.0",
-      reason: "build_list.json listed no B42+ candidates",
+    expect(response.getBody()).toMatchObject({
+      available: false,
+      provider: { origin: "https://pzmap.org", status: "error" },
+      tiles: {
+        origin: "https://tiles.pzmap.org",
+        mode: "direct",
+        referrerPolicy: "no-referrer",
+      },
     });
-
-    const res = await runRoute("/worldmap", "get", adminReq());
-
-    expect(res.getStatusCode()).toBe(200);
-    const check = findCheck(res.getBody(), "worldmap.tiles.buildDetect");
-    expect(check).toBeTruthy();
-    expect(check.status).toBe("warn");
-    expect(check.message).toContain("42.19.0");
-    expect(check.message).toContain("build_list.json listed no B42+ candidates");
-    expect(check.params).toEqual({
-      build: "42.19.0",
-      reason: "build_list.json listed no B42+ candidates",
-    });
-  });
-
-  it("an unrecognized source value fails closed to the warn branch, not the ok branch", async () => {
-    getB42ResolutionStatus.mockReturnValue({
-      source: "something-not-in-the-contract",
-      directory: "42.19.0",
-      reason: null,
-    });
-
-    const res = await runRoute("/worldmap", "get", adminReq());
-
-    const check = findCheck(res.getBody(), "worldmap.tiles.buildDetect");
-    expect(check.status).toBe("warn");
+    expect(response.getBody()).not.toHaveProperty("tileSources");
+    expect(response.getBody()).not.toHaveProperty("proxy");
   });
 });

@@ -31,7 +31,9 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 <td colspan="2" valign="top">
 
 ### 🗺️ Live World Map
-Real-time player positions on Knox County. Multi-floor support, zoom and pan. Right-click any player for instant teleport, heal, kick, or message — straight from the map. Map tiles are proxied and cached by the panel itself, which also auto-detects the current PZ map build so a new release doesn't leave you looking at a stale layout.
+Live player positions, floors, pan and zoom, coordinate teleport, and POI and container-location search. The map uses PZMap's available Build 42 dataset and supported mod overlays in the server's configured map order. Its dataset version is displayed separately from the installed game version. Unsupported mod maps produce a warning. Container locations describe the map dataset, rather than the contents of your live server.
+
+Map images load directly from `tiles.pzmap.org`. Opening the map sends your IP address, map version, floor, zoom level and tile coordinates to that provider; the panel page URL is withheld. The panel fetches map metadata from PZMap. If the provider is unavailable or blocks access, the map shows an error and the rest of the panel remains usable. Map attribution links to [PZMap](https://pzmap.org/).
 
 <img src="docs/assets/screenshots/screenshot-worldmap-v2.png" alt="World Map" />
 
@@ -95,7 +97,7 @@ Host RAM and CPU graphs, PZ process memory, player count history. The last 24 ho
 <td width="50%" valign="top">
 
 ### 🐛 Crash Logs & Diagnostics
-Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus diagnostics for the panel, server, and world map.
+Text crash and error logs with full-file downloads, plus a support bundle containing logs and diagnostics. The bundle masks known secrets and excludes saves, full databases and binary crash dumps. Health, environment and activity tabs include panel, game server and map-provider status.
 
 <img src="docs/assets/screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
 
@@ -163,7 +165,7 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
   DoLuaChecksum=false
   ```
   Use the actual RCON port and password configured for your server. `DoLuaChecksum=false` is needed only for game integration features.
-- **`curl`** for World Map build detection (Docker, Windows, and macOS already have it; a bare-metal Linux tarball install might not). Without it, the map still works — it just falls back to a fixed build and stops tracking new Project Zomboid map releases, which Debug > World Map will flag.
+- **Outbound HTTPS** from the panel to `pzmap.org` and `tiles.pzmap.org` for live map metadata, and from your browser to `tiles.pzmap.org` for images. Debug > World Map reports provider access failures. The map has no fixed-build fallback.
 
 The packaged binary includes its own runtime — no Node.js, Python, or Java install needed on the panel host.
 

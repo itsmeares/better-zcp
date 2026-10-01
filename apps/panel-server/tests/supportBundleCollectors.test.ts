@@ -16,7 +16,6 @@ const {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  checkCurlAvailable,
   buildWorldMapDiagnostics,
   buildDbWriteHealth,
   buildBackupsSummary,
@@ -71,37 +70,27 @@ describe("support bundle: recursive log discovery", () => {
   });
 });
 
-describe("support bundle: curl availability (World Map's runtime dependency)", () => {
-  afterEach(() => mockExecFile.mockReset());
-
-  it("reports available with a version string when curl is on PATH", async () => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) => {
-      cb(null, "curl 8.4.0 (x86_64-pc-win32)\nRelease-Date: 2023-10-11", "");
+describe("support bundle: World Map provider diagnostics", () => {
+  it("reports live metadata availability and direct tile delivery policy", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async () => {
+      throw new Error("network disabled for this test");
     });
-    const result = await checkCurlAvailable();
-    expect(result.available).toBe(true);
-    expect(result.version).toContain("curl 8.4.0");
-  });
-
-  it("reports unavailable with a clear reason when curl is missing (ENOENT)", async () => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) => {
-      const err = new Error("spawn curl ENOENT");
-      err.code = "ENOENT";
-      cb(err);
-    });
-    const result = await checkCurlAvailable();
-    expect(result).toEqual({ available: false, reason: "curl is not on PATH" });
-  });
-
-  it("buildWorldMapDiagnostics combines curl status with the B42 resolution contract shape", async () => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) =>
-      cb(null, "curl 8.4.0", ""),
-    );
-    const result = await buildWorldMapDiagnostics();
-    expect(result.curl.available).toBe(true);
-    expect(result.b42Resolution).toHaveProperty("source");
-    expect(result.b42Resolution).toHaveProperty("directory");
-    expect(result.b42Resolution).toHaveProperty("reason");
+    try {
+      const result = await buildWorldMapDiagnostics();
+      expect(result).toMatchObject({
+        available: false,
+        provider: { origin: "https://pzmap.org", status: "error" },
+        tiles: {
+          origin: "https://tiles.pzmap.org",
+          mode: "direct",
+          referrerPolicy: "no-referrer",
+        },
+      });
+      expect(result.error).toContain("network disabled for this test");
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });
 

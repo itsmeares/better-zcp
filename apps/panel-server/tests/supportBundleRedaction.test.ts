@@ -133,6 +133,15 @@ describe("createRedactingLogStream() -- streams a raw log file through the same 
     expect(out).toBe("password=[REDACTED] accepted\n");
   });
 
+  it("preserves split UTF-8 characters so Unicode secrets still redact", async () => {
+    const secret = "sëcret";
+    const line = Buffer.from(`password=${secret} accepted\n`);
+    const split = line.indexOf(Buffer.from("ë")) + 1;
+    const source = Readable.from([line.subarray(0, split), line.subarray(split)]);
+    const out = await collectStream(source.pipe(createRedactingLogStream([secret])));
+    expect(out).toBe("password=[REDACTED] accepted\n");
+  });
+
   it("flushes a final line with no trailing newline", async () => {
     const source = Readable.from(["password=hunter2"]);
     const out = await collectStream(source.pipe(createRedactingLogStream(["hunter2"])));

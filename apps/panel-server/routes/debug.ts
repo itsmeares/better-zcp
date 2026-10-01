@@ -34,16 +34,9 @@ import {
   getDatabaseFilePath,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
-import { ErrorCode } from "../utils/errorCodes.ts";
 import { checkSandboxBraceBalance } from "./serverFiles.ts";
-import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
-import {
-  PZ_TILES_ROOT,
-  getB42Dir,
-  getB42TopFormat,
-  getB42ResolutionStatus,
-} from "./mapProxy.ts";
+import { getWorldMapDiagnostics } from "./worldMap.ts";
 import { getThumbnailResolutionStatus } from "./mods.ts";
 import {
   getCandidateZomboidPaths,
@@ -66,8 +59,10 @@ import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
-import { Transform } from "stream";
+import { Readable, Transform } from "stream";
 import { addLogToBuffer, getLogBuffer } from "../utils/logBuffer.ts";
+import { openRegularFile } from "../utils/regularFile.ts";
+import { StringDecoder } from "node:string_decoder";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,7 +159,8 @@ async function getAvailableLogFiles(logsDir: string) {
         .map(async (entry) => {
           try {
             const filePath = path.join(logsDir, entry.name);
-            const stats = await fs.promises.stat(filePath);
+            const stats = await fs.promises.lstat(filePath);
+            if (!stats.isFile()) return null;
             return {
               name: entry.name,
               size: stats.size,
@@ -187,6 +183,28 @@ async function getAvailableLogFiles(logsDir: string) {
   return files;
 }
 
+function isSafeBasename(filename: string): boolean {
+  return Boolean(
+    filename &&
+      filename === path.basename(filename) &&
+      !/[\\/\0]/.test(filename),
+  );
+}
+
+function tryOpenRegularFile(filePath: string): number | null {
+  try {
+    return openRegularFile(filePath);
+  } catch (error: any) {
+    if (
+      ["ENOENT", "ELOOP", "ENOTDIR"].includes(error?.code) ||
+      error?.message === "File is not a regular file or changed while opening."
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 const SUPPORT_LOG_FILE_RE = /\.(log|txt|out|err|trace)$/i;
 const CRASH_FILE_RE =
   /^(hs_err_pid.*|.*(?:crash|error|exception).*)\.(log|txt|out|err|trace)$/i;
@@ -202,6 +220,12 @@ async function resolveSearchRoot(candidate: string | null) {
   } catch {
     return path.extname(resolved) ? path.dirname(resolved) : resolved;
   }
+}
+
+function getZomboidDataPath(activeServer: any): string {
+  return typeof activeServer?.zomboidDataPath === "string"
+    ? activeServer.zomboidDataPath
+    : "";
 }
 
 async function collectBundleFilesFromDir(
@@ -222,7 +246,7 @@ async function collectBundleFilesFromDir(
 ) {
   if (!dir) return { addedFiles: 0, visitedDirectories: 0 };
 
-  const skipped = new Set(skipDirectories.map((name) => name.toLowerCase()));
+  const skipped = new Set(["saves", "backups", ...skipDirectories].map((name) => name.toLowerCase()));
   let addedFiles = 0;
   let visitedDirectories = 0;
 
@@ -349,9 +373,10 @@ function redactRawLogText(text: any, knownSecrets: any[]): string {
 
 function createRedactingLogStream(knownSecrets: any[]) {
   let carry = "";
+  const decoder = new StringDecoder("utf8");
   return new Transform({
     transform(chunk, _enc, callback) {
-      carry += chunk.toString("utf-8");
+      carry += decoder.write(chunk);
       const lines = carry.split("\n");
       carry = lines.pop() ?? "";
       for (const line of lines) {
@@ -360,10 +385,37 @@ function createRedactingLogStream(knownSecrets: any[]) {
       callback();
     },
     flush(callback) {
+      carry += decoder.end();
       if (carry) this.push(redactRawLogText(carry, knownSecrets));
       callback();
     },
   });
+}
+
+function createSafeRedactingLogStream(filePath: string, knownSecrets: any[]) {
+  const source = Readable.from(
+    (async function* () {
+      let fd: number;
+      try {
+        fd = openRegularFile(filePath);
+      } catch (error: any) {
+        log.debug(`Skipping unavailable support log ${filePath}: ${error.message}`);
+        return;
+      }
+
+      try {
+        for await (const chunk of fs.createReadStream(filePath, { fd })) {
+          yield chunk;
+        }
+      } catch (error: any) {
+        log.warn(`Support log read failed (${filePath}): ${error.message}`);
+      }
+    })(),
+  );
+  const redacted = createRedactingLogStream(knownSecrets);
+  redacted.on("close", () => source.destroy());
+  source.pipe(redacted);
+  return redacted;
 }
 
 async function readPanelVersion() {
@@ -1123,28 +1175,9 @@ async function buildNetworkInterfaces() {
   }
 }
 
-function checkCurlAvailable() {
-  return new Promise((resolve) => {
-    execFile("curl", ["--version"], { timeout: 3000 }, (err, stdout) => {
-      if (err) {
-        resolve({
-          available: false,
-          reason: err.code === "ENOENT" ? "curl is not on PATH" : err.message,
-        });
-        return;
-      }
-      resolve({ available: true, version: stdout.split("\n")[0]?.trim() || null });
-    });
-  });
-}
-
 async function buildWorldMapDiagnostics() {
   try {
-    const [curl, resolution] = await Promise.all([
-      checkCurlAvailable(),
-      Promise.resolve(getB42ResolutionStatus()),
-    ]);
-    return { curl, b42Resolution: resolution };
+    return await getWorldMapDiagnostics();
   } catch (e: any) {
     return { _error: e.message };
   }
@@ -1279,7 +1312,7 @@ function buildBundleReadme() {
     "13. `server-config-summary.json` — sanitized effective server settings, mod/map lists, sandbox integrity, and whether the Mods/WorkshopItems lists are the same length (a mismatch is a cheap signal of an unresolved mod).",
     "14. `sandbox-options-diagnostics.json` — PZ/Argus versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
-    "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
+    "17. `world-map-diagnostics.json` — live PZMap metadata provider status, resolved Build 42 version when available, and the browser's direct tile delivery policy.",
     "18. `db-write-health.json` — SQLite integrity and storage errors. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
     "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
     "## Then the raw logs",
@@ -1396,7 +1429,7 @@ async function getSupportBundleEntries() {
   const serverPathRoot = await resolveSearchRoot(activeServer?.serverPath || "");
   const steamcmdRoot = await resolveSearchRoot(settings?.steamcmdPath || "");
   const zomboidDataRoot = await resolveSearchRoot(
-    activeServer?.zomboidDataPath || "",
+    getZomboidDataPath(activeServer),
   );
 
   const entries: any[] = [];
@@ -1526,6 +1559,21 @@ async function getSupportBundleEntries() {
     { maxDepth: 3, maxFiles: 200 },
   );
 
+  for (const root of alternateServerRoots) {
+    await scan(
+      root,
+      (name) => CRASH_FILE_RE.test(name),
+      "crash-logs/alternate-server-root",
+      { maxDepth: 2, maxFiles: 200 },
+    );
+    await scan(
+      path.join(root, "logs"),
+      (name) => CRASH_FILE_RE.test(name),
+      "crash-logs/alternate-server-logs",
+      { maxDepth: 3, maxFiles: 200 },
+    );
+  }
+
   return {
     entries,
     activeServer,
@@ -1565,20 +1613,23 @@ router.get("/logs/download", async (req, res) => {
   try {
     const paths = getDataPaths();
     const logsPath = path.join(paths.logsDir, "combined.log");
-
-    if (!fs.existsSync(logsPath)) {
+    const fd = tryOpenRegularFile(logsPath);
+    if (fd === null) {
       return res.status(404).json({ error: "Log file not found" });
     }
 
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Content-Disposition", "attachment; filename=combined.log");
 
-    const readStream = fs.createReadStream(logsPath);
+    const readStream = fs.createReadStream(logsPath, { fd });
     readStream.on("error", (err) => {
       log.error(`Log file read error: ${err.message}`);
       if (!res.headersSent)
         res.status(500).json({ error: "Failed to read log file" });
       else res.destroy();
+    });
+    res.on("close", () => {
+      if (!readStream.destroyed) readStream.destroy();
     });
     readStream.pipe(res);
   } catch (error: any) {
@@ -1610,6 +1661,19 @@ router.get("/logs/download-zip", async (req, res) => {
 
     const archive = archiver("zip", {
       zlib: { level: 6 },
+    });
+    const logStreams: Readable[] = [];
+    let responseFinished = false;
+    let responseClosed = false;
+
+    res.on("finish", () => {
+      responseFinished = true;
+    });
+    res.on("close", () => {
+      if (responseFinished) return;
+      responseClosed = true;
+      archive.abort();
+      for (const stream of logStreams) stream.destroy();
     });
 
     archive.on("warning", (error: any) => {
@@ -1663,10 +1727,9 @@ router.get("/logs/download-zip", async (req, res) => {
     archive.append(manifest, { name: "support-bundle-info.txt" });
 
     for (const entry of entries) {
-      archive.append(
-        fs.createReadStream(entry.filePath).pipe(createRedactingLogStream(knownSecrets)),
-        { name: entry.archivePath },
-      );
+      const stream = createSafeRedactingLogStream(entry.filePath, knownSecrets);
+      logStreams.push(stream);
+      archive.append(stream, { name: entry.archivePath });
     }
 
     try {
@@ -1685,7 +1748,13 @@ router.get("/logs/download-zip", async (req, res) => {
       );
     }
 
-    archive.finalize();
+    if (!responseClosed) {
+      void archive.finalize().catch((error: any) => {
+        if (!responseClosed) {
+          log.error(`Failed to finalize log archive: ${error.message}`);
+        }
+      });
+    }
   } catch (error: any) {
     log.error(`Failed to download log archive: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -1698,17 +1767,13 @@ router.get("/logs/download/:filename", async (req, res) => {
     const filename = String(req.params.filename);
     log.info(`GET /logs/download/${filename}`);
 
-    if (
-      filename.includes("..") ||
-      filename.includes("/") ||
-      filename.includes("\\")
-    ) {
+    if (!isSafeBasename(filename) || path.extname(filename).toLowerCase() !== ".log") {
       return res.status(400).json({ error: "Invalid filename" });
     }
 
     const logsPath = path.join(paths.logsDir, filename);
-
-    if (!fs.existsSync(logsPath)) {
+    const fd = tryOpenRegularFile(logsPath);
+    if (fd === null) {
       return res.status(404).json({ error: "Log file not found" });
     }
 
@@ -1719,12 +1784,15 @@ router.get("/logs/download/:filename", async (req, res) => {
       `attachment; filename="${safeFilename}"`,
     );
 
-    const readStream = fs.createReadStream(logsPath);
+    const readStream = fs.createReadStream(logsPath, { fd });
     readStream.on("error", (err) => {
       log.error(`Log file read error: ${err.message}`);
       if (!res.headersSent)
         res.status(500).json({ error: "Failed to read log file" });
       else res.destroy();
+    });
+    res.on("close", () => {
+      if (!readStream.destroyed) readStream.destroy();
     });
     readStream.pipe(res);
   } catch (error: any) {
@@ -4560,42 +4628,9 @@ router.get("/diagnostics", async (req, res) => {
   }
 });
 
-const TILE_PROBE_TIMEOUT_MS = 5000;
 const WORLDMAP_HANDLERS = [
   "getServerInfo",
 ];
-
-async function probeTile(url: string) {
-  const t0 = Date.now();
-  try {
-    const ctrl = AbortSignal.timeout(TILE_PROBE_TIMEOUT_MS);
-    let resp = await fetch(url, { method: "HEAD", signal: ctrl }).catch(
-      () => null,
-    );
-    if (!resp || !resp.ok) {
-      resp = await fetch(url, {
-        method: "GET",
-        headers: { Range: "bytes=0-0" },
-        signal: AbortSignal.timeout(TILE_PROBE_TIMEOUT_MS),
-      });
-    }
-    return {
-      url,
-      reachable: resp.ok || resp.status === 206,
-      statusCode: resp.status,
-      latencyMs: Date.now() - t0,
-      error: null,
-    };
-  } catch (e: any) {
-    return {
-      url,
-      reachable: false,
-      statusCode: null,
-      latencyMs: Date.now() - t0,
-      error: e?.name === "TimeoutError" ? "timeout" : e?.message || "unknown",
-    };
-  }
-}
 
 async function detectSaveBuild(savePath: string) {
   if (!(await safePathExists(savePath))) return "unknown";
@@ -4663,157 +4698,31 @@ router.get("/worldmap", async (req, res) => {
       );
     }
 
-    let b42Probe = null;
-    let b42TopProbe = null;
-    let b42Dir = null;
-    let b42TopFormat = null;
-    try {
-      b42Dir = await getB42Dir().catch(() => null);
-      b42TopFormat = b42Dir ? await getB42TopFormat(b42Dir).catch(() => null) : null;
-
-      const resolution = getB42ResolutionStatus();
-      if (resolution.source === "dynamic") {
-        checks.push(
-          diagOk(
-            "worldmap.tiles.buildDetect",
-            "B42 build auto-detect healthy",
-            `Build ${resolution.directory} was resolved dynamically from build_list.json.`,
-            {
-              category: "worldmap",
-              hint: "Resolution depends on an upstream bot-detection heuristic outside the panel's control, which has been observed responding inconsistently to identical requests. Treat this as working right now, not permanently solved -- it can start failing again with no change on the panel's side.",
-              params: { build: resolution.directory },
-            },
-          ),
-        );
-      } else {
-        checks.push(
-          diagWarn(
-            "worldmap.tiles.buildDetect",
-            "B42 build auto-detect failed",
-            `Using hardcoded build ${resolution.directory} because discovery failed: ${resolution.reason || "unknown reason"}. This will not track the next PZ map build until discovery starts working again.`,
-            {
-              category: "worldmap",
-              hint: "Discovery reads build_list.json and each candidate's layer0.dzi from tiles.pzmap.org. If upstream is blocking the panel's requests specifically (e.g. bot protection keyed on the HTTP client), this may not be fixable from the panel side — watch for this warning after the next PZ map release, since that's when a stale build actually shows up as wrong map geometry.",
-              params: { build: resolution.directory, reason: resolution.reason || "unknown reason" },
-            },
-          ),
-        );
-      }
-
-      [b42Probe, b42TopProbe] = await Promise.all([
-        probeTile(
-          `${PZ_TILES_ROOT}/${b42Dir || "42.19.0"}/base/layer0_files/0/0_0.jpg`,
+    const mapDiagnostics = await getWorldMapDiagnostics();
+    if (mapDiagnostics.available) {
+      checks.push(
+        diagOk(
+          "worldmap.tiles.provider",
+          "PZMap metadata provider reachable",
+          `Build ${mapDiagnostics.version} was resolved from ${mapDiagnostics.provider.origin}. Tiles are delivered directly to the browser with no referrer.`,
+          {
+            category: "worldmap",
+            params: { build: mapDiagnostics.version || "unknown" },
+          },
         ),
-        b42Dir && b42TopFormat
-          ? probeTile(
-              `${PZ_TILES_ROOT}/${b42Dir}/base_top/layer0_files/10/0_0.${b42TopFormat}`,
-            )
-          : Promise.resolve(null),
-      ]);
-
-      if (b42Probe.reachable) {
-        checks.push(
-          diagOk(
-            "worldmap.tiles.b42",
-            "B42 tile CDN reachable",
-            `Build ${b42Dir || "42.19.0"} responded in ${b42Probe.latencyMs} ms (HTTP ${b42Probe.statusCode}).`,
-            {
-              category: "worldmap",
-              params: {
-                build: b42Dir || "42.19.0",
-                latencyMs: b42Probe.latencyMs,
-                statusCode: b42Probe.statusCode,
-              },
-            },
-          ),
-        );
-      } else {
-        checks.push(
-          diagFail(
-            "worldmap.tiles.b42",
-            "B42 tile CDN unreachable",
-            `Could not reach tiles.pzmap.org for B42 tiles (${b42Probe.error || `HTTP ${b42Probe.statusCode}`}). The B42 base map will not load.`,
-            {
-              category: "worldmap",
-              hint: "Check the panel host's outbound HTTPS access. The /api/map/tiles proxy fetches tiles server-side.",
-              params: { detail: b42Probe.error || `HTTP ${b42Probe.statusCode}` },
-            },
-          ),
-        );
-      }
-
-      if (b42TopProbe && b42TopProbe.reachable) {
-        checks.push(
-          diagOk(
-            "worldmap.tiles.b42Top",
-            "B42 top-down tiles reachable",
-            `Build ${b42Dir} serves .${b42TopFormat} top-down tiles (HTTP ${b42TopProbe.statusCode}, ${b42TopProbe.latencyMs} ms).`,
-            {
-              category: "worldmap",
-              params: {
-                build: b42Dir,
-                format: b42TopFormat,
-                statusCode: b42TopProbe.statusCode,
-                latencyMs: b42TopProbe.latencyMs,
-              },
-            },
-          ),
-        );
-      } else if (b42TopProbe) {
-        checks.push(
-          diagFail(
-            "worldmap.tiles.b42Top",
-            "B42 top-down tiles unavailable",
-            `Build ${b42Dir} did not serve a .${b42TopFormat} top-down tile (${b42TopProbe.error || `HTTP ${b42TopProbe.statusCode}`}). The World Map may show missing base tiles.`,
-            {
-              category: "worldmap",
-              hint: "Upstream may have republished this build in a different image format. Re-run diagnostics after a few minutes; the panel re-reads the format from base_top/layer0.dzi every 24h or on restart.",
-              params: {
-                build: b42Dir,
-                format: b42TopFormat,
-                detail: b42TopProbe.error || `HTTP ${b42TopProbe.statusCode}`,
-              },
-            },
-          ),
-        );
-      } else {
-        checks.push(
-          diagWarn(
-            "worldmap.tiles.b42Top",
-            "B42 top-down format unresolved",
-            "Could not read base_top/layer0.dzi to determine the top-down tile format.",
-            {
-              category: "worldmap",
-              hint: "Check outbound HTTPS access from the panel host.",
-            },
-          ),
-        );
-      }
-
-      if (
-        typeof AbortSignal === "undefined" ||
-        typeof AbortSignal.timeout !== "function"
-      ) {
-        checks.push(
-          diagFail(
-            "worldmap.runtime",
-            "Tile proxy needs Node 18+",
-            "AbortSignal.timeout is unavailable on this runtime. Every tile fetch will throw and return 502.",
-            {
-              category: "worldmap",
-              hint: "Upgrade the panel host to Node 18+ (the bundled .exe already ships with this).",
-            },
-          ),
-        );
-      }
-    } catch (e: any) {
-      const reason = e?.message || "unknown";
+      );
+    } else {
+      const reason = mapDiagnostics.error || mapDiagnostics.provider.error || "provider unavailable";
       checks.push(
         diagWarn(
-          "worldmap.tiles.error",
-          "Tile reachability probe failed",
-          `Tile probe could not complete: ${reason}`,
-          { category: "worldmap", params: { reason } },
+          "worldmap.tiles.provider",
+          "PZMap metadata provider unavailable",
+          `The map provider could not resolve live metadata: ${reason}. The map endpoint will return 503 until the provider is available.`,
+          {
+            category: "worldmap",
+            hint: "Retry when pzmap.org and tiles.pzmap.org are reachable from this panel host.",
+            params: { reason },
+          },
         ),
       );
     }
@@ -4893,9 +4802,10 @@ router.get("/worldmap", async (req, res) => {
     let savePath = null;
     let savesDir = null;
     let saveCount = 0;
+    const zomboidDataPath = getZomboidDataPath(activeServer);
 
-    if (activeServer?.zomboidDataPath) {
-      const savesRoot = path.join(activeServer.zomboidDataPath, "Saves");
+    if (zomboidDataPath) {
+      const savesRoot = path.join(zomboidDataPath, "Saves");
       if (await safePathExists(savesRoot)) {
         try {
           const modes = (await safeReaddir(savesRoot)) || [];
@@ -4990,9 +4900,11 @@ router.get("/worldmap", async (req, res) => {
       summary,
       checks: sanitizedChecks,
       durationMs: Date.now() - t0,
-      tileSources: {
-        b42: b42Probe,
-      },
+      provider: mapDiagnostics.provider,
+      tiles: mapDiagnostics.tiles,
+      available: mapDiagnostics.available,
+      version: mapDiagnostics.version,
+      error: mapDiagnostics.error,
       gameIntegration: {
         configured: gameIntegrationStatus.configured,
         isRunning: gameIntegrationStatus.isRunning,
@@ -5002,7 +4914,7 @@ router.get("/worldmap", async (req, res) => {
       },
       handlers: WORLDMAP_HANDLERS,
       save: {
-        zomboidDataPath: activeServer?.zomboidDataPath || null,
+        zomboidDataPath: zomboidDataPath || null,
         savesDir,
         activeSaveName: saveName,
         activeSavePath: savePath,
@@ -5016,9 +4928,6 @@ router.get("/worldmap", async (req, res) => {
             serverName: activeServer.serverName,
           }
         : null,
-      proxy: {
-        b42: "/api/map/tiles/:level/:tile?floor=N",
-      },
     });
   } catch (error: any) {
     log.error(`World map diagnostics failed: ${error.message}`);
@@ -5256,22 +5165,46 @@ router.post("/clear-stale-locks", async (req, res) => {
 function isCrashLogFilename(filename: unknown): filename is string {
   return (
     typeof filename === "string" &&
-    (filename.startsWith("hs_err_pid") ||
-      (filename.includes("crash") && filename.endsWith(".log")) ||
-      (filename.includes("error") && filename.endsWith(".log")))
+    isSafeBasename(filename) &&
+    CRASH_FILE_RE.test(filename)
   );
+}
+
+async function getCrashLogDirectories(serverManager: any): Promise<string[]> {
+  const activeServer = await getCurrentServer().catch(() => null);
+  const zomboidDataPath = getZomboidDataPath(activeServer);
+  const serverRoots = [
+    activeServer?.serverPath,
+    activeServer?.installPath,
+    activeServer &&
+    String(serverManager?._serverId) === String(activeServer.id)
+      ? serverManager.serverPath
+      : "",
+  ].filter(
+    (directory): directory is string =>
+      typeof directory === "string" && Boolean(directory),
+  );
+  const directories = [
+    ...serverRoots.flatMap((root) => [root, path.join(root, "logs")]),
+    ...(zomboidDataPath
+      ? [zomboidDataPath, path.join(zomboidDataPath, "Logs")]
+      : []),
+    getDataPaths().logsDir,
+  ].map((directory) => path.resolve(directory));
+  const seen = new Set<string>();
+  return directories.filter((directory) => {
+    const key = process.platform === "win32" ? directory.toLowerCase() : directory;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 router.get("/crash-logs", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
-    const serverPath = serverManager?.serverPath || "";
 
-    const crashDirs = [
-      serverPath,
-      path.join(serverPath, "logs"),
-      getDataPaths().logsDir,
-    ].filter(Boolean);
+    const crashDirs = await getCrashLogDirectories(serverManager);
 
   const crashLogs: any[] = [];
     const seenFiles = new Set();
@@ -5285,28 +5218,25 @@ router.get("/crash-logs", async (req, res) => {
           continue;
         }
 
-        const files = await fs.promises.readdir(dir);
+        const files = await fs.promises.readdir(dir, { withFileTypes: true });
 
         await Promise.all(
-          files.map(async (file) => {
-            if (seenFiles.has(file)) return;
+          files.map(async (entry) => {
+            if (!entry.isFile() || !isCrashLogFilename(entry.name)) return;
+            if (seenFiles.has(entry.name)) return;
 
-            if (isCrashLogFilename(file)) {
-              try {
-                const filePath = path.join(dir, file);
-                const stats = await fs.promises.stat(filePath);
-                if (!seenFiles.has(file)) {
-                  seenFiles.add(file);
-                  crashLogs.push({
-                    name: file,
-                    path: filePath,
-                    size: stats.size,
-                    modified: stats.mtime.toISOString(),
-                  });
-                }
-              } catch (e: any) {
-                log.debug(`Stat failed for crash log ${file}: ${e.message}`);
-              }
+            try {
+              const filePath = path.join(dir, entry.name);
+              const stats = await fs.promises.lstat(filePath);
+              if (!stats.isFile()) return;
+              seenFiles.add(entry.name);
+              crashLogs.push({
+                name: entry.name,
+                size: stats.size,
+                modified: stats.mtime.toISOString(),
+              });
+            } catch (e: any) {
+              log.debug(`Stat failed for crash log ${entry.name}: ${e.message}`);
             }
           }),
         );
@@ -5329,42 +5259,67 @@ router.get("/crash-logs", async (req, res) => {
   }
 });
 
+router.get("/crash-logs/:filename/download", async (req, res) => {
+  try {
+    const filename = String(req.params.filename);
+    if (!isCrashLogFilename(filename)) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+
+    const serverManager = req.app.get("serverManager");
+    const crashDirs = await getCrashLogDirectories(serverManager);
+    for (const dir of crashDirs) {
+      const filePath = path.join(dir, filename);
+      const fd = tryOpenRegularFile(filePath);
+      if (fd === null) continue;
+
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename.replace(/["\r\n]/g, "")}"`,
+      );
+      const stream = fs.createReadStream(filePath, { fd });
+      stream.on("error", (error) => {
+        log.error(`Crash log read error: ${error.message}`);
+        if (!res.headersSent) res.status(500).json({ error: "Failed to read crash log" });
+        else res.destroy(error);
+      });
+      res.on("close", () => {
+        if (!stream.destroyed) stream.destroy();
+      });
+      stream.pipe(res);
+      return;
+    }
+
+    res.status(404).json({ error: "Crash log not found" });
+  } catch (error: any) {
+    log.error(`Failed to download crash log: ${error.message}`);
+    res.status(500).json({ error: sanitizeError(error.message) });
+  }
+});
+
 router.get("/crash-logs/:filename", async (req, res) => {
   try {
     const filename = String(req.params.filename);
     const serverManager = req.app.get("serverManager");
-    const serverPath = serverManager?.serverPath || "";
-
-    if (
-      filename.includes("..") ||
-      filename.includes("/") ||
-      filename.includes("\\")
-    ) {
-      return res.status(400).json({ error: "Invalid filename" });
-    }
 
     if (!isCrashLogFilename(filename)) {
       return res.status(400).json({ error: "Invalid filename" });
     }
 
-    const searchDirs: string[] = [
-      serverPath,
-      path.join(serverPath, "logs"),
-      getDataPaths().logsDir,
-    ].filter(Boolean);
+    const searchDirs = await getCrashLogDirectories(serverManager);
 
     for (const dir of searchDirs) {
       const filePath = path.join(dir, filename);
       try {
-        await fs.promises.access(filePath);
-
-        const handle = await fs.promises.open(filePath, "r");
+        const fd = tryOpenRegularFile(filePath);
+        if (fd === null) continue;
         try {
-          const stats = await handle.stat();
+          const stats = fs.fstatSync(fd);
           const readSize = Math.min(stats.size, 100000);
           const buffer = Buffer.alloc(readSize);
 
-          await handle.read(buffer, 0, readSize, 0);
+          fs.readSync(fd, buffer, 0, readSize, 0);
           const content = buffer.toString("utf-8");
 
           return res.json({
@@ -5373,7 +5328,7 @@ router.get("/crash-logs/:filename", async (req, res) => {
             size: stats.size,
           });
         } finally {
-          await handle.close();
+          fs.closeSync(fd);
         }
       } catch (e: any) {
         // File not found in this dir, try next
@@ -5504,7 +5459,6 @@ export {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  checkCurlAvailable,
   buildWorldMapDiagnostics,
   buildDbWriteHealth,
   buildBackupsSummary,
