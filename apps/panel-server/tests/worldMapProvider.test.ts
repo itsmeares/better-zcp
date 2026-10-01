@@ -212,7 +212,7 @@ describe("world map resolution", () => {
     expect(res.body.mapOrder).toEqual([]);
     expect(res.body.layers).toEqual([]);
     expect(res.body.warnings).toContain("Could not read the active server INI; map overlays were not resolved.");
-    expect(fetchMock.mock.calls.every(([input]) => String(input).startsWith(PZ_MAP_ROOT))).toBe(true);
+    expect(fetchMock.mock.calls.every(([input]) => new URL(String(input)).origin === PZ_MAP_ROOT)).toBe(true);
   });
 
   it("reports non-composite maps as unsupported instead of rendering incorrect floors", async () => {
