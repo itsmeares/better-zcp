@@ -27,6 +27,24 @@ describe("release transport", () => {
   it("preserves RC tags and offers the stable release after its RC", () => {
     const checker = new PanelUpdateChecker(); expect(checker.extractVersion("v2.0.0-rc10")).toBe("2.0.0-rc10"); expect(checker.isNewer("2.0.0-rc10", "2.0.0-rc5")).toBe(true); expect(checker.isNewer("2.0.0", "2.0.0-rc10")).toBe(true); expect(checker.isNewer("2.0.0-rc10", "2.0.0")).toBe(false);
   });
+  it.each([
+    ["3.0.0-rc1", "3.0.0-rc2", "/releases?per_page=20", true],
+    ["3.0.0", "3.0.0", "/releases/latest", false],
+  ])("checks the release channel for %s", async (current, expected, endpoint, available) => {
+    const release = (tag: string, prerelease = false) => ({ tag_name: tag, prerelease, assets: [] });
+    const payload = current.includes("-")
+      ? [release("v2.0.0-rc5", true), release("v3.0.0-rc2", true), release("v3.0.0-rc1", true), { ...release("v3.0.0"), draft: true }]
+      : release("v3.0.0");
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload)));
+    vi.stubGlobal("fetch", fetcher);
+    const checker = new PanelUpdateChecker();
+    checker.currentVersion = current;
+    const status = await checker.checkForUpdate();
+    expect(String(fetcher.mock.calls[0][0])).toBe(`https://api.github.com/repos/itsmeares/better-zcp${endpoint}`);
+    expect(status.latestVersion).toBe(expected);
+    expect(status.updateAvailable).toBe(available);
+    expect(status.lastError).toBeNull();
+  });
   it.skipIf(process.platform === "win32")("rejects linked and oversized update reports without reading their contents", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-result-"));
     const checker = new PanelUpdateChecker(); checker.getExeBasePath = () => path.join(root, "panel");

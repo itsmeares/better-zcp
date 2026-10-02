@@ -13,7 +13,7 @@ you did it right before moving to the next one.
 ## Phase 1: Extract and run the panel
 
 1. Download `ZomboidControlPanel-linux.tar.gz` from
-   [Releases](https://github.com/itsmeares/better-zcp/releases/latest).
+   [Releases](https://github.com/itsmeares/better-zcp/releases).
 2. Make a folder for it and extract the archive into it:
    ```bash
    mkdir zomboid-panel && cd zomboid-panel
@@ -98,29 +98,21 @@ switching to Docker.
 
 ---
 
-## Phase 4: Install curl
+## Phase 4: Check map provider access
 
-`curl` isn't bundled with every minimal Linux install, and the panel uses it
-for one specific feature: detecting new Project Zomboid map builds for the
-**World Map** page. Docker, Windows, and macOS installs already have `curl`;
-a bare tarball install on a minimal Linux image might not.
+The World Map needs outbound HTTPS from the panel host to `pzmap.org` and
+`tiles.pzmap.org` for metadata. Your browser also needs access to
+`tiles.pzmap.org` for map images. Open **Debug > World Map** to check provider
+access from the panel host.
 
-```bash
-# Debian / Ubuntu
-sudo apt install curl
+The panel fetches metadata with its bundled runtime. Installing `curl` does
+not change this path. There is no fixed-build fallback: if the provider is
+unavailable or returns HTTP 403, the map reports that error and the rest of
+the panel remains usable.
 
-# RHEL / CentOS / Rocky
-sudo dnf install curl
-```
-
-**You know it worked when:** `curl --version` prints a version instead of
-`command not found`.
-
-**If you skip this:** nothing crashes. The panel still runs and the World Map
-still works — it just falls back to a fixed, older map build and stops
-tracking new Project Zomboid map releases. **Debug > World Map** in the panel
-will flag this if it happens, so you can catch it later even if you skip this
-step now.
+**You know it worked when:** the metadata provider check succeeds and the
+World Map can load its dataset. See the [RC notes](../releases/3.0.0-rc1.md)
+for the known G11 provider failure.
 
 ---
 
@@ -398,10 +390,10 @@ two options that don't depend on how the request reached the panel:
 - [ ] Panel starts via `start.sh` and loads at `:3001` (Phase 1)
 - [ ] Admin account created using the terminal's setup token (Phase 2)
 - [ ] Distro clears the glibc 2.28 floor (Phase 3)
-- [ ] `curl` installed, so World Map stays on the latest build (Phase 4)
+- [ ] Map provider metadata access checked in Debug > World Map (Phase 4)
 - [ ] Panel runs as `pzuser`, not root (Phase 5)
 - [ ] `zomboid-panel.service` installed and `active (running)` (Phase 6)
 - [ ] `/opt/zomboid-panel/data/pzserver` created before the install wizard (Phase 7)
 - [ ] 32-bit libraries installed so SteamCMD runs (Phase 8)
 - [ ] Firewall open on 3001, only if accessed remotely (Phase 9)
-- [ ] Recovery codes generated before going behind a reverse proxy (Phase 10)
+- [ ] Host-side admin password recovery understood before adding a reverse proxy (Phase 10)

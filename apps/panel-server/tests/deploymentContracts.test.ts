@@ -92,9 +92,7 @@ describe("Deployment contracts", () => {
 
     expect(workflow).toContain("node scripts/verify-release-version.mjs");
     expect(verifier).toContain("pnpm-lock.yaml");
-    expect(verifier).toContain(
-      "Game integration must contain exactly one runtime and mod.info version",
-    );
+    expect(verifier).toContain("validateArgusBundle(lua, modInfo)");
     expect(verifier).toContain("release-manifest.json client file inventory differs");
   });
 

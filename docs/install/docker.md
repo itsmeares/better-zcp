@@ -30,6 +30,9 @@ where you trust the panel administrator with Docker access.
 
 ### Install
 
+For `v3.0.0-rc1`, use the exact commands in the
+[RC notes](../releases/3.0.0-rc1.md). A prerelease must be selected explicitly.
+
 1. On an amd64 Linux Docker host, install Docker Engine, the Docker Compose
    plugin, `curl`, and `tar`. Check `docker compose version` before proceeding.
 2. Run:
@@ -38,7 +41,7 @@ where you trust the panel administrator with Docker access.
    curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
    ```
 
-   To select a release, add a version after `sh -s --`, such as `2.0.0`.
+   To select a release, add a version after `sh -s --`, such as `3.0.0-rc1`.
    The script downloads that release's source, pulls its exact image tag when
    available, and otherwise builds from source. It keeps named volumes for
    panel state, logs, the PZ install, and saves. It waits for the panel health
@@ -63,7 +66,10 @@ host with the same `PANEL_HOME` or `BUILD_ROOT` value used at install time.
 
 The first update from the older combined container requires stopping the game
 once. The installer refuses to split it while the old game process is running.
-It keeps the four named volumes, existing profiles, game install, and saves.
+It keeps the four named volumes, game install, and saves. Existing profiles
+are retained only when the panel already uses the rebuilt `panel.sqlite`
+database. Older panel databases are not imported; create the admin account
+and register those servers again.
 Later panel updates leave game containers running. The obsolete updater
 service is removed by Compose.
 

@@ -283,9 +283,6 @@ GitHub if you'd rather read them there or check for updates to them:
                                    where Project Zomboid itself runs. Not needed
                                    for this package; only relevant if you'd
                                    rather switch to Docker instead.
-- docs/install/hosted.md          Renting a PZ server from a host (Indifferent
-                                   Broccoli and similar) instead of running it
-                                   yourself.
 - docs/install/troubleshooting.md Symptom-first fixes, organized by what's on
                                    your screen, not by subsystem.
 
@@ -548,6 +545,8 @@ async function main() {
       "docs/install not found -- release will ship without install guides",
     );
   }
+
+  fs.cpSync("./docs/releases", "./release/docs/releases", { recursive: true });
 
   fs.mkdirSync("./release/data", { recursive: true });
 
