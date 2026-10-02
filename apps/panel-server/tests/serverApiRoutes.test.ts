@@ -87,10 +87,18 @@ describe("server API routes", () => {
       lastSize: String(Buffer.byteLength(initialLog)),
       filter: "important",
     })).body).toMatchObject({ newLines: ["RCON: connected"] });
-    const originalInode = fs.statSync(logPath).ino;
-    expect((await execute("/console-log/clear", "post")).body).toEqual({ success: true });
-    expect(fs.statSync(logPath).ino).toBe(originalInode);
-    expect(fs.readFileSync(logPath, "utf8")).toBe("");
+    const writer = fs.openSync(logPath, "r+");
+    try {
+      const originalInode = fs.fstatSync(writer).ino;
+      expect((await execute("/console-log/clear", "post")).body).toEqual({ success: true });
+      expect(fs.statSync(logPath).ino).toBe(originalInode);
+      expect(fs.fstatSync(writer).size).toBe(0);
+      fs.writeSync(writer, "active writer remains attached\n");
+      expect((await execute("/console-log", "get")).body.content)
+        .toContain("active writer remains attached");
+    } finally {
+      fs.closeSync(writer);
+    }
     expect((await execute("/console-log/error-count", "get")).body)
       .toMatchObject({ count: 0 });
   });
