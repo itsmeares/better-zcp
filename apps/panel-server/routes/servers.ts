@@ -553,8 +553,8 @@ router.get("/status", async (req, res) => {
       }
       const descriptor = serverProcessDescriptor(server);
       const peers = servers.filter((peer) => String(peer.id) !== String(server.id)).map(serverProcessDescriptor);
-      const owned = matched.find((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "owned");
-      const unknown = matched.some((entry) => classifyServerProcess(entry.cmd, descriptor, peers) === "unknown");
+      const owned = matched.find((entry) => classifyServerProcess(entry.cmd, descriptor, peers, entry.argv) === "owned");
+      const unknown = matched.some((entry) => classifyServerProcess(entry.cmd, descriptor, peers, entry.argv) === "unknown");
       return {
         id: server.id,
         name: server.name,

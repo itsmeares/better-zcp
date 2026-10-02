@@ -82,6 +82,39 @@ async function runRoute(routePath, method, req, res) {
 }
 
 describe('GET /api/servers/status', () => {
+  it('uses Linux argv boundaries when cache paths contain spaces and literal quotes', async () => {
+    const savePathA = `/tmp/PZ "Alpha" & data'`;
+    const savePathB = `/tmp/PZ "Beta" & data'`;
+    const profiles = [
+      { id: 'quoted-a', name: 'A', serverName: 'Launch Fixture', installPath: '/tmp/pz', zomboidDataPath: savePathA },
+      { id: 'quoted-b', name: 'B', serverName: 'Other Fixture', installPath: '/tmp/pz', zomboidDataPath: savePathB },
+    ];
+    getServers.mockResolvedValue(profiles);
+    getCurrentServer.mockResolvedValue(profiles[0]);
+    const argv = [
+      '/tmp/pz/jre64/bin/java', 'zombie.network.GameServer',
+      '-servername', 'Launch Fixture', `-cachedir=${savePathA}`,
+    ];
+    const scan = vi.fn().mockResolvedValue({ matched: [
+      {
+        pid: '111',
+        cmd: `java zombie.network.GameServer -servername Launch Fixture -cachedir=${savePathA}`,
+        argv,
+      },
+    ] });
+    const res = createResponse();
+
+    scanDedicatedServerProcesses.mockImplementation(scan);
+    await runRoute('/status', 'get', { app: { get: (key) => key === 'serverManager' ? { _scanDedicatedServerProcesses: scan } : null } }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      servers: [
+        expect.objectContaining({ id: 'quoted-a', running: true, pid: '111', stateUnknown: false }),
+        expect.objectContaining({ id: 'quoted-b', running: false, pid: null, stateUnknown: false }),
+      ],
+    }));
+  });
+
   it('keeps two profiles with a shared install path separate and leaves external processes unknown', async () => {
     const profiles = [
       { id: 'a', name: 'A', serverName: 'ServerA', installPath: '/tmp/pz', zomboidDataPath: '/tmp/a' },
@@ -187,6 +220,20 @@ describe("POST /api/servers", () => {
       expect.objectContaining({ adminPassword: "first-boot-password" }),
     );
     expect(response.status).toHaveBeenCalledWith(201);
+  });
+
+  it.each(["bad\necho INJECTED", "bad\0value", { value: "password" }])("rejects unsupported admin passwords before profile creation/update", async adminPassword => {
+    const created = createResponse();
+    await getCreateHandler()({ body: {
+      name: "Fixture", installPath: "C:\\PZ", rconHost: "127.0.0.1",
+      rconPort: 27015, rconPassword: "rcon", adminPassword,
+    } }, created);
+    expect(created.status).toHaveBeenCalledWith(400);
+    expect(createServer).not.toHaveBeenCalled();
+    const updated = createResponse();
+    await getUpdateHandler()({ params: { id: "1" }, body: { adminPassword } }, updated);
+    expect(updated.status).toHaveBeenCalledWith(400);
+    expect(updateServer).not.toHaveBeenCalled();
   });
 
   it("rejects a serverName containing a path traversal sequence", async () => {

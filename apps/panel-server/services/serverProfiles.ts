@@ -25,6 +25,7 @@ import {
   sanitizeServerResponse,
 } from "../utils/sanitize.ts";
 import { resolveLaunchMode, ServerManager } from "./serverManager.ts";
+import { getStartupScriptInputError } from "./serverLaunch.ts";
 import { applyUpnpToIni } from "../utils/upnpConfig.ts";
 import { resolveEnvRconHost } from "./rcon.ts";
 import { getServerName } from "./sandboxPersistence.ts";
@@ -287,6 +288,8 @@ export async function createServerProfile(
 
   const pathCheck = validateInstallPathShape(config.installPath);
   if (!pathCheck.valid) fail(pathCheck.error!);
+  const launchInputError = getStartupScriptInputError(config);
+  if (launchInputError) fail(launchInputError);
 
   if (typeof config.name !== "string" || config.name.length > 100) {
     fail("Server name must be under 100 characters");
@@ -381,6 +384,8 @@ export async function updateServerProfile(
     if (serverId === null) fail("Invalid server ID");
 
     const body = record(input);
+    const launchInputError = getStartupScriptInputError(body);
+    if (launchInputError) fail(launchInputError);
     const updates: JsonRecord = {};
     for (const key of ALLOWED_SERVER_UPDATE_FIELDS) {
       if (body[key] !== undefined) updates[key] = body[key];
