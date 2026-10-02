@@ -17,7 +17,8 @@ vi.mock("../utils/paths.ts", () => ({
   })),
 }));
 
-const { buildFileIndex } = await import("../routes/mods.ts");
+const { default: router, buildFileIndex } = await import("../routes/mods.ts");
+const { getCurrentServer } = await import("../database/init.ts");
 
 const WORKSHOP_ID = "123456789";
 
@@ -53,7 +54,34 @@ describe("buildFileIndex() yields to the event loop many times while indexing on
 
   afterEach(() => {
     fs.rmSync(serverPath, { recursive: true, force: true });
+    vi.mocked(getCurrentServer).mockResolvedValue(null);
     vi.restoreAllMocks();
+  });
+
+  it("reports the scanned INI snapshot before completing an empty Workshop scan", async () => {
+    fs.writeFileSync(path.join(serverPath, "Fixture.ini"), "WorkshopItems=\nMods=OnlyA;OnlyB\n");
+    vi.mocked(getCurrentServer).mockResolvedValue({
+      installPath: serverPath,
+      serverConfigPath: serverPath,
+      serverName: "Fixture",
+    });
+    const chunks = [];
+    const route = router.stack.find(layer => layer.route?.path === "/conflicts/stream");
+    await route.route.stack[0].handle({ on: vi.fn() }, {
+      writable: true,
+      writeHead: vi.fn(),
+      flushHeaders: vi.fn(),
+      write: chunk => chunks.push(chunk),
+      end: vi.fn(),
+    });
+    const events = chunks.join("").split("\n\n").filter(Boolean);
+    expect(events[0]).toContain("event: init");
+    expect(JSON.parse(events[0].split("data: ")[1])).toEqual({
+      totalWorkshopIds: 0,
+      workshopIds: [],
+      modLoadOrder: ["OnlyA", "OnlyB"],
+    });
+    expect(events[1]).toContain("event: complete");
   });
 
   it("yield count scales with file count instead of staying fixed at one-per-mod", async () => {

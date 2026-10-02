@@ -1466,7 +1466,11 @@ export class BackupService {
 
     for (const entry of archive.files as any[]) {
       if (entry.type !== "File") continue;
-      const entryPath = path.join(stagingPath, entry.path);
+      const entryPath = path.resolve(stagingPath, entry.path);
+      if (!entryPath.startsWith(path.resolve(stagingPath) + path.sep)) {
+        corruptFiles.push(`${entry.path} (outside the restore staging directory)`);
+        continue;
+      }
 
       let actualCrc32;
       try {

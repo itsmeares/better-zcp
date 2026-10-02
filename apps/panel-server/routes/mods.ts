@@ -6012,6 +6012,7 @@ router.get("/conflicts/stream", async (req, res) => {
 
     send("init", {
       totalWorkshopIds: workshopIds.length,
+      workshopIds,
       modLoadOrder: modIdsFromIni,
     });
 

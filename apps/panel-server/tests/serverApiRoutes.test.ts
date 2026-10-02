@@ -87,7 +87,9 @@ describe("server API routes", () => {
       lastSize: String(Buffer.byteLength(initialLog)),
       filter: "important",
     })).body).toMatchObject({ newLines: ["RCON: connected"] });
+    const originalInode = fs.statSync(logPath).ino;
     expect((await execute("/console-log/clear", "post")).body).toEqual({ success: true });
+    expect(fs.statSync(logPath).ino).toBe(originalInode);
     expect(fs.readFileSync(logPath, "utf8")).toBe("");
     expect((await execute("/console-log/error-count", "get")).body)
       .toMatchObject({ count: 0 });
@@ -114,6 +116,22 @@ describe("server API routes", () => {
     expect((await execute("/console-log/clear", "post")).statusCode).toBe(400);
     expect(fs.readFileSync(path.join(root, "server-console.txt"), "utf8"))
       .toContain("ERROR[server] first");
+  });
+
+  it.skipIf(process.platform === "win32")("refuses linked console logs on every read and clear route without changing the target", async () => {
+    getCurrentServer.mockResolvedValue({ zomboidDataPath: root });
+    const target = path.join(root, "panel.sqlite");
+    fs.writeFileSync(target, "PRIVATE-PANEL-FIXTURE");
+    fs.symlinkSync(target, path.join(root, "server-console.txt"));
+
+    for (const [route, method] of [
+      ["/console-log", "get"], ["/console-log/error-count", "get"],
+      ["/console-log/stream", "get"], ["/console-log/clear", "post"],
+    ]) {
+      expect((await execute(route, method)).statusCode).toBe(500);
+    }
+    expect(fs.readFileSync(target, "utf8")).toBe("PRIVATE-PANEL-FIXTURE");
+    expect(fs.lstatSync(path.join(root, "server-console.txt")).isSymbolicLink()).toBe(true);
   });
 
   it("writes RCON settings through the locked INI writer", async () => {

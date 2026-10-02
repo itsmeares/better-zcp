@@ -24,7 +24,6 @@
     "node-cron": "^4.6.0",
     "socket.io": "^4.8.3",
     "sql.js": "^1.14.2",
-    "undici": "^8.10.0",
     "unzipper": "^0.12.5",
     "uuid": "^13.0.0",
     "winston": "^3.17.0",
@@ -41,7 +40,7 @@
     "nodemon": "^3.1.14",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.69.0",
-    "ws": "^8.21.0",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "ws": "^8.21.0"
   }
 }

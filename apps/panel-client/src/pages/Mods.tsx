@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/serverSelection"
+import { apiUrl, getSelectedServerId } from "@/lib/serverSelection"
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -63,7 +63,7 @@ import {
   type DepSearchHit,
   type DepSearchState,
 } from '@/lib/modsShared'
-import { getAccessToken } from '@/lib/authToken'
+import { readSseStream } from '@/lib/sse'
 import { isDemoMode } from '@/lib/demo'
 import {
   createConflictScanSnapshot,
@@ -111,7 +111,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/use-toast'
-import { modsApi, serversApi } from '@/lib/api'
+import { apiFetch, modsApi, serversApi } from '@/lib/api'
 import { FolderBrowser } from '@/components/FolderBrowser'
 import {
   buildRequiresMap,
@@ -261,6 +261,7 @@ const STEAM_API_ISSUE_DISMISSED_KEY = 'pz-mods-steam-api-issue-dismissed'
 export default function Mods() {
   const MODS_NAV = useMemo(() => getModsNav(), [])
   const { searchStr } = useLocation()
+  const selectedServerId = getSelectedServerId()
   const searchParams = new URLSearchParams(searchStr)
   const reviewUnresolved = searchParams.get('review') === 'unresolved'
   const reviewDeepLinkStarted = useRef(false)
@@ -409,8 +410,8 @@ export default function Mods() {
   const [streamConflicts, setStreamConflicts] = useState<
     ScanStreamConflictFound[]
   >([])
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const closingIntentionallyRef = useRef(false)
+  const scanControllerRef = useRef<AbortController | null>(null)
+  const scanServerIdRef = useRef<string | null>(null)
   const sseIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scanBatchRef = useRef<{
     progress: number
@@ -450,23 +451,40 @@ export default function Mods() {
   })
   useEffect(() => {
     return () => {
-      closingIntentionallyRef.current = true
-      eventSourceRef.current?.close()
-      eventSourceRef.current = null
+      scanControllerRef.current?.abort()
+      scanControllerRef.current = null
+      scanServerIdRef.current = null
       if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
       sseIdleTimerRef.current = null
       cancelAnimationFrame(scanBatchRef.current.raf)
     }
   }, [])
 
+  useEffect(() => {
+    if (!scanControllerRef.current || scanServerIdRef.current === selectedServerId)
+      return
+    scanControllerRef.current.abort()
+    scanControllerRef.current = null
+    scanServerIdRef.current = null
+    if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
+    sseIdleTimerRef.current = null
+    cancelAnimationFrame(scanBatchRef.current.raf)
+    setScanProgress(0)
+    setScanCurrentMod(null)
+    setScanModsScanned(0)
+    setScanTotalMods(0)
+    setStreamConflicts([])
+    setConflictsLoading(false)
+  }, [selectedServerId])
+
   const conflictsStale = useMemo(() => {
-    if (!conflicts || !scanIniSnapshot) return false
+    if (!conflicts || !scanIniSnapshot || !iniConfig) return false
     const currentSnapshot = createConflictScanSnapshot(
       iniConfig?.workshopIds,
       iniConfig?.modIds,
     )
     return currentSnapshot !== scanIniSnapshot
-  }, [conflicts, scanIniSnapshot, iniConfig?.workshopIds, iniConfig?.modIds])
+  }, [conflicts, scanIniSnapshot, iniConfig])
 
   const autoDiscoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -538,7 +556,6 @@ export default function Mods() {
       }
       discoverAbortRef.current?.abort()
       discoverAbortRef.current = null
-      eventSourceRef.current?.close()
     }
   }, [])
 
@@ -2562,12 +2579,58 @@ export default function Mods() {
   }, [activeModsData, deferredModManagerSearch])
 
   const scanConflicts = useCallback(async () => {
-    if (eventSourceRef.current) {
-      closingIntentionallyRef.current = true
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
+    const previousController = scanControllerRef.current
+    scanControllerRef.current = null
+    scanServerIdRef.current = null
+    previousController?.abort()
+    if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
+    sseIdleTimerRef.current = null
+    cancelAnimationFrame(scanBatchRef.current.raf)
+
+    if (!selectedServerId) {
+      scanServerIdRef.current = null
+      setConflictsError('Select a server before scanning mod conflicts')
+      setConflictsLoading(false)
+      return
     }
-    closingIntentionallyRef.current = false
+
+    const controller = new AbortController()
+    scanControllerRef.current = controller
+    scanServerIdRef.current = selectedServerId
+    const isCurrentScan = () => scanControllerRef.current === controller
+    const clearIdleTimer = () => {
+      if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
+      sseIdleTimerRef.current = null
+    }
+    const loadCachedResults = async () => {
+      if (!isCurrentScan()) return
+      setConflictsLoading(false)
+      try {
+        const cached = await modsApi.getCachedConflicts()
+        if (!isCurrentScan()) return
+        if (cached) {
+          setConflicts(cached)
+          setConflictsError(
+            'Scan disconnected — showing previously cached results.',
+          )
+        } else {
+          setConflictsError('Scan connection lost')
+          toast({
+            title: 'Scan Failed',
+            description: 'Lost connection to scan stream',
+            variant: 'destructive',
+          })
+        }
+      } catch {
+        if (!isCurrentScan()) return
+        setConflictsError('Scan connection lost')
+        toast({
+          title: 'Scan Failed',
+          description: 'Lost connection to scan stream',
+          variant: 'destructive',
+        })
+      }
+    }
 
     setConflictsLoading(true)
     setScanProgress(0)
@@ -2584,159 +2647,144 @@ export default function Mods() {
       raf: 0,
     }
 
-    const token = getAccessToken()
-    const url = `/api/mods/conflicts/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
-    const es = new EventSource(url)
-    eventSourceRef.current = es
-
+    let completed = false
+    let streamFailed = false
+    let scannedSnapshot: string | null = null
     const resetIdleTimer = () => {
       if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
-      sseIdleTimerRef.current = setTimeout(() => {
-        es.close()
-        if (eventSourceRef.current === es) eventSourceRef.current = null
+      const idleTimer = setTimeout(() => {
+        if (sseIdleTimerRef.current !== idleTimer || !isCurrentScan()) return
+        sseIdleTimerRef.current = null
+        scanControllerRef.current = null
+        scanServerIdRef.current = null
+        controller.abort()
+        cancelAnimationFrame(scanBatchRef.current.raf)
         setConflictsError('Scan timed out — no response from server')
         setConflictsLoading(false)
       }, 90_000)
+      sseIdleTimerRef.current = idleTimer
     }
     resetIdleTimer()
 
-    es.addEventListener('init', (e) => {
-      resetIdleTimer()
-      try {
-        const data = JSON.parse(e.data)
-        setConflictsError(null)
-        setScanTotalMods(data.totalWorkshopIds || 0)
-      } catch (err) {
-        reportClientWarning('SSE init parse error.', err)
-      }
-    })
-
-    es.addEventListener('mod-scanned', (e) => {
-      resetIdleTimer()
-      try {
-        const data: ScanStreamModScanned = JSON.parse(e.data)
-        const batch = scanBatchRef.current
-        batch.progress = data.progress
-        batch.modName = data.modName
-        batch.modsScanned = data.modsScanned
-        if (!batch.dirty) {
-          batch.dirty = true
-          batch.raf = requestAnimationFrame(() => {
-            setScanProgress(batch.progress)
-            setScanCurrentMod(batch.modName)
-            setScanModsScanned(batch.modsScanned)
-            batch.dirty = false
-          })
-        }
-      } catch (err) {
-        reportClientWarning('SSE mod-scanned parse error.', err)
-      }
-    })
-
-    es.addEventListener('conflict-found', (e) => {
-      resetIdleTimer()
-      try {
-        const data: ScanStreamConflictFound = JSON.parse(e.data)
-        setStreamConflicts((prev) => {
-          const next = [...prev, data]
-          return next.length > 50 ? next.slice(-50) : next
-        })
-      } catch (err) {
-        reportClientWarning('SSE conflict-found parse error.', err)
-      }
-    })
-
-    es.addEventListener('phase', (e) => {
-      resetIdleTimer()
-      try {
-        const data = JSON.parse(e.data)
-        setScanProgress(data.progress)
-        if (data.phase === 'hashing')
-          setScanCurrentMod('Comparing file contents...')
-        if (data.phase === 'grouping') setScanCurrentMod('Grouping results...')
-      } catch (err) {
-        reportClientWarning('SSE phase parse error.', err)
-      }
-    })
-
-    es.addEventListener('complete', (e) => {
-      if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
-      try {
-        const data = JSON.parse((e as MessageEvent).data)
-        cancelAnimationFrame(scanBatchRef.current.raf)
-        scanBatchRef.current.dirty = false
-        setConflicts(data)
-        setLastScanTime(new Date())
-        setScanIniSnapshot(
-          createConflictScanSnapshot(iniConfig?.workshopIds, iniConfig?.modIds),
-        )
-        setScanProgress(100)
-      } catch (err) {
-        setConflictsError('Failed to parse scan results')
-      } finally {
-        es.close()
-        if (eventSourceRef.current === es) eventSourceRef.current = null
-        setConflictsLoading(false)
-      }
-    })
-
-    es.addEventListener('error', (e) => {
-      if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
-      es.close()
-      if (eventSourceRef.current === es) eventSourceRef.current = null
-
-      if (closingIntentionallyRef.current) {
-        closingIntentionallyRef.current = false
-        setConflictsLoading(false)
+    try {
+      const endpoint = apiUrl(
+        '/mods/conflicts/stream',
+        selectedServerId,
+      ).slice(4)
+      const response = await apiFetch(endpoint, {
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+        timeout: 0,
+      })
+      if (!isCurrentScan()) return
+      if (!response.ok || !response.body) {
+        await loadCachedResults()
         return
       }
 
-      const me = e as MessageEvent
-      if (typeof me.data === 'string') {
-        try {
-          const data = JSON.parse(me.data)
-          setConflictsError(data.error || 'Scan failed')
-        } catch {
-          setConflictsError('Scan connection lost')
-        }
-        setConflictsLoading(false)
-        toast({
-          title: 'Scan Failed',
-          description: 'Lost connection to scan stream',
-          variant: 'destructive',
-        })
-      } else {
-        setConflictsLoading(false)
-        modsApi
-          .getCachedConflicts()
-          .then((cached) => {
-            if (closingIntentionallyRef.current) return
-            if (cached) {
-              setConflicts(cached)
-              setConflictsError(
-                'Scan disconnected — showing previously cached results.',
-              )
-            } else {
-              setConflictsError('Scan connection lost')
-              toast({
-                title: 'Scan Failed',
-                description: 'Lost connection to scan stream',
-                variant: 'destructive',
+      await readSseStream(response.body, ({ event, data: raw }) => {
+        if (!isCurrentScan()) return
+        resetIdleTimer()
+        if (event === 'init') {
+          try {
+            const data = JSON.parse(raw)
+            setConflictsError(null)
+            setScanTotalMods(data.totalWorkshopIds || 0)
+            scannedSnapshot = createConflictScanSnapshot(
+              data.workshopIds,
+              data.modLoadOrder,
+            )
+          } catch (err) {
+            reportClientWarning('SSE init parse error.', err)
+          }
+        } else if (event === 'mod-scanned') {
+          try {
+            const data: ScanStreamModScanned = JSON.parse(raw)
+            const batch = scanBatchRef.current
+            batch.progress = data.progress
+            batch.modName = data.modName
+            batch.modsScanned = data.modsScanned
+            if (!batch.dirty) {
+              batch.dirty = true
+              batch.raf = requestAnimationFrame(() => {
+                if (!isCurrentScan()) return
+                setScanProgress(batch.progress)
+                setScanCurrentMod(batch.modName)
+                setScanModsScanned(batch.modsScanned)
+                batch.dirty = false
               })
             }
-          })
-          .catch(() => {
-            if (closingIntentionallyRef.current) return
-            setConflictsError('Scan connection lost')
-            toast({
-              title: 'Scan Failed',
-              description: 'Lost connection to scan stream',
-              variant: 'destructive',
+          } catch (err) {
+            reportClientWarning('SSE mod-scanned parse error.', err)
+          }
+        } else if (event === 'conflict-found') {
+          try {
+            const data: ScanStreamConflictFound = JSON.parse(raw)
+            setStreamConflicts((prev) => {
+              const next = [...prev, data]
+              return next.length > 50 ? next.slice(-50) : next
             })
+          } catch (err) {
+            reportClientWarning('SSE conflict-found parse error.', err)
+          }
+        } else if (event === 'phase') {
+          try {
+            const data = JSON.parse(raw)
+            setScanProgress(data.progress)
+            if (data.phase === 'hashing')
+              setScanCurrentMod('Comparing file contents...')
+            if (data.phase === 'grouping') setScanCurrentMod('Grouping results...')
+          } catch (err) {
+            reportClientWarning('SSE phase parse error.', err)
+          }
+        } else if (event === 'complete') {
+          completed = true
+          clearIdleTimer()
+          try {
+            const data = JSON.parse(raw)
+            cancelAnimationFrame(scanBatchRef.current.raf)
+            scanBatchRef.current.dirty = false
+            setConflicts(data)
+            setLastScanTime(new Date())
+            setScanIniSnapshot(scannedSnapshot)
+            setScanProgress(100)
+          } catch {
+            setConflictsError('Failed to parse scan results')
+          } finally {
+            setConflictsLoading(false)
+          }
+        } else if (event === 'error') {
+          streamFailed = true
+          clearIdleTimer()
+          try {
+            const data = JSON.parse(raw)
+            setConflictsError(data.error || 'Scan failed')
+          } catch {
+            setConflictsError('Scan connection lost')
+          }
+          setConflictsLoading(false)
+          toast({
+            title: 'Scan Failed',
+            description: 'Lost connection to scan stream',
+            variant: 'destructive',
           })
+        }
+      })
+
+      if (isCurrentScan() && !completed && !streamFailed)
+        await loadCachedResults()
+    } catch {
+      if (isCurrentScan()) await loadCachedResults()
+    } finally {
+      if (isCurrentScan()) {
+        clearIdleTimer()
+        cancelAnimationFrame(scanBatchRef.current.raf)
+        scanControllerRef.current = null
+        scanServerIdRef.current = null
+        setConflictsLoading(false)
       }
-    })
-  }, [toast, iniConfig?.workshopIds, iniConfig?.modIds])
+    }
+  }, [selectedServerId, toast])
 
   useEffect(() => {
     if (!reviewUnresolved || reviewDeepLinkStarted.current) return

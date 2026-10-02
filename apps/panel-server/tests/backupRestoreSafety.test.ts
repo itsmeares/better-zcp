@@ -89,6 +89,34 @@ afterEach(() => {
 });
 
 describe("restoreBackup archive safety", () => {
+  it("rejects archive paths outside staging before checksum verification", async () => {
+    const staged = path.join(root, "staging");
+    const archivePath = path.join(backupsPath, "traversal.zip");
+    fs.mkdirSync(staged);
+    fs.writeFileSync(path.join(root, "integrity-target.txt"), "PRIVATE-FIXTURE");
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(archivePath);
+      const archive = archiver("zip", { zlib: { level: 0 } });
+      output.on("close", resolve);
+      output.on("error", reject);
+      archive.on("error", reject);
+      archive.pipe(output);
+      archive.append("PRIVATE-FIXTURE", { name: "AA/integrity-target.txt" });
+      void archive.finalize();
+    });
+    // Replace both ZIP directory/header names without changing their byte lengths.
+    const bytes = fs.readFileSync(archivePath);
+    const name = Buffer.from("AA/integrity-target.txt");
+    for (let at = bytes.indexOf(name); at !== -1; at = bytes.indexOf(name, at + name.length)) {
+      Buffer.from("../integrity-target.txt").copy(bytes, at);
+    }
+    fs.writeFileSync(archivePath, bytes);
+
+    const result = await createService()._verifyExtractedIntegrity(archivePath, staged);
+    expect(result.ok).toBe(false);
+    expect(result.corruptFiles[0]).toMatch(/outside.*staging/i);
+  });
+
   it("never selects another world's save folder when the active profile has no save yet", async () => {
     const otherWorld = path.join(root, "Saves", "Multiplayer", "OtherServer");
     writeWorld(otherWorld, "OTHER");

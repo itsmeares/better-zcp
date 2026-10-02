@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
-export function openRegularFile(file: string): number {
-  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+export function openRegularFile(file: string, flags = fs.constants.O_RDONLY): number {
+  const fd = fs.openSync(file, flags | (fs.constants.O_NOFOLLOW || 0));
   try {
     const opened = fs.fstatSync(fd), current = fs.lstatSync(file);
     if (!opened.isFile() || !current.isFile() || opened.ino !== current.ino || opened.dev !== current.dev) {

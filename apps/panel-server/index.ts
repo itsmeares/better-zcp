@@ -485,7 +485,7 @@ io.use(async (socket: AuthenticatedSocket, next) => {
       return next();
     }
 
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const token = socket.handshake.auth?.token;
     if (!token) {
       return next(new Error("Authentication required"));
     }

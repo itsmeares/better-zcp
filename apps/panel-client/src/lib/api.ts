@@ -92,6 +92,22 @@ function isRetryableError(error: unknown, response?: Response): boolean {
   return false;
 }
 
+function requestSignal(
+  externalSignal: AbortSignal | null | undefined,
+  timeout: number,
+) {
+  if (timeout <= 0) return { signal: externalSignal, clearTimeout: () => {} }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+  return {
+    signal: externalSignal
+      ? AbortSignal.any([controller.signal, externalSignal])
+      : controller.signal,
+    clearTimeout: () => clearTimeout(timeoutId),
+  }
+}
+
 function getStatusMessage(status: number): string {
   switch (status) {
     case 400:
@@ -253,35 +269,23 @@ async function fetchWithRetry(
   retries: number = RETRY_CONFIG.maxRetries,
 ): Promise<Response> {
   let lastError: unknown;
-  const effectiveTimeout = options?.timeout || RETRY_CONFIG.fetchTimeout;
+  const { timeout, ...requestOptions } = options || {};
+  const effectiveTimeout = timeout ?? RETRY_CONFIG.fetchTimeout;
   const method = requestMethod(options);
   const transportRetries = RETRY_SAFE_METHODS.has(method) ? retries : 0;
   let authenticationReplayUsed = false;
 
   for (let attempt = 0; attempt <= transportRetries; attempt++) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
-
       const externalSignal = options?.signal;
-      if (externalSignal) {
-        if (externalSignal.aborted) {
-          controller.abort(externalSignal.reason);
-        } else {
-          externalSignal.addEventListener(
-            "abort",
-            () => controller.abort(externalSignal.reason),
-            { once: true },
-          );
-        }
-      }
+      const request = requestSignal(externalSignal, effectiveTimeout);
 
       try {
         const response = await fetch(url, {
-          ...withAuth(options),
-          signal: controller.signal,
+          ...withAuth(requestOptions),
+          signal: request.signal,
         });
-        clearTimeout(timeoutId);
+        request.clearTimeout();
 
         if (
           response.status === 401 &&
@@ -292,15 +296,14 @@ async function fetchWithRetry(
           authenticationReplayUsed = true;
           const refreshed = await tryRefreshToken();
           if (refreshed) {
-            const retryController = new AbortController();
-            const retryTimeoutId = setTimeout(
-              () => retryController.abort(),
-              effectiveTimeout,
-            );
+            if (externalSignal?.aborted) {
+              throw externalSignal.reason ?? new DOMException("Aborted", "AbortError");
+            }
+            const retryRequest = requestSignal(externalSignal, effectiveTimeout);
             const retryResponse = await fetch(url, {
-              ...withAuth(options),
-              signal: retryController.signal,
-            }).finally(() => clearTimeout(retryTimeoutId));
+              ...withAuth(requestOptions),
+              signal: retryRequest.signal,
+            }).finally(retryRequest.clearTimeout);
             if (retryResponse.status === 401) {
               clearAccessToken();
               window.location.reload();
@@ -319,7 +322,7 @@ async function fetchWithRetry(
           return response;
         }
       } catch (error) {
-        clearTimeout(timeoutId);
+        request.clearTimeout();
         throw error;
       }
 
@@ -327,6 +330,7 @@ async function fetchWithRetry(
         setTimeout(resolve, getRetryDelay(attempt)),
       );
     } catch (error) {
+      if (options?.signal?.aborted) throw error;
       lastError = toApiError(error);
 
       if (
@@ -349,7 +353,9 @@ async function fetchWithRetry(
   throw toApiError(lastError);
 }
 
-export function apiFetch(endpoint: string, options?: RequestInit,
+export function apiFetch(
+  endpoint: string,
+  options?: RequestInit & { timeout?: number },
   retries?: number,
 ) {
   return fetchWithRetry(apiUrl(endpoint), options, retries);

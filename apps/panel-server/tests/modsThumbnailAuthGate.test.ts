@@ -47,6 +47,26 @@ describe("native legacy API authentication carve-outs, no Authorization header",
     expect(body.code).toBe("AUTH_REQUIRED");
   });
 
+  it("does not accept a valid bearer token from the query string", async () => {
+    const token = authService.generateAccessToken(db.data.users[0]);
+    const queryTokenResponse = await handleApiRequest(
+      new Request(
+        `http://panel.test/api/mods/status?token=${encodeURIComponent(token)}`,
+      ),
+    );
+    expect(queryTokenResponse?.status).toBe(401);
+    expect(await queryTokenResponse?.json()).toMatchObject({
+      code: "AUTH_REQUIRED",
+    });
+
+    const bearerResponse = await handleApiRequest(
+      new Request("http://panel.test/api/mods/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    expect(bearerResponse?.status).toBe(400);
+  });
+
   it("requires authentication for map metadata", async () => {
     const res = await handleApiRequest(
       new Request("http://panel.test/api/map/resolve"),
