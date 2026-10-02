@@ -336,7 +336,8 @@ export function scoreServerProcessOwnership(
   if (installPath) {
     const occursInCommand = Array.isArray(argv)
       ? argv.some((arg) => {
-          const processPath = normalizePathForCompare(arg, true);
+          const pathArgument = arg.startsWith("-D") ? arg.slice(arg.indexOf("=") + 1) : arg;
+          const processPath = normalizePathForCompare(pathArgument, true);
           return processPath === installPath || processPath.startsWith(`${installPath}/`);
         })
       : new RegExp(`(?:^|[\\s"'=])${escapeRegExp(installPath)}(?=$|[/\\s"'])`).test(normalizePathForCompare(cmd));

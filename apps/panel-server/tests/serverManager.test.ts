@@ -126,6 +126,16 @@ describe('ServerManager process ownership', () => {
     expect(scoreServerProcessOwnership(flattened, descriptor, null)).toBe(0);
     expect(classifyServerProcess(flattened, descriptor, [], null)).toBe('unknown');
   });
+
+  (isLinux ? it : it.skip)('keeps install-path evidence in JVM properties bounded to one argument', () => {
+    const descriptor = { serverPath: '/opt/shared' };
+    const argv = ['/usr/bin/java', '-Djava.library.path=/opt/shared/natives', 'zombie.network.GameServer'];
+    expect(scoreServerProcessOwnership(argv.join(' '), descriptor, argv)).toBe(1);
+    expect(classifyServerProcess(argv.join(' '), descriptor, [{ serverPath: '/opt/other' }], argv)).toBe('owned');
+    expect(classifyServerProcess(argv.join(' '), descriptor, [descriptor], argv)).toBe('unknown');
+    const unrelated = ['/usr/bin/java', 'zombie.network.GameServer', 'arbitrary=/opt/shared/natives'];
+    expect(scoreServerProcessOwnership(unrelated.join(' '), descriptor, unrelated)).toBe(0);
+  });
 });
 
 describe('ServerManager detection with two servers on one host', () => {
