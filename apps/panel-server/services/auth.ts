@@ -695,13 +695,6 @@ class AuthService {
           return next();
         }
 
-        if (
-          req.path.startsWith("/api/map/tiles/") ||
-          req.path.startsWith("/api/map/toptiles/")
-        ) {
-          return next();
-        }
-
         if (req.path.startsWith("/api/mods/thumbnail/")) {
           return next();
         }

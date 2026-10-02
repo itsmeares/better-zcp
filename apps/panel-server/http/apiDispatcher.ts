@@ -67,7 +67,7 @@ const routeModules: RouteModule[] = [
   },
   {
     base: "/api/map",
-    load: loadRouteModule(() => import("../routes/mapProxy.ts")),
+    load: loadRouteModule(() => import("../routes/worldMap.ts")),
   },
   {
     base: "/api/config",
@@ -223,6 +223,8 @@ function createResponseAdapter(): {
       }),
     );
     stream.on("finish", () => events.emit("finish"));
+    stream.on("drain", () => events.emit("drain"));
+    stream.on("close", () => events.emit("close"));
     return stream;
   };
   const end = (value?: unknown) => {
@@ -499,8 +501,6 @@ async function authenticateApiRequest(
 ): Promise<{ user: any } | globalThis.Response | null> {
   if (
     PUBLIC_API_PATHS.has(pathname) ||
-    pathname.startsWith("/api/map/tiles/") ||
-    pathname.startsWith("/api/map/toptiles/") ||
     pathname.startsWith("/api/mods/thumbnail/") ||
     pathname === "/api/debug/client-errors"
   ) {

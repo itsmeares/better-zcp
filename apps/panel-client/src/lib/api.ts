@@ -2062,20 +2062,57 @@ export const updateApi = {
   install: (): Promise<{ success: boolean; message: string }> => apiPost("/server/steam-update"),
 };
 
+export interface WorldMapLayer {
+  id: string;
+  name: string;
+  tileRoot: string;
+  width: number;
+  height: number;
+  tileSize: number;
+  format: string;
+  x0: number;
+  y0: number;
+  sqr: number;
+  scale: number;
+  minFloor: number;
+  maxFloor: number;
+  composite: boolean;
+  cellSize: number;
+  cellRects: Array<[number, number, number, number]>;
+}
+
+export interface WorldMapCoverage {
+  ground: number;
+  levels: Record<string, Record<string, Array<[number, number]>>>;
+}
+
+export interface WorldMapPoint { x: number; y: number; z: number }
+export interface WorldMapPoi extends WorldMapPoint {
+  id: string;
+  name: string;
+  tags: string[];
+}
+
+export interface WorldMapInfo {
+  version: string;
+  label: string;
+  layers: WorldMapLayer[];
+  mapOrder: string[];
+  warnings: string[];
+}
+
 export const mapApi = {
-  resolve: (): Promise<{
-    root: string;
-    b42Dir: string;
-    tileSize: number;
-    width: number;
-    height: number;
-    maxLevel: number;
-    renderedMaxLevel: number;
-    x0?: number;
-    y0?: number;
-    sqr?: number;
-    scale?: number;
-  }> => apiGet("/map/resolve"),
+  resolve: (): Promise<WorldMapInfo> => apiGet("/map/resolve", undefined, 0),
+  coverage: (version: string, id: string): Promise<WorldMapCoverage> =>
+    apiGet(`/map/coverage?${new URLSearchParams({ version, id })}`, undefined, 0),
+  floor: (version: string, id: string, floor: number): Promise<{ format: string }> =>
+    apiGet(`/map/floor?${new URLSearchParams({ version, id, floor: String(floor) })}`, undefined, 0),
+  pois: (version: string): Promise<{ pois: WorldMapPoi[] }> =>
+    apiGet(`/map/pois?${new URLSearchParams({ version })}`, undefined, 0),
+  lootTypes: (version: string): Promise<{ types: Array<{ id: string; name: string; total: number }> }> =>
+    apiGet(`/map/loot-types?${new URLSearchParams({ version })}`, undefined, 0),
+  loot: (version: string, type: string, point: WorldMapPoint): Promise<{ points: WorldMapPoint[]; truncated: boolean }> =>
+    apiGet(`/map/loot?${new URLSearchParams({ version, type, x: String(point.x), y: String(point.y), z: String(point.z) })}`, undefined, 0),
 };
 
 export const panelUpdateApi = {

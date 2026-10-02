@@ -83,7 +83,9 @@ import { SocketContext } from '@/contexts/SocketContext'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { cn, copyText } from '@/lib/utils'
-import { apiFetch, gameIntegrationApi } from '@/lib/api'
+import { apiFetch, gameIntegrationApi, mapApi } from '@/lib/api'
+import { buildTileUrl } from './worldMapHelpers'
+import { getHealthHeadline } from './debugHealthHeadline'
 
 interface LogEntry {
   id: string
@@ -113,7 +115,7 @@ interface HealthStatus {
   timestamp: string
   services: {
     rcon: { connected: boolean; host: string }
-    server: { running: boolean }
+    server: { running: boolean | null; scanFailed?: boolean }
     modChecker: { running: boolean; interval: number }
   }
   memory: {
@@ -166,7 +168,6 @@ interface PerformanceSnapshot {
 
 interface CrashLog {
   name: string
-  path: string
   size: number
   modified: string
 }
@@ -201,21 +202,26 @@ interface DiagnosticsResult {
   durationMs: number
 }
 
-interface TileProbe {
-  url: string
-  reachable: boolean
-  statusCode: number | null
-  latencyMs: number
-  error: string | null
-}
-
 interface WorldMapDiagnostics {
   timestamp: string
   overall: 'ok' | 'warn' | 'fail'
   summary: DiagSummary
   checks: DiagCheck[]
   durationMs: number
-  tileSources: { b42: TileProbe | null }
+  provider: {
+    origin: string
+    status: 'ok' | 'error' | 'unknown'
+    statusCode?: number
+    error?: string
+  }
+  tiles: {
+    origin: string
+    mode: 'direct'
+    referrerPolicy: 'no-referrer'
+  }
+  available: boolean
+  version?: string
+  error?: string
   save: {
     zomboidDataPath: string | null
     savesDir: string | null
@@ -225,7 +231,6 @@ interface WorldMapDiagnostics {
     build: 'b42' | 'unknown'
   }
   activeServer: { id: string; name: string; serverName: string } | null
-  proxy: { b42: string }
 }
 
 type TimeFormat = 'relative' | 'time' | 'datetime'
@@ -255,40 +260,6 @@ const DebugPerformanceCharts = lazy(
   () => import('@/components/DebugPerformanceCharts'),
 )
 
-export type HealthHeadlineTone =
-  'checking' | 'healthy' | 'servicesDown' | 'issues'
-
-export interface HealthHeadline {
-  tone: HealthHeadlineTone
-  title: string
-}
-
-export function getHealthHeadline(
-  healthStatus: HealthStatus | null,
-): HealthHeadline {
-  if (!healthStatus) {
-    return { tone: 'checking', title: 'Checking...' }
-  }
-  if (healthStatus.status !== 'ok') {
-    return { tone: 'issues', title: 'Issues Detected' }
-  }
-  const rconDown = !healthStatus.services.rcon.connected
-  const serverDown = !healthStatus.services.server.running
-  if (rconDown && serverDown) {
-    return {
-      tone: 'servicesDown',
-      title: 'RCON Disconnected · Game Server Stopped',
-    }
-  }
-  if (rconDown) {
-    return { tone: 'servicesDown', title: 'RCON Disconnected' }
-  }
-  if (serverDown) {
-    return { tone: 'servicesDown', title: 'Game Server Stopped' }
-  }
-  return { tone: 'healthy', title: 'Healthy' }
-}
-
 export default function Debug() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
@@ -305,6 +276,7 @@ export default function Debug() {
   const [crashLogsTotalCount, setCrashLogsTotalCount] = useState(0)
   const [selectedCrashLog, setSelectedCrashLog] = useState<string | null>(null)
   const [crashLogContent, setCrashLogContent] = useState<string>('')
+  const [crashLogTruncated, setCrashLogTruncated] = useState(false)
   const [loadingCrashLog, setLoadingCrashLog] = useState(false)
   const [refreshingLogs, setRefreshingLogs] = useState(false)
   const [refreshingCrashLogs, setRefreshingCrashLogs] = useState(false)
@@ -343,6 +315,7 @@ export default function Debug() {
   )
   const [refreshingWorldMap, setRefreshingWorldMap] = useState(false)
   const [worldMapTilePreviewKey, setWorldMapTilePreviewKey] = useState(0)
+  const [worldMapTileUrl, setWorldMapTileUrl] = useState<string | null>(null)
   const [worldMapHideOk, setWorldMapHideOk] = useState(false)
   const [worldMapTileErrors, setWorldMapTileErrors] = useState<{
     b42: boolean
@@ -375,6 +348,21 @@ export default function Debug() {
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const endpoint = url.startsWith('/api') ? url.slice(4) : url
     return apiFetch(endpoint, options)
+  }, [])
+
+  const refreshWorldMapTilePreview = useCallback(async () => {
+    setWorldMapTileErrors({ b42: false })
+    setWorldMapTileMeta({ b42: null })
+    setWorldMapTilePreviewKey((key) => key + 1)
+    try {
+      const info = await mapApi.resolve()
+      const baseLayer = info.layers.find((layer) => layer.id === 'base')
+      if (!baseLayer) throw new Error('Base map layer unavailable')
+      setWorldMapTileUrl(buildTileUrl(baseLayer, 0, 0, 0, 0))
+    } catch {
+      setWorldMapTileUrl(null)
+      setWorldMapTileErrors({ b42: true })
+    }
   }, [])
 
   const [editingPaths, setEditingPaths] = useState(false)
@@ -479,9 +467,6 @@ export default function Debug() {
 
   const fetchWorldMapDiag = useCallback(async () => {
     setRefreshingWorldMap(true)
-    setWorldMapTileErrors({ b42: false })
-    setWorldMapTileMeta({ b42: null })
-    setWorldMapTilePreviewKey((k) => k + 1)
     setWorldMapError(null)
     try {
       const res = await authFetch('/api/debug/worldmap')
@@ -490,6 +475,7 @@ export default function Debug() {
       const data = await res.json()
       if (data?.checks) {
         setWorldMapDiag(data)
+        await refreshWorldMapTilePreview()
       } else {
         setWorldMapError(
           'Diagnostics endpoint returned an unexpected response.',
@@ -502,7 +488,7 @@ export default function Debug() {
     } finally {
       setRefreshingWorldMap(false)
     }
-  }, [authFetch])
+  }, [authFetch, refreshWorldMapTilePreview])
 
   const runProbe = useCallback(
     async (
@@ -684,12 +670,14 @@ export default function Debug() {
     try {
       setLoadingCrashLog(true)
       setSelectedCrashLog(filename)
+      setCrashLogTruncated(false)
       const res = await authFetch(
         `/api/debug/crash-logs/${encodeURIComponent(filename)}`,
       )
       if (!res.ok)
         throw new Error(await parseDownloadError(res, `HTTP ${res.status}`))
       const data = await res.json()
+      setCrashLogTruncated(data.truncated === true)
       if (data.content !== undefined && data.content !== null) {
         setCrashLogContent(data.content || '(empty file)')
       } else {
@@ -701,6 +689,33 @@ export default function Debug() {
       )
     } finally {
       setLoadingCrashLog(false)
+    }
+  }
+
+  const downloadCrashLog = async (filename: string) => {
+    let url: string | null = null
+    try {
+      const res = await authFetch(
+        `/api/debug/crash-logs/${encodeURIComponent(filename)}/download`,
+      )
+      if (!res.ok)
+        throw new Error(await parseDownloadError(res, `HTTP ${res.status}`))
+
+      url = window.URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to download crash log'),
+        variant: 'destructive',
+      })
+    } finally {
+      if (url) window.setTimeout(() => window.URL.revokeObjectURL(url!), 1000)
     }
   }
 
@@ -1902,13 +1917,15 @@ export default function Debug() {
                   `Overall: ${wm.overall.toUpperCase()} (${wm.summary.fail} fail / ${wm.summary.warn} warn / ${wm.summary.ok} ok)`,
                 )
                 lines.push('')
-                lines.push('Tile sources:')
-                for (const k of ['b42'] as const) {
-                  const p = wm.tileSources?.[k]
-                  lines.push(
-                    `  ${k.toUpperCase()}: ${p ? (p.reachable ? `OK (${p.latencyMs}ms HTTP ${p.statusCode})` : `FAIL (${p.error || 'HTTP ' + p.statusCode})`) : '—'}`,
-                  )
-                }
+                lines.push(
+                  `Map provider: ${wm.provider.status.toUpperCase()} ${wm.provider.origin}${wm.provider.statusCode ? ` (HTTP ${wm.provider.statusCode})` : ''}${wm.provider.error ? ` — ${wm.provider.error}` : ''}`,
+                )
+                lines.push(
+                  `Tiles: ${wm.tiles.mode} from ${wm.tiles.origin} (referrer policy: ${wm.tiles.referrerPolicy})`,
+                )
+                lines.push(
+                  `Metadata: ${wm.available ? `Build ${wm.version}` : 'unavailable'}`,
+                )
                 lines.push('')
                 lines.push(
                   `Save: build=${wm.save.build} count=${wm.save.saveCount} active=${wm.save.activeSaveName || '—'}`,
@@ -2048,7 +2065,10 @@ export default function Debug() {
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <Button variant="outline" size="sm" asChild>
-                                <Link to="/world-map">
+                                <Link
+                                  to="/world-map"
+                                  search={{ x: undefined, y: undefined, z: undefined }}
+                                >
                                   <ExternalLink className="w-4 h-4 me-2" />
                                   {'Open World Map'}
                                 </Link>
@@ -2120,224 +2140,127 @@ export default function Debug() {
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Globe className="w-4 h-4 text-primary" />
-                            {'Tile sources'}
+                            {'Map provider and tile delivery'}
                           </CardTitle>
                           <CardDescription>
-                            {
-                              'The /api/map proxy fetches tiles server-side from these CDNs.'
-                            }
+                            {'The panel resolves current map metadata; the browser loads tiles directly without sending a referrer.'}
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          {(['b42'] as const).map((kind) => {
-                            const probe = wm?.tileSources?.[kind]
-                            const label = 'Build 42 tile source'
-                            return (
-                              <div
-                                key={kind}
-                                className="flex items-start justify-between gap-3 p-3 rounded-md border bg-card"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {probe ? (
-                                      probe.reachable ? (
-                                        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                                      ) : (
-                                        <AlertCircle
-                                          className={cn(
-                                            'w-4 h-4 shrink-0',
-                                            'text-destructive',
-                                          )}
-                                        />
-                                      )
-                                    ) : (
-                                      <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
-                                    )}
-                                    <span className="font-medium text-sm">
-                                      {label}
-                                    </span>
-                                    {probe?.reachable && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px]"
-                                      >
-                                        {probe.latencyMs} ms
-                                      </Badge>
-                                    )}
-                                    {probe && !probe.reachable && (
-                                      <Badge
-                                        variant="destructive"
-                                        className="text-[10px]"
-                                      >
-                                        {probe.error ||
-                                          `HTTP ${probe.statusCode}`}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {probe && (
-                                    <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                      <CopyablePath
-                                        label={'Probe URL'}
-                                        value={probe.url}
-                                      />
-                                      <a
-                                        href={probe.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                                        title={
-                                          'Open the upstream URL in a new tab to verify reachability from your browser'
-                                        }
-                                      >
-                                        <ExternalLink className="w-3 h-3" />
-                                        {'Open'}
-                                      </a>
-                                    </div>
-                                  )}
-                                </div>
+                          <div className="flex items-start justify-between gap-3 p-3 rounded-md border bg-card">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {wm?.provider.status === 'ok' ? (
+                                  <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+                                ) : wm ? (
+                                  <AlertCircle className="w-4 h-4 text-warning shrink-0" />
+                                ) : (
+                                  <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
+                                )}
+                                <span className="font-medium text-sm">
+                                  {wm?.available
+                                    ? `Build ${wm.version} metadata available`
+                                    : wm
+                                      ? 'Live map metadata unavailable'
+                                      : 'Checking map provider…'}
+                                </span>
+                                {wm?.provider.statusCode && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    HTTP {wm.provider.statusCode}
+                                  </Badge>
+                                )}
                               </div>
-                            )
-                          })}
+                              {wm && (
+                                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                  <CopyablePath label={'Provider'} value={wm.provider.origin} />
+                                  <CopyablePath label={'Tile host'} value={wm.tiles.origin} />
+                                </div>
+                              )}
+                              {wm?.provider.error && (
+                                <p className="mt-1 text-xs text-muted-foreground break-words">
+                                  {wm.provider.error}
+                                </p>
+                              )}
+                            </div>
+                          </div>
 
                           <div className="mt-3 pt-3 border-t">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-medium text-muted-foreground">
-                                {'Live tile via panel proxy'}
+                                {'Direct browser tile preview'}
                               </span>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 px-2 text-xs"
-                                onClick={() => {
-                                  setWorldMapTileErrors({
-                                    b42: false,
-                                  })
-                                  setWorldMapTileMeta({ b42: null })
-                                  setWorldMapTilePreviewKey((k) => k + 1)
-                                }}
+                                onClick={() => void refreshWorldMapTilePreview()}
                               >
                                 <RefreshCw className="w-3 h-3 me-1" />{' '}
                                 {'Refresh'}
                               </Button>
                             </div>
-                            {(() => {
-                              const tiles: Array<{
-                                key: 'b42'
-                                label: string
-                                src: string
-                                errTone: string
-                              }> = [
-                                {
-                                  key: 'b42',
-                                  label: 'B42 floor 0 / 0_0',
-                                  src: `/api/map/tiles/0/0_0.jpg?floor=0&t=${worldMapTilePreviewKey}`,
-                                  errTone: 'destructive',
-                                },
-                              ]
-                              return (
-                                <div className="flex flex-wrap gap-3">
-                                  {tiles.map((tile) => {
-                                    const failed = worldMapTileErrors[tile.key]
-                                    const meta = worldMapTileMeta[tile.key]
-                                    const loaded = !failed && meta !== null
-                                    return (
-                                      <div
-                                        key={tile.key}
-                                        className="flex items-center gap-3 rounded-lg border border-border/55 bg-muted/20 p-2.5"
-                                      >
-                                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded border border-border/60 bg-muted/40">
-                                          {failed ? (
-                                            <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
-                                              <AlertCircle
-                                                className={cn(
-                                                  'w-4 h-4 mb-0.5',
-                                                  tile.errTone === 'destructive'
-                                                    ? 'text-destructive'
-                                                    : 'text-warning',
-                                                )}
-                                              />
-                                              <div
-                                                className={cn(
-                                                  'text-[9px] font-medium leading-tight',
-                                                  tile.errTone === 'destructive'
-                                                    ? 'text-destructive'
-                                                    : 'text-warning',
-                                                )}
-                                              >
-                                                {'Failed'}
-                                              </div>
-                                            </div>
-                                          ) : (
-                                            <img
-                                              key={`${tile.key}-${worldMapTilePreviewKey}`}
-                                              src={tile.src}
-                                              alt={`${tile.label} preview`}
-                                              className="h-full w-full object-cover"
-                                              onLoad={(e) => {
-                                                const img = e.currentTarget
-                                                setWorldMapTileMeta((prev) => ({
-                                                  ...prev,
-                                                  [tile.key]: {
-                                                    w: img.naturalWidth,
-                                                    h: img.naturalHeight,
-                                                  },
-                                                }))
-                                              }}
-                                              onError={() =>
-                                                setWorldMapTileErrors(
-                                                  (prev) => ({
-                                                    ...prev,
-                                                    [tile.key]: true,
-                                                  }),
-                                                )
-                                              }
-                                            />
-                                          )}
-                                        </div>
-                                        <div className="min-w-0">
-                                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                            {tile.label}
-                                          </div>
-                                          <div className="mt-1">
-                                            {failed ? (
-                                              <span
-                                                className={cn(
-                                                  'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
-                                                  tile.errTone === 'destructive'
-                                                    ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                                                    : 'border-warning/40 bg-warning/10 text-warning',
-                                                )}
-                                              >
-                                                <AlertCircle className="w-2.5 h-2.5" />{' '}
-                                                {'Tile failed'}
-                                              </span>
-                                            ) : loaded ? (
-                                              <span className="inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                                                <CheckCircle className="w-2.5 h-2.5" />{' '}
-                                                {'Loaded'}
-                                                <span className="font-mono tabular-nums text-primary/80">
-                                                  {meta!.w}×{meta!.h}
-                                                </span>
-                                              </span>
-                                            ) : (
-                                              <span className="inline-flex items-center gap-1 rounded-full border border-border/55 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                                <Loader2 className="w-2.5 h-2.5 animate-spin" />{' '}
-                                                {'Loading…'}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <p className="mt-1 text-[10px] text-muted-foreground/70 leading-tight">
-                                            {
-                                              'Tile 0_0 is the empty map corner — a solid color square here means the proxy works.'
-                                            }
-                                          </p>
-                                        </div>
+                            <div className="flex flex-wrap gap-3">
+                              <div className="flex items-center gap-3 rounded-lg border border-border/55 bg-muted/20 p-2.5">
+                                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded border border-border/60 bg-muted/40">
+                                  {worldMapTileErrors.b42 ? (
+                                    <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center text-destructive">
+                                      <AlertCircle className="w-4 h-4 mb-0.5" />
+                                      <div className="text-[9px] font-medium leading-tight">
+                                        {'Failed'}
                                       </div>
-                                    )
-                                  })}
+                                    </div>
+                                  ) : worldMapTileUrl ? (
+                                    <img
+                                      key={`b42-${worldMapTilePreviewKey}`}
+                                      src={worldMapTileUrl}
+                                      alt={'B42 floor 0 / 0_0 preview'}
+                                      referrerPolicy="no-referrer"
+                                      className="h-full w-full object-cover"
+                                      onLoad={(event) => {
+                                        const img = event.currentTarget
+                                        setWorldMapTileMeta({
+                                          b42: { w: img.naturalWidth, h: img.naturalHeight },
+                                        })
+                                      }}
+                                      onError={() => setWorldMapTileErrors({ b42: true })}
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center p-1 text-center text-muted-foreground">
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    </div>
+                                  )}
                                 </div>
-                              )
-                            })()}
+                                <div className="min-w-0">
+                                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    {'B42 floor 0 / 0_0'}
+                                  </div>
+                                  <div className="mt-1">
+                                    {worldMapTileErrors.b42 ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                                        <AlertCircle className="w-2.5 h-2.5" />{' '}
+                                        {'Tile failed'}
+                                      </span>
+                                    ) : worldMapTileMeta.b42 ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                        <CheckCircle className="w-2.5 h-2.5" />{' '}
+                                        {'Loaded'}{' '}
+                                        <span className="font-mono tabular-nums text-primary/80">
+                                          {worldMapTileMeta.b42.w}×{worldMapTileMeta.b42.h}
+                                        </span>
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-border/55 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />{' '}
+                                        {'Loading…'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-[10px] text-muted-foreground/70 leading-tight">
+                                    {'The browser requests this tile from the resolved provider URL.'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -3760,6 +3683,7 @@ export default function Debug() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                aria-label="Copy crash log preview"
                                 onClick={async () => {
                                   const ok = await copyText(crashLogContent)
                                   toast({
@@ -3784,22 +3708,8 @@ export default function Debug() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  const blob = new Blob([crashLogContent], {
-                                    type: 'text/plain',
-                                  })
-                                  const url = window.URL.createObjectURL(blob)
-                                  const a = document.createElement('a')
-                                  a.href = url
-                                  a.download = selectedCrashLog
-                                  document.body.appendChild(a)
-                                  a.click()
-                                  a.remove()
-                                  window.setTimeout(
-                                    () => window.URL.revokeObjectURL(url),
-                                    1000,
-                                  )
-                                }}
+                                aria-label="Download full crash log"
+                                onClick={() => downloadCrashLog(selectedCrashLog)}
                               >
                                 <Download className="w-4 h-4" />
                               </Button>
@@ -3824,11 +3734,18 @@ export default function Debug() {
                       <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <ScrollArea className="max-h-[45vh] lg:h-[calc(100vh-360px)] lg:max-h-none min-h-[160px] lg:min-h-[300px]">
-                      <pre className="text-xs font-mono whitespace-pre-wrap break-all p-2 bg-muted/30 rounded">
-                        {crashLogContent}
-                      </pre>
-                    </ScrollArea>
+                    <>
+                      {crashLogTruncated && (
+                        <p role="status" className="mb-2 text-xs text-warning">
+                          {'Showing the first 100 KB. Download the full crash log to see the rest.'}
+                        </p>
+                      )}
+                      <ScrollArea className="max-h-[45vh] lg:h-[calc(100vh-360px)] lg:max-h-none min-h-[160px] lg:min-h-[300px]">
+                        <pre className="text-xs font-mono whitespace-pre-wrap break-all p-2 bg-muted/30 rounded">
+                          {crashLogContent}
+                        </pre>
+                      </ScrollArea>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -4165,6 +4082,10 @@ export default function Debug() {
               ? null
               : (() => {
                   const headline = getHealthHeadline(healthStatus)
+                  const serverRunning =
+                    healthStatus?.services?.server?.running ?? null
+                  const serverScanFailed =
+                    healthStatus?.services?.server?.scanFailed === true
                   return (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4187,6 +4108,7 @@ export default function Debug() {
                                     'bg-warning/10',
                                   headline.tone === 'issues' &&
                                     'bg-destructive/10',
+                                  headline.tone === 'unknown' && 'bg-muted',
                                 )}
                               >
                                 {headline.tone === 'checking' ? (
@@ -4195,8 +4117,10 @@ export default function Debug() {
                                   <CheckCircle className="w-8 h-8 text-primary" />
                                 ) : headline.tone === 'servicesDown' ? (
                                   <AlertTriangle className="w-8 h-8 text-warning" />
-                                ) : (
+                                ) : headline.tone === 'issues' ? (
                                   <AlertCircle className="w-8 h-8 text-destructive" />
+                                ) : (
+                                  <Info className="w-8 h-8 text-muted-foreground" />
                                 )}
                               </div>
                               <div>
@@ -4393,22 +4317,37 @@ export default function Debug() {
                             <div className="p-4 rounded-lg border bg-card">
                               <div className="flex items-center gap-3 mb-3">
                                 <Server
-                                  className={`w-5 h-5 ${healthStatus?.services?.server?.running ? 'text-primary' : 'text-muted-foreground'}`}
+                                  className={cn(
+                                    'w-5 h-5',
+                                    serverRunning === true && 'text-primary',
+                                    serverRunning === false &&
+                                      'text-muted-foreground',
+                                    serverRunning === null && 'text-warning',
+                                  )}
                                 />
                                 <span className="font-medium">
                                   {'Game Server'}
                                 </span>
                                 <Badge
                                   variant={
-                                    healthStatus?.services?.server?.running
+                                    serverRunning === true
                                       ? 'default'
-                                      : 'secondary'
+                                      : serverRunning === false
+                                        ? 'secondary'
+                                        : 'outline'
                                   }
                                   className="ms-auto"
+                                  title={
+                                    serverScanFailed
+                                      ? 'Process scan failed; status is unknown'
+                                      : undefined
+                                  }
                                 >
-                                  {healthStatus?.services?.server?.running
+                                  {serverRunning === true
                                     ? 'Running'
-                                    : 'Stopped'}
+                                    : serverRunning === false
+                                      ? 'Stopped'
+                                      : 'Unknown'}
                                 </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground">

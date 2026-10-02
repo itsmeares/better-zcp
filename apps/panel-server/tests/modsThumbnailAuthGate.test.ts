@@ -47,11 +47,10 @@ describe("native legacy API authentication carve-outs, no Authorization header",
     expect(body.code).toBe("AUTH_REQUIRED");
   });
 
-  it("GET /api/map/tiles/:level/:tile (the sibling exemption that already worked) stays not-401 with no auth header", async () => {
+  it("requires authentication for map metadata", async () => {
     const res = await handleApiRequest(
-      new Request("http://panel.test/api/map/tiles/999/0_0.jpg"),
+      new Request("http://panel.test/api/map/resolve"),
     );
-    expect(res?.status).not.toBe(401);
-    expect(res?.status).toBe(400);
+    expect(res?.status).toBe(401);
   });
 });
