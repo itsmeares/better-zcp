@@ -387,14 +387,18 @@ describe("debug.js crash-logs: scans the configured logs directory, not process.
     if (hadCombinedLog) fs.renameSync(combinedPath, backupPath);
     let symlinkCreated = false;
     try {
-      fs.symlinkSync(externalFile, combinedPath);
-      symlinkCreated = true;
-      const response = createDownloadResponse();
-      await runRoute(debugRouter, "/logs/download", "get", adminReq(), response);
-      expect(response.getStatusCode()).toBe(404);
-      expect(response.getBody()).not.toContain("outside log contents");
-    } catch (error: any) {
-      if (error?.code !== "EPERM" && error?.code !== "EACCES") throw error;
+      try {
+        fs.symlinkSync(externalFile, combinedPath);
+        symlinkCreated = true;
+      } catch (error: any) {
+        if (error?.code !== "EPERM" && error?.code !== "EACCES") throw error;
+      }
+      if (symlinkCreated) {
+        const response = createDownloadResponse();
+        await runRoute(debugRouter, "/logs/download", "get", adminReq(), response);
+        expect(response.getStatusCode()).toBe(404);
+        expect(response.getBody()).not.toContain("outside log contents");
+      }
     } finally {
       if (symlinkCreated) fs.rmSync(combinedPath, { force: true });
       if (hadCombinedLog) fs.renameSync(backupPath, combinedPath);

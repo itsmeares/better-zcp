@@ -93,6 +93,21 @@ describe('world map helpers', () => {
     expect(availableTileFloors(coverage, 0, 2)).toEqual([0, 1])
   })
 
+  it('does not select an uncovered ground floor for sparse tile coverage', () => {
+    const coverage = indexLayerCoverage({
+      ground: 0,
+      levels: { '4': { '-1': [[0, 0]], '3': [[1, 0]] } },
+    })
+
+    for (const selectedFloor of [0, 2]) {
+      expect(tileFloorFor(coverage, 0, selectedFloor, 4, 0, 0)).toBeNull()
+      expect(tileFloorFor(coverage, 0, selectedFloor, 4, 1, 0)).toBeNull()
+      expect(availableTileFloors(coverage, 0, selectedFloor)).toEqual([])
+    }
+    expect(tileFloorFor(coverage, 0, 3, 4, 1, 0)).toBe(3)
+    expect(availableTileFloors(coverage, 0, 4)).toEqual([3])
+  })
+
   it('projects mod cell clipping polygons at the selected floor', () => {
     const mod = { ...base, cellRects: [[2, 3, 4, 5] as [number, number, number, number]] }
     const ground = layerClipPolygons(mod, 0)[0]

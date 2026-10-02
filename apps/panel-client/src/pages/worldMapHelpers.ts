@@ -133,10 +133,10 @@ function tileFloorFromAvailable(available: number[], ground: number, selectedFlo
   if (selectedFloor < ground) {
     return available.includes(selectedFloor) ? selectedFloor : null
   }
-  let closest = ground
+  let closest: number | null = null
   for (const floor of available) {
     if (floor < ground || floor > selectedFloor) continue
-    if (floor > closest) closest = floor
+    if (closest === null || floor > closest) closest = floor
   }
   return closest
 }
