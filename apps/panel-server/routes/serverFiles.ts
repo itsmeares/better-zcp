@@ -1301,7 +1301,6 @@ router.put("/spawnregions", async (req, res) => {
 });
 
 router.get("/raw/:type", async (req, res) => {
-  log.info(`GET /raw/${req.params.type}`);
   try {
     const { configPath, serverName } = await getRequestServerValues(req);
     const type = req.params.type;
@@ -1313,13 +1312,14 @@ router.get("/raw/:type", async (req, res) => {
       spawnregions: `${serverName}_spawnregions.lua`,
     };
 
-    if (!fileMap[type]) {
+    if (!Object.hasOwn(fileMap, type)) {
       return res.status(400).json({
         error: "Invalid file type",
         code: ErrorCode.RAW_FILE_INVALID_TYPE,
       });
     }
 
+    log.info(`GET /raw/${type}`);
     const filePath = path.join(configPath, fileMap[type]);
 
     if (!fs.existsSync(filePath)) {
@@ -1345,7 +1345,6 @@ router.put("/raw/:type", async (req, res) => {
     const { configPath, serverName } = await getRequestServerValues(req);
     const type = req.params.type;
     const { content } = req.body || {};
-    log.info(`PUT /raw/${type}: contentLength=${content?.length || 0}`);
 
     const fileMap: Record<string, string> = {
       ini: `${serverName}.ini`,
@@ -1354,7 +1353,7 @@ router.put("/raw/:type", async (req, res) => {
       spawnregions: `${serverName}_spawnregions.lua`,
     };
 
-    if (!fileMap[type]) {
+    if (!Object.hasOwn(fileMap, type)) {
       return res.status(400).json({
         error: "Invalid file type",
         code: ErrorCode.RAW_FILE_INVALID_TYPE,
@@ -1367,6 +1366,8 @@ router.put("/raw/:type", async (req, res) => {
         code: ErrorCode.RAW_CONTENT_STRING_REQUIRED,
       });
     }
+
+    log.info(`PUT /raw/${type}: contentLength=${content.length}`);
 
     if (content.length > 512 * 1024) {
       return res.status(400).json({

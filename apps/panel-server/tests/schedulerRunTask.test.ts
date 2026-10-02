@@ -2,6 +2,12 @@ import { scopedTests } from "./helpers/serverScope.ts";
 const it = scopedTests("server-a");
 import { beforeEach, describe, expect, vi } from "vite-plus/test";
 
+const { logInfo } = vi.hoisted(() => ({ logInfo: vi.fn() }));
+
+vi.mock("../utils/logger.ts", () => ({
+  createLogger: () => ({ debug: vi.fn(), info: logInfo, warn: vi.fn(), error: vi.fn() }),
+}));
+
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
@@ -225,6 +231,32 @@ describe("POST /api/scheduler/tasks/:id/run", () => {
 
     expect(response.status).toHaveBeenCalledWith(400);
     expect(getScheduledTasks).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/scheduler/tasks logging", () => {
+  it("redacts a raw RCON adduser password before logging the task", async () => {
+    const { createScheduledTask } = await import("../database/init.ts");
+    const secret = "hunter2-scheduled-password";
+    createScheduledTask.mockResolvedValue({ id: 42 });
+    logInfo.mockClear();
+    const response = createResponse();
+
+    await getCreateHandler()(
+      {
+        body: {
+          name: "Add player",
+          cronExpression: "0 * * * *",
+          command: `adduser "Bob" "${secret}"`,
+        },
+        app: { get: () => ({ scheduleTask: vi.fn().mockReturnValue({ scheduled: true }) }) },
+      },
+      response,
+    );
+
+    expect(logInfo).toHaveBeenCalledOnce();
+    expect(logInfo.mock.calls[0][0]).toContain('adduser "Bob" "[REDACTED]"');
+    expect(logInfo.mock.calls[0][0]).not.toContain(secret);
   });
 });
 

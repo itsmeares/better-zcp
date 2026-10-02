@@ -105,4 +105,41 @@ describe("Socket.IO session revocation wiring", () => {
     expect(disconnectSocketsSpy).not.toHaveBeenCalled();
     expect(inSpy).not.toHaveBeenCalled();
   });
+
+  it("does not authenticate a Socket.IO session from the Engine.IO URL query", async () => {
+    const user = db.data.users[0];
+    const token = authService.generateAccessToken(user);
+    const httpServer = (io as unknown as {
+      httpServer: import("node:http").Server;
+    }).httpServer;
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const address = httpServer.address();
+    if (!address || typeof address === "string") throw new Error("No TCP address");
+
+    try {
+      const endpoint = `http://127.0.0.1:${address.port}/socket.io/`;
+      const handshake = await fetch(
+        `${endpoint}?EIO=4&transport=polling&token=${encodeURIComponent(token)}`,
+      );
+      const handshakePayload = await handshake.text();
+      expect(handshake.status).toBe(200);
+      expect(handshakePayload.startsWith("0")).toBe(true);
+      const { sid } = JSON.parse(handshakePayload.slice(1));
+
+      const sessionUrl = `${endpoint}?EIO=4&transport=polling&sid=${encodeURIComponent(sid)}`;
+      const connect = await fetch(sessionUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: "40{}",
+      });
+      expect(connect.status).toBe(200);
+
+      const response = await fetch(sessionUrl);
+      expect(await response.text()).toContain(
+        '44{"message":"Authentication required"}',
+      );
+    } finally {
+      await new Promise<void>((resolve) => io.close(() => resolve()));
+    }
+  });
 });

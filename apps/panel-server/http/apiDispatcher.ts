@@ -9,6 +9,7 @@ import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import authService from "../services/auth.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
+import { openRegularFile } from "../utils/regularFile.ts";
 import type { ApiRouter, Request, Response } from "./apiRouter.ts";
 
 const REGISTERED_ERROR_CODES = new Set<string>(Object.values(ErrorCode));
@@ -323,22 +324,22 @@ function createResponseAdapter(): {
         )[path.extname(filePath).toLowerCase()] || "application/octet-stream",
       );
     }
-    void fs.promises
-      .open(filePath, "r")
-      .then((file) => {
-        const fileStream = file.createReadStream();
-        fileStream.on("error", (error) => {
-          callbackFn?.(error);
-          if (!committed) fail(error);
-          else stream?.destroy(error);
-        });
-        fileStream.on("end", () => callbackFn?.());
-        fileStream.pipe(commitStream());
-      })
-      .catch((error: unknown) => {
-        callbackFn?.(error as Error);
-        fail(error);
+    try {
+      const fd = openRegularFile(filePath);
+      const fileStream = fs.createReadStream(filePath, { fd });
+      fileStream.on("error", (error) => {
+        callbackFn?.(error);
+        if (!committed) fail(error);
+        else stream?.destroy(error);
       });
+      fileStream.on("end", () => callbackFn?.());
+      const destination = commitStream();
+      destination.on("close", () => fileStream.destroy());
+      fileStream.pipe(destination);
+    } catch (error) {
+      callbackFn?.(error as Error);
+      fail(error);
+    }
   };
   const download = (
     filePath: string,
@@ -449,9 +450,6 @@ async function createApiRequest(
   const protocol = url.protocol.replace(":", "") || "http";
   const pathname = url.pathname.slice(base.length) || "/";
   const query = queryObject(url);
-  if (!headers.authorization && typeof query.token === "string") {
-    headers.authorization = "Bearer " + query.token;
-  }
   const source =
     request.body && !request.bodyUsed
       ? Readable.fromWeb(request.body as any)
@@ -506,7 +504,6 @@ async function authenticateApiRequest(
   ) {
     return null;
   }
-  const token = new URL(request.url).searchParams.get("token");
   let runtimeAuthService = authService;
   try {
     runtimeAuthService = getPanelRuntime().authService || authService;
@@ -514,7 +511,7 @@ async function authenticateApiRequest(
     // The standalone route tests do not boot the panel runtime.
   }
   const result = await runtimeAuthService.authenticateApiRequest(
-    request.headers.get("authorization") || (token ? "Bearer " + token : null),
+    request.headers.get("authorization"),
   );
   if (result.ok) return { user: result.user };
   return globalThis.Response.json(

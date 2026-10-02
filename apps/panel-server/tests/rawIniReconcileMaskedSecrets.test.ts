@@ -8,6 +8,16 @@ import { ErrorCode } from "../utils/errorCodes.ts";
 
 
 const getCurrentServer = vi.fn();
+const { logInfo } = vi.hoisted(() => ({ logInfo: vi.fn() }));
+vi.mock("../utils/logger.ts", () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: logInfo,
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
 vi.mock("../database/init.ts", () => ({
   getCurrentServer,
   getAllSettings: vi.fn(async () => ({})),
@@ -234,5 +244,34 @@ describe("serverFiles.ts PUT /raw/ini: ambiguous or destructive cases REFUSE the
 
     expect(fs.readFileSync(iniPath, "utf-8")).toBe(baseIni());
     expect(backupCount()).toBe(0);
+  });
+});
+
+describe("serverFiles raw route log safety", () => {
+  it("does not log an invalid decoded route type or inherited object keys", async () => {
+    logInfo.mockClear();
+
+    for (const type of ["\r\n[ERROR] forged", "constructor", "__proto__"]) {
+      const response = await runRoute("/raw/:type", "get", {
+        user: { role: "admin" },
+        params: { type },
+      });
+      expect(response.getStatusCode()).toBe(400);
+    }
+
+    expect(logInfo).not.toHaveBeenCalled();
+  });
+
+  it("does not log an untyped content object's attacker-controlled length", async () => {
+    logInfo.mockClear();
+    const response = await runRoute("/raw/:type", "put", {
+      user: { role: "admin" },
+      params: { type: "ini" },
+      body: { content: { length: "\r\n[ERROR] forged" } },
+    });
+
+    expect(response.getStatusCode()).toBe(400);
+    expect(logInfo).not.toHaveBeenCalled();
+    expect(fs.readFileSync(iniPath, "utf-8")).toBe(baseIni());
   });
 });

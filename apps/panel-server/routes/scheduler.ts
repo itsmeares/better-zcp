@@ -22,6 +22,7 @@ import {
 } from '../utils/cronValidation.ts';
 import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.ts';
 import { isSchedulableCommand } from '../utils/schedulerCommands.ts';
+import { redactRconCommandSecrets } from '../utils/rconCommandRedaction.ts';
 
 export { hasUnsupportedCronFieldCount };
 
@@ -164,7 +165,7 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Request body must be an object', code: ErrorCode.SCHEDULER_REQUEST_BODY_INVALID });
     }
     const { name, cronExpression, command, serverId } = req.body;
-    log.info(`POST /tasks: name=${name}, cron=${cronExpression}, command=${typeof command === 'string' ? command.substring(0, 80) : ''}, serverId=${serverId}`);
+    log.info(`POST /tasks: name=${name}, cron=${cronExpression}, command=${typeof command === 'string' ? String(redactRconCommandSecrets(command)).substring(0, 80) : ''}, serverId=${serverId}`);
 
     if (!name || !cronExpression || !command) {
       return res.status(400).json({ error: 'Name, cronExpression, and command are required', code: ErrorCode.SCHEDULER_TASK_FIELDS_REQUIRED });

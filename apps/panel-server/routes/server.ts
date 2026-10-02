@@ -40,6 +40,7 @@ import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "../utils/mapFolderScan.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
+import { openRegularFile } from "../utils/regularFile.ts";
 import {
   createLinuxServiceLifecycle,
   isManagedLifecycleProvider,
@@ -2720,6 +2721,23 @@ async function getConsoleDataPath() {
   return (await getSetting("zomboidDataPath")) || (await getSetting("serverPath"));
 }
 
+function readConsoleLog(file: string, maxBytes: number, from = 0) {
+  const fd = openRegularFile(file);
+  try {
+    const stats = fs.fstatSync(fd);
+    const requestedStart = from > stats.size ? 0 : from;
+    const start = Math.max(requestedStart, stats.size - maxBytes);
+    const buffer = Buffer.alloc(stats.size - start);
+    const count = fs.readSync(fd, buffer, 0, buffer.length, start);
+    const raw = buffer.subarray(0, count).toString("utf8");
+    const truncated = start > requestedStart;
+    const firstNewline = truncated ? raw.indexOf("\n") : -1;
+    return { stats, truncated, content: firstNewline >= 0 ? raw.slice(firstNewline + 1) : raw };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 router.get("/console-log", async (req, res) => {
   try {
     const zomboidDataPath = await getConsoleDataPath();
@@ -2745,28 +2763,7 @@ router.get("/console-log", async (req, res) => {
 
     const maxLines = parseBoundedInteger(req.query.lines, 500, 1, 2000);
 
-    const stats = fs.statSync(consoleLogPath);
-    const MAX_READ_BYTES = 5 * 1024 * 1024;
-    let content;
-    if (stats.size > MAX_READ_BYTES) {
-      const fd = fs.openSync(consoleLogPath, "r");
-      const readStart = stats.size - MAX_READ_BYTES;
-      const buffer = Buffer.alloc(MAX_READ_BYTES);
-      try {
-        fs.readSync(fd, buffer, 0, MAX_READ_BYTES, readStart);
-      } finally {
-        try {
-          fs.closeSync(fd);
-        } catch (_: any) {
-          /* ignore */
-        }
-      }
-      const raw = buffer.toString("utf-8");
-      const firstNewline = raw.indexOf("\n");
-      content = firstNewline >= 0 ? raw.slice(firstNewline + 1) : raw;
-    } else {
-      content = fs.readFileSync(consoleLogPath, "utf-8");
-    }
+    const { stats, content } = readConsoleLog(consoleLogPath, 5 * 1024 * 1024);
     const allLines = content.split("\n");
 
     const filteredLines = filterConsoleLogLines(allLines, filterLevel);
@@ -2813,29 +2810,7 @@ router.get("/console-log/error-count", async (req, res) => {
       return res.json({ exists: false, count: 0, sinceStart: false });
     }
 
-    const MAX_READ_BYTES = 2 * 1024 * 1024;
-    const stats = fs.statSync(consoleLogPath);
-    let content;
-    let truncated = false;
-    if (stats.size > MAX_READ_BYTES) {
-      truncated = true;
-      const fd = fs.openSync(consoleLogPath, "r");
-      const buffer = Buffer.alloc(MAX_READ_BYTES);
-      try {
-        fs.readSync(fd, buffer, 0, MAX_READ_BYTES, stats.size - MAX_READ_BYTES);
-      } finally {
-        try {
-          fs.closeSync(fd);
-        } catch (_: any) {
-          /* ignore */
-        }
-      }
-      const raw = buffer.toString("utf-8");
-      const firstNewline = raw.indexOf("\n");
-      content = firstNewline >= 0 ? raw.slice(firstNewline + 1) : raw;
-    } else {
-      content = fs.readFileSync(consoleLogPath, "utf-8");
-    }
+    const { stats, content, truncated } = readConsoleLog(consoleLogPath, 2 * 1024 * 1024);
 
     const lines = content.split("\n");
     let startIndex = -1;
@@ -2888,52 +2863,16 @@ router.get("/console-log/stream", async (req, res) => {
       0,
       Number.MAX_SAFE_INTEGER,
     );
-    const stats = fs.statSync(consoleLogPath);
+    const { stats, content: newContent } = readConsoleLog(consoleLogPath, 5 * 1024 * 1024, lastSize);
+    const rotated = stats.size < lastSize;
 
-    if (stats.size < lastSize) {
-      const content = fs.readFileSync(consoleLogPath, "utf-8");
-      const allLines = content.split("\n").filter((l) => l.trim());
-      const lines = filterConsoleLogLines(allLines, filterLevel);
-      return res.json({
-        success: true,
-        newLines: lines,
-        currentSize: stats.size,
-        rotated: true,
-        filterLevel,
-        lastModified: stats.mtime.toISOString(),
-      });
-    }
-
-    if (stats.size === lastSize) {
-      return res.json({
-        success: true,
-        newLines: [],
-        currentSize: stats.size,
-        filterLevel,
-        lastModified: stats.mtime.toISOString(),
-      });
-    }
-
-    const fd = fs.openSync(consoleLogPath, "r");
-    const newBytes = stats.size - lastSize;
-    const buffer = Buffer.alloc(newBytes);
-    try {
-      fs.readSync(fd, buffer, 0, newBytes, lastSize);
-    } finally {
-      try {
-        fs.closeSync(fd);
-      } catch (_: any) {
-        /* ignore */
-      }
-    }
-
-    const newContent = buffer.toString("utf-8");
     const allNewLines = newContent.split("\n").filter((l) => l.trim());
     const newLines = filterConsoleLogLines(allNewLines, filterLevel);
 
     res.json({
       success: true,
       newLines,
+      ...(rotated ? { rotated: true } : {}),
       currentSize: stats.size,
       filterLevel,
       lastModified: stats.mtime.toISOString(),
@@ -2955,7 +2894,12 @@ router.post("/console-log/clear", async (req, res) => {
     const consoleLogPath = path.join(zomboidDataPath, "server-console.txt");
 
     if (fs.existsSync(consoleLogPath)) {
-      fs.writeFileSync(consoleLogPath, "");
+      const fd = openRegularFile(consoleLogPath, fs.constants.O_WRONLY);
+      try {
+        fs.ftruncateSync(fd, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
       errorCountCache = { at: 0, path: null, value: null };
       log.info("Server console log cleared");
     }

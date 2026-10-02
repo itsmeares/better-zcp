@@ -4,6 +4,11 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 const setDataPaths = vi.fn();
 const getServers = vi.fn();
+const { logWarn } = vi.hoisted(() => ({ logWarn: vi.fn() }));
+
+vi.mock("../utils/logger.ts", () => ({
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: logWarn, error: vi.fn() }),
+}));
 
 vi.mock("../utils/paths.ts", async () => {
   const actual = await vi.importActual("../utils/paths.ts");
@@ -123,5 +128,29 @@ describe("POST /debug/paths: extraBlockedPaths wiring", () => {
     getServers.mockResolvedValue([]);
     await postPaths({ dataDir: "/new/data" });
     expect(setDataPaths).toHaveBeenCalledWith(expect.any(Object), false, { extraBlockedPaths: [] });
+  });
+});
+
+describe("POST /debug/client-errors log safety", () => {
+  it("keeps a public client message on one log line", async () => {
+    const handlers = getRouteHandlers("/client-errors", "post");
+    const res = createResponse();
+    logWarn.mockClear();
+
+    await handlers[0](
+      {
+        ip: "203.0.113.10",
+        body: { message: "client failed\r\n[INFO] forged entry" },
+      },
+      res,
+      vi.fn(),
+    );
+
+    expect(logWarn).toHaveBeenCalledOnce();
+    expect(logWarn.mock.calls[0][0]).toBe(
+      "[ClientError] client failed [INFO] forged entry",
+    );
+    expect(logWarn.mock.calls[0][0]).not.toMatch(/[\r\n]/);
+    expect(res.getBody()).toEqual({ ok: true });
   });
 });

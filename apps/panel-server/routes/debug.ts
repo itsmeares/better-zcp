@@ -5374,7 +5374,7 @@ router.post("/client-errors", (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    log.warn(`[ClientError] ${message.slice(0, 500)}`, {
+    log.warn(`[ClientError] ${message.slice(0, 500).replace(/[\r\n]+/g, " ")}`, {
       error:
         typeof errorDetail === "string"
           ? errorDetail.slice(0, 1000)
