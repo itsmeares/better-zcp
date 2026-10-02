@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-hePW80VL.js";import{n as t}from"./jsx-runtime-096o_Uk7.js";var n=e(t(),1),r=(0,n.createContext)(null),i=(0,n.createContext)({connected:!1,reconnecting:!1,reconnectAttempt:0,error:null});function a(){return(0,n.useContext)(r)}function o(){return(0,n.useContext)(i)}export{a as i,r as n,o as r,i as t};
