@@ -4,14 +4,14 @@
 
 ### The complete admin cockpit for Project Zomboid dedicated servers
 
-[![Latest Release](https://img.shields.io/github/v/release/itsmeares/better-zcp?style=for-the-badge&logo=github&color=8a9a5b)](https://github.com/itsmeares/better-zcp/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/itsmeares/better-zcp?include_prereleases&style=for-the-badge&logo=github&color=8a9a5b)](https://github.com/itsmeares/better-zcp/releases)
 [![Downloads](https://img.shields.io/github/downloads/itsmeares/better-zcp/total?style=for-the-badge&logo=github&color=8a9a5b)](https://github.com/itsmeares/better-zcp/releases)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/jHsWJDNmSg)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-green.svg?style=for-the-badge)](LICENSE)
 
 Project Zomboid is a zombie survival game; playing it with friends means running a **dedicated server** somewhere. Zomboid Control Panel is the web app that sets up and manages that server for you — no command line required — with a live world map, Workshop mod management, scheduled restarts, and backups built in.
 
-[**🚀 Download**](https://github.com/itsmeares/better-zcp/releases/latest) ·
+[**🚀 Download**](https://github.com/itsmeares/better-zcp/releases) ·
 [**👁️ Live demo**](https://itsmeares.github.io/better-zcp/) ·
 [**💬 Discord**](https://discord.gg/jHsWJDNmSg) ·
 [**📖 Setup**](#quick-start)
@@ -43,7 +43,7 @@ Map images load directly from `tiles.pzmap.org`. Opening the map sends your IP a
 <td width="50%" valign="top">
 
 ### 👥 Player Management
-Roster with online / offline / banned tabs. Per-player dossier with moderation, spawn loadout, live status, recent sessions, and lifelong playtime and deaths. Voice ban, SteamID ban, manual targeting.
+Roster with online / offline / banned tabs. Per-player details with moderation, item delivery, XP, invisibility, noclip, god mode, teleport, heal and kill, live status, recent sessions, and lifelong playtime and deaths. Voice ban, SteamID ban, manual targeting.
 
 <img src="docs/assets/screenshots/screenshot-players-v2.png" alt="Players" />
 
@@ -137,7 +137,6 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
 - **Console** — Live log viewer and RCON terminal with command history.
 - **Scheduling** — Recurring restarts, saves, broadcasts with countdown warnings.
 - **Backups** — Manual or scheduled world backups with configurable retention, snapshot preview, and download/upload of the raw archive. Restore takes an automatic safety backup first and warns it can't be undone.
-- **Roles & permissions** — Capability-based access control: three built-in roles (admin, technician, moderator) plus fully custom ones, each granting an explicit subset of the panel's 28 individual capabilities across 12 areas (server lifecycle, RCON, backups, mods, and more).
 - **Account recovery** — Reset the admin password with a local-only token file or the `--reset-password` CLI flag run directly on the server.
 
 ### Observe
@@ -147,10 +146,9 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
 - **Server config** — Full INI editor with structured and raw views. Sandbox, spawn points, mod settings — searchable and editable in-browser.
 
 ### Extend
-- **Game integration** — Server-side Lua for live player positions and details, heal, kill, coordinate teleport, and live sandbox and mod settings. RCON handles moderation, player powers, item delivery, and XP.
-- **Single sign-on (SSO)** — OpenID Connect login, with ready-made presets for Google, Authentik, Keycloak, Azure AD, Okta, and Auth0, or any other compliant provider entered by hand. Full discovery + PKCE + state/nonce flow, with a one-click credential test before you commit to it.
+- **Game integration** — Server-side Lua for live player positions and details, heal, kill, and live sandbox and mod settings. RCON handles moderation, player powers, teleport, item delivery, and XP.
 - **Multi-server** — Manage multiple PZ servers from one panel.
-- **Auto-update** — Checks for new releases, downloads and applies them.
+- **Panel updates** — Checks for new releases. Native Windows/Linux packages update on request with a data backup and health-check rollback. Docker deployments show a host update command.
 
 ---
 
@@ -173,6 +171,11 @@ The packaged binary includes its own runtime — no Node.js, Python, or Java ins
 
 ## Quick Start
 
+The rebuilt panel is being tested as `v3.0.0-rc1`. Use the
+[RC installation and test notes](docs/releases/3.0.0-rc1.md) for its exact
+packages and Docker tags. The RC is a prerelease, and older panel databases
+are not imported.
+
 Choose where the **panel** runs. It can run beside the game server, in Docker,
 or in a container with the game server's folders mounted. The panel needs
 RCON access and local access to the server files it manages.
@@ -186,7 +189,7 @@ RCON access and local access to the server files it manages.
 
 **Not sure which?** Pick the row that matches the computer the _panel_ will run on; Docker needs the fewest manual steps if that machine has it.
 
-Every path above ends the same way: a browser tab open to the panel's setup screen, where you create your admin account. Download the current package from [Releases](https://github.com/itsmeares/better-zcp/releases/latest). Something not working? [docs/install/troubleshooting.md](docs/install/troubleshooting.md) is organized by what's actually on your screen, not by which guide you followed.
+Every path above ends the same way: a browser tab open to the panel's setup screen, where you create your admin account. Download the current package from [Releases](https://github.com/itsmeares/better-zcp/releases). Something not working? [docs/install/troubleshooting.md](docs/install/troubleshooting.md) is organized by what's actually on your screen, not by which guide you followed.
 
 ### macOS
 
@@ -233,7 +236,7 @@ building from source.
 1. Open the panel and create your admin account.
 2. In **Settings**, set your server install path and Zomboid data path.
 3. Configure RCON (host, port `27015`, password from your server `.ini`).
-4. Optionally install the game integration for live player details, coordinate teleport, and live mod settings.
+4. Optionally install the game integration for live player details, heal/kill, and live mod settings.
 
 If you installed a brand-new server with the Setup Wizard, steps 2 and 3 are already done — the wizard fills them in as part of installing.
 
@@ -244,13 +247,14 @@ Node's SQLite driver. Each server keeps its own configuration, schedules,
 and history. Server selection is local to the browser URL.
 
 This rebuild starts with a fresh panel database. Older `db.json` and
-`db.sqlite` files stay on disk; they are not imported or deleted. Register
-existing servers again using their installation and Zomboid data paths.
+`db.sqlite` files stay on disk; they are not imported or deleted. Legacy database
+import is not planned. Register existing servers again using their installation
+and Zomboid data paths.
 This does not reset their saves, game accounts, or configuration files.
 
 ### Game Integration (Optional)
 
-Game integration adds live player positions and details, heal, kill, coordinate teleport, and live sandbox and mod settings. RCON handles player powers, moderation, item delivery, and XP.
+Game integration adds live player positions and details, heal, kill, and live sandbox and mod settings. RCON handles player powers, moderation, teleport, item delivery, and XP.
 
 The panel installs the server-side Lua integration before starting or restarting a configured server. If permissions prevent installation, open **Settings → Game integration** and use **Install** after correcting the server path.
 
@@ -349,7 +353,7 @@ pnpm test                  # Run tests
 - **Issues** — [Report bugs or request features](https://github.com/itsmeares/better-zcp/issues) on GitHub.
 - **Contributing** — Read [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) before opening a pull request.
 - **Security** — Follow [.github/SECURITY.md](.github/SECURITY.md) for private vulnerability reports.
-- **Release notes** — See the [latest release notes](https://github.com/itsmeares/better-zcp/releases/latest) for what's new.
+- **Release notes** — See the [latest release notes](https://github.com/itsmeares/better-zcp/releases) for what's new.
 
 ---
 
