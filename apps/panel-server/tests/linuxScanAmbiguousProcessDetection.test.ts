@@ -142,6 +142,51 @@ function makeManager(overrides) {
       expect(details.owned).toHaveLength(1);
     });
 
+    it("attributes exact argv for profiles sharing an install when cache paths contain spaces and literal quotes", async () => {
+      const savePathA = `/tmp/PZ "Alpha" & data'`;
+      const savePathB = `/tmp/PZ "Beta" & data'`;
+      const profiles = [
+        { id: "quoted-a", serverName: "Launch Fixture", installPath: "/opt/shared", zomboidDataPath: savePathA },
+        { id: "quoted-b", serverName: "Other Fixture", installPath: "/opt/shared", zomboidDataPath: savePathB },
+      ];
+      getServers.mockResolvedValue(profiles);
+      await waitUntilVisibleInProcTable(
+        spawnBg(fakeJava, [
+          "-Djava.library.path=natives/",
+          "-cp",
+          "java/.",
+          "zombie.network.GameServer",
+          "-servername",
+          "Launch Fixture",
+          `-cachedir=${savePathA}`,
+        ]),
+      );
+
+      const managerA = makeManager({
+        _serverId: "quoted-a",
+        serverName: "Launch Fixture",
+        savePath: savePathA,
+        serverPath: "/opt/shared",
+      });
+      const managerB = makeManager({
+        _serverId: "quoted-b",
+        serverName: "Other Fixture",
+        savePath: savePathB,
+        serverPath: "/opt/shared",
+      });
+
+      const [detailsA, detailsB] = await Promise.all([
+        managerA.getServerProcessDetails(),
+        managerB.getServerProcessDetails(),
+      ]);
+
+      expect(detailsA.running).toBe(true);
+      expect(detailsA.scanFailed).toBe(false);
+      expect(detailsA.owned[0].argv).toContain(`-cachedir=${savePathA}`);
+      expect(detailsB.running).toBe(false);
+      expect(detailsB.scanFailed).toBe(false);
+    });
+
     it("does not force-stop a managed profile's unlabelled JVM from a direct profile", async () => {
       getServers.mockResolvedValue([
         { id: "direct", serverName: "Direct", installPath: "/opt/shared" },

@@ -2,6 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'vite-plus/test';
 import fs from 'fs';
 import { ServerManager } from '../services/serverManager.ts';
 
+const isLinux = process.platform === 'linux';
+
 
 describe('ServerManager pidfile fast path', () => {
   let manager;
@@ -25,6 +27,9 @@ describe('ServerManager pidfile fast path', () => {
       expect(String(pid)).toBe('4242');
       return 'java -cp pz.jar zombie.network.GameServer -servername PidTestServer';
     };
+    manager._getLiveProcessArgv = async () => [
+      'java', '-cp', 'pz.jar', 'zombie.network.GameServer', '-servername', 'PidTestServer',
+    ];
     let scanCalled = false;
     manager._scanDedicatedServerProcesses = async () => {
       scanCalled = true;
@@ -52,6 +57,34 @@ describe('ServerManager pidfile fast path', () => {
 
     expect(scanCalled).toBe(true);
     expect(details.running).toBe(false);
+  });
+
+  (isLinux ? it : it.skip)('uses exact Linux argv on the pidfile fast path for spaced and quoted cache paths', async () => {
+    const savePath = `/tmp/PZ "Alpha" & data'`;
+    Object.assign(manager, {
+      serverName: 'Launch Fixture',
+      savePath,
+      serverPath: '/opt/shared',
+    });
+    manager._writePidFile(4321);
+    manager._getLiveCommandLine = async () =>
+      `java zombie.network.GameServer -servername Launch Fixture -cachedir=${savePath}`;
+    const argv = [
+      '/opt/shared/jre64/bin/java',
+      'zombie.network.GameServer',
+      '-servername',
+      'Launch Fixture',
+      `-cachedir=${savePath}`,
+    ];
+    manager._getLiveProcessArgv = async () => argv;
+    manager._getOwnershipPeers = async () => [];
+
+    const details = await manager.getServerProcessDetails();
+
+    expect(details.running).toBe(true);
+    expect(details.owned).toEqual([
+      expect.objectContaining({ pid: '4321', argv }),
+    ]);
   });
 
   it('falls back to the OS scan when the recorded PID is dead', async () => {
@@ -97,6 +130,9 @@ describe('ServerManager pidfile fast path', () => {
     manager._writePidFile(8888);
     manager._getLiveCommandLine = async () =>
       'java zombie.network.GameServer -servername SomeOtherServer -cachedir="C:\\Zomboid\\Other"';
+    manager._getLiveProcessArgv = async () => [
+      'java', 'zombie.network.GameServer', '-servername', 'SomeOtherServer', '-cachedir=C:\\Zomboid\\Other',
+    ];
     let scanCalled = false;
     manager._scanDedicatedServerProcesses = async () => {
       scanCalled = true;

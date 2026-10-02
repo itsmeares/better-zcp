@@ -59,7 +59,7 @@ import {
   monitorGracefulStop,
   refreshLaunchTargetBeforeStart,
   regenerateStartupScriptsWithBackup,
-  sanitizeForBatch,
+  getStartupScriptInputError,
   waitForRconAfterStart,
 } from "../services/serverLaunch.ts";
 import {
@@ -86,7 +86,6 @@ export {
   monitorGracefulStop,
   refreshLaunchTargetBeforeStart,
   regenerateStartupScriptsWithBackup,
-  sanitizeForBatch,
   waitForRconAfterStart,
 };
 
@@ -998,6 +997,11 @@ router.post("/install", async (req, res) => {
       rconPort = 27015,
     } = req.body;
 
+    const inputError = getStartupScriptInputError(req.body);
+    if (inputError) {
+      return res.status(400).json({ error: inputError, code: ErrorCode.STARTUP_ARGUMENT_INVALID });
+    }
+
     const steamcmdPath =
       suppliedSteamcmdPath || (await findSteamCmdPath());
 
@@ -1104,8 +1108,6 @@ router.post("/install", async (req, res) => {
     if (isLifecycleLockedForServer(installTargetServer)) {
       return res.status(409).json(lifecycleInProgressResponse());
     }
-
-    const safeAdminPassword = sanitizeForBatch(adminPassword);
 
     if (steamcmdDownloadInProgress) {
       return res.status(409).json({
@@ -1347,7 +1349,7 @@ router.post("/install", async (req, res) => {
             minMemory: safeMinMemory,
             maxMemory: safeMaxMemory,
             zomboidDataPath: zomboidPath,
-            adminPassword: safeAdminPassword,
+            adminPassword,
             serverPort: safeServerPort,
             useNoSteam,
             useDebug,
@@ -1488,6 +1490,11 @@ router.post("/quick-setup", async (req, res) => {
       rconPort = 27015,
     } = req.body;
 
+    const inputError = getStartupScriptInputError(req.body);
+    if (inputError) {
+      return res.status(400).json({ error: inputError, code: ErrorCode.STARTUP_ARGUMENT_INVALID });
+    }
+
     if (!installPath || !serverName) {
       return res
         .status(400)
@@ -1590,8 +1597,6 @@ router.post("/quick-setup", async (req, res) => {
       return res.status(409).json(lifecycleInProgressResponse());
     }
 
-    const safeAdminPassword = sanitizeForBatch(adminPassword);
-
     log.info(
       `Quick setup: Creating server config for ${serverName} using files from ${installPath}`,
     );
@@ -1652,7 +1657,7 @@ router.post("/quick-setup", async (req, res) => {
       minMemory: safeMinMemory,
       maxMemory: safeMaxMemory,
       zomboidDataPath: zomboidPath,
-      adminPassword: safeAdminPassword,
+      adminPassword,
       serverPort: safeServerPort,
       useNoSteam,
       useDebug,
@@ -2373,7 +2378,7 @@ async function checkOneServerStopped(
   for (const entry of Array.isArray(processDetails.matched)
     ? processDetails.matched
     : []) {
-    const score = scoreServerProcessOwnership(entry.cmd, descriptor);
+    const score = scoreServerProcessOwnership(entry.cmd, descriptor, entry.argv);
     if (score > 0) owned = true;
     else if (score === 0) unattributable = true;
   }

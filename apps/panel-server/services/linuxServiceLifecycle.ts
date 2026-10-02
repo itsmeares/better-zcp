@@ -108,7 +108,7 @@ function plainSystemdValue(value: string): string {
   return String(value).replace(/%/g, "%%");
 }
 
-function quoteShellLiteral(value: string): string {
+export function quoteShellLiteral(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 

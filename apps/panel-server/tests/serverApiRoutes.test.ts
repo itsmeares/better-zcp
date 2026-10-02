@@ -50,6 +50,20 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe("server API routes", () => {
+  it.each(["/install", "/quick-setup"])("%s rejects invalid launch input before creating files", async route => {
+    const installPath = path.join(root, "not-created");
+    const result = await execute(route, "post", {
+      installPath,
+      steamcmdPath: root,
+      serverName: "Fixture",
+      adminPassword: "bad\necho INJECTED",
+    });
+    expect(result.statusCode).toBe(400);
+    expect(result.body).toMatchObject({ code: "STARTUP_ARGUMENT_INVALID" });
+    expect(fs.existsSync(installPath)).toBe(false);
+    expect(updateServerProfile).not.toHaveBeenCalled();
+  });
+
   it("checks SteamCMD without accepting traversal paths", async () => {
     const executableName = process.platform === "win32" ? "steamcmd.exe" : "steamcmd.sh";
     fs.writeFileSync(path.join(root, executableName), "");

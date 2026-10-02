@@ -46,7 +46,7 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     await refreshLaunchTargetBeforeStart(server);
     const batPath = path.join(installPath, "StartServer_TestServer.bat");
     expect(fs.readFileSync(batPath, "utf8")).toContain(
-      `-cachedir="${oldDataPath}"`,
+      `-cachedir=^"${oldDataPath}^"`,
     );
 
     const updatedServer = { ...server, zomboidDataPath: newDataPath };
@@ -55,9 +55,21 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     const result = await refreshLaunchTargetBeforeStart(updatedServer);
 
     const content = fs.readFileSync(batPath, "utf8");
-    expect(content).toContain(`-cachedir="${newDataPath}"`);
-    expect(content).not.toContain(`-cachedir="${oldDataPath}"`);
+    expect(content).toContain(`-cachedir=^"${newDataPath}^"`);
+    expect(content).not.toContain(`-cachedir=^"${oldDataPath}^"`);
     expect(result.scriptBackupWarnings).toEqual([]);
+  });
+
+  it("refuses invalid launch input instead of reusing a stale script", async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-refresh-invalid-"));
+    const script = path.join(root, "StartServer_TestServer.bat");
+    fs.writeFileSync(script, "original launcher");
+    getCurrentServer.mockResolvedValue(null);
+    await expect(refreshLaunchTargetBeforeStart(baseServer({
+      installPath: root,
+      adminPassword: "bad\necho INJECTED",
+    }))).rejects.toThrow("Admin password must be text without control characters");
+    expect(fs.readFileSync(script, "utf8")).toBe("original launcher");
   });
 
   it("also pre-configures RCON in the ini before the script regen completes", async () => {

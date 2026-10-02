@@ -8,6 +8,8 @@ import {
   ServerManager,
 } from '../services/serverManager.ts';
 
+const isLinux = process.platform === 'linux';
+
 describe('ServerManager Windows detection', () => {
   it('should recognize WinGSM-style ProjectZomboid server launches', () => {
     const commandLine = '"C:\\WinGSM\\servers\\1\\serverfiles\\ProjectZomboid64.exe" -cachedir="C:\\WinGSM\\servers\\1\\Zomboid" -servername WheelerZoidB42';
@@ -88,6 +90,41 @@ describe('ServerManager process ownership', () => {
     expect(classifyServerProcess('java zombie.network.GameServer', serverA, [peer])).toBe('unknown');
     expect(classifyServerProcess('java zombie.network.GameServer -servername ServerB', serverA, [peer])).toBe('other');
     expect(classifyServerProcess('java zombie.network.GameServer -servername ServerA', serverA, [peer])).toBe('owned');
+  });
+
+  (isLinux ? it : it.skip)('uses exact Linux argv boundaries for profile names and cache paths containing spaces and quote characters', () => {
+    const savePath = `/tmp/PZ "Alpha" & data'`;
+    const descriptor = {
+      serverName: 'Launch Fixture',
+      savePath,
+      serverPath: '/opt/shared',
+    };
+    const peer = {
+      serverName: 'Other Fixture',
+      savePath: `/tmp/PZ "Beta" & data'`,
+      serverPath: '/opt/shared',
+    };
+    const argv = [
+      '/opt/shared/jre64/bin/java',
+      '-cp',
+      'java/.',
+      'zombie.network.GameServer',
+      '-servername',
+      'Launch Fixture',
+      `-cachedir=${savePath}`,
+    ];
+    const flattened = `${argv.join(' ')}`;
+
+    expect(classifyServerProcess(flattened, descriptor, [peer], argv)).toBe('owned');
+    expect(scoreServerProcessOwnership(flattened, { ...descriptor, savePath: `${savePath.slice(0, -1)}` }, argv)).toBe(-1);
+  });
+
+  (isLinux ? it : it.skip)('does not attribute a Linux process from flattened text when reading /proc argv failed', () => {
+    const descriptor = { serverName: 'ServerA', savePath: '/tmp/ServerA', serverPath: '/opt/pz' };
+    const flattened = 'java zombie.network.GameServer -servername ServerA -cachedir=/tmp/ServerA';
+
+    expect(scoreServerProcessOwnership(flattened, descriptor, null)).toBe(0);
+    expect(classifyServerProcess(flattened, descriptor, [], null)).toBe('unknown');
   });
 });
 

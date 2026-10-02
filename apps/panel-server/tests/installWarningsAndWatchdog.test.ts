@@ -117,7 +117,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       serverName: "TestServer",
       branch: "public",
       zomboidDataPath,
-      adminPassword: "adminpw",
+      adminPassword: "Start!42",
       rconPassword: "rconpassword123",
       rconPort: 27015,
       serverPort: 16261,
@@ -126,6 +126,19 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       ...overrides,
     };
   }
+
+  it("preserves the admin password when configuring existing server files", async () => {
+    fs.mkdirSync(path.join(installPath, "jre64"));
+    const { default: router } = await import("../routes/server.ts");
+    const res = createResponse();
+    await getRouteHandler(router, "/quick-setup", "post")(
+      { body: baseBody(), app: fakeApp({ emit: vi.fn() }) }, res,
+    );
+    expect(res.getStatusCode()).toBe(200);
+    expect(res.getBody().success).toBe(true);
+    expect(fs.readFileSync(path.join(installPath, "start-server_TestServer.sh"), "utf8"))
+      .toContain("-adminpassword 'Start!42'");
+  });
 
   it("reports success with an EMPTY warnings array when nothing fails (baseline, proves the plumbing didn't change normal behavior)", async () => {
     const fakeProc = new EventEmitter();
@@ -147,6 +160,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const payload = await completePromise;
     expect(payload.success).toBe(true);
     expect(payload.warnings).toEqual([]);
+    expect(fs.readFileSync(path.join(installPath, "start-server_TestServer.sh"), "utf8")).toContain("-adminpassword 'Start!42'");
     for (const key of ["serverPath", "serverName", "rconPassword", "rconPort", "minMemory", "maxMemory"]) expect(setSetting).not.toHaveBeenCalledWith(key, expect.anything());
   });
 

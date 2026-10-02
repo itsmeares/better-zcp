@@ -237,7 +237,36 @@ function looksLikeUndeterminedJvmCandidate(commandLine: unknown) {
   return /\bjava\b|\bjavaw\b|\/java$/.test(lower);
 }
 
-function extractLaunchArgValue(commandLine: unknown, flag: string) {
+function readLinuxProcessArgv(pid: unknown): string[] | null {
+  if (!/^\d+$/.test(String(pid || ""))) return null;
+  try {
+    const raw = fs.readFileSync(`/proc/${pid}/cmdline`);
+    if (!raw.length) return null;
+    const argv = raw.toString("utf8").split("\0");
+    if (argv[argv.length - 1] === "") argv.pop();
+    return argv.length ? argv : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractLaunchArgValue(
+  commandLine: unknown,
+  flag: string,
+  argv?: string[] | null,
+) {
+  if (argv) {
+    const wanted = `-${flag}`.toLowerCase();
+    const index = argv.findIndex((arg) => {
+      const lower = arg.toLowerCase();
+      return lower === wanted || lower.startsWith(`${wanted}=`);
+    });
+    if (index < 0) return null;
+    return argv[index].length > wanted.length
+      ? argv[index].slice(wanted.length + 1) || null
+      : argv[index + 1] || null;
+  }
+
   const pattern = new RegExp(
     `(?:^|\\s)-${flag}(?:\\s*=\\s*|\\s+)("[^"]*"|'[^']*'|\\S+)`,
     "i",
@@ -248,12 +277,16 @@ function extractLaunchArgValue(commandLine: unknown, flag: string) {
   return value || null;
 }
 
-function normalizePathForCompare(value: unknown) {
-  const normalized = String(value || "")
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/[\\/]+/g, "/")
-    .replace(/\/+$/, "");
+function normalizePathForCompare(value: unknown, exactLinuxArgv = false) {
+  const raw = String(value ?? "");
+  if (!raw) return "";
+  const normalized = exactLinuxArgv
+    ? raw.replace(/\/+$/, "")
+    : raw
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .replace(/[\\/]+/g, "/")
+        .replace(/\/+$/, "");
   return isWindows ? normalized.toLowerCase() : normalized;
 }
 
@@ -269,13 +302,18 @@ export function resolveLaunchMode(server: AnyRecord | null): LaunchMode {
   return { mode: "managed", launcherPath: null };
 }
 
-export function scoreServerProcessOwnership(commandLine: unknown, descriptor: AnyRecord = {}) {
+export function scoreServerProcessOwnership(
+  commandLine: unknown,
+  descriptor: AnyRecord = {},
+  argv?: string[] | null,
+) {
   const cmd = String(commandLine || "");
   if (!cmd) return 0;
+  if (argv === null) return 0;
 
   let score = 0;
 
-  const nameArg = extractLaunchArgValue(cmd, "servername");
+  const nameArg = extractLaunchArgValue(cmd, "servername", argv);
   if (nameArg && descriptor.serverName) {
     if (nameArg.toLowerCase() !== String(descriptor.serverName).toLowerCase()) {
       return -1;
@@ -283,20 +321,26 @@ export function scoreServerProcessOwnership(commandLine: unknown, descriptor: An
     score += 3;
   }
 
-  const cacheArg = extractLaunchArgValue(cmd, "cachedir");
+  const cacheArg = extractLaunchArgValue(cmd, "cachedir", argv);
   if (cacheArg && descriptor.savePath) {
     if (
-      normalizePathForCompare(cacheArg) !==
-      normalizePathForCompare(descriptor.savePath)
+      normalizePathForCompare(cacheArg, argv !== undefined) !==
+      normalizePathForCompare(descriptor.savePath, argv !== undefined)
     ) {
       return -1;
     }
     score += 2;
   }
 
-  const installPath = normalizePathForCompare(descriptor.serverPath);
-  if (installPath && new RegExp(`(?:^|[\\s"'=])${escapeRegExp(installPath)}(?=$|[/\\s"'])`).test(normalizePathForCompare(cmd))) {
-    score += 1;
+  const installPath = normalizePathForCompare(descriptor.serverPath, argv !== undefined);
+  if (installPath) {
+    const occursInCommand = Array.isArray(argv)
+      ? argv.some((arg) => {
+          const processPath = normalizePathForCompare(arg, true);
+          return processPath === installPath || processPath.startsWith(`${installPath}/`);
+        })
+      : new RegExp(`(?:^|[\\s"'=])${escapeRegExp(installPath)}(?=$|[/\\s"'])`).test(normalizePathForCompare(cmd));
+    if (occursInCommand) score += 1;
   }
 
   return score;
@@ -317,9 +361,10 @@ export function classifyServerProcess(
   commandLine: unknown,
   descriptor: AnyRecord,
   peers: AnyRecord[] = [],
+  argv?: string[] | null,
 ): "owned" | "other" | "unknown" {
-  const score = scoreServerProcessOwnership(commandLine, descriptor);
-  const peerScore = Math.max(-1, ...peers.map((peer) => scoreServerProcessOwnership(commandLine, peer)));
+  const score = scoreServerProcessOwnership(commandLine, descriptor, argv);
+  const peerScore = Math.max(-1, ...peers.map((peer) => scoreServerProcessOwnership(commandLine, peer, argv)));
   if (score < 0 || peerScore > score) return "other";
   if (score > 0 && score > peerScore) return "owned";
   return "unknown";
@@ -333,7 +378,9 @@ export function scanDedicatedServerProcesses(onTimeout?: () => void): Promise<Pr
       const matched: AnyRecord[] = [];
       const pushMatch = (cmd: unknown, pid: unknown) => {
         const full = String(cmd || "");
-        matched.push(pid ? { pid: String(pid), cmd: full } : { cmd: full });
+        const entry: AnyRecord = pid ? { pid: String(pid), cmd: full } : { cmd: full };
+        if (!isWindows) entry.argv = readLinuxProcessArgv(pid);
+        matched.push(entry);
       };
 
       const timeout = setTimeout(() => {
@@ -764,7 +811,7 @@ export class ServerManager {
     const owned = [];
     const unattributable = [];
     for (const candidate of scan.matched) {
-      const owner = classifyServerProcess(candidate.cmd, descriptor, peers);
+      const owner = classifyServerProcess(candidate.cmd, descriptor, peers, candidate.argv);
       if (owner === "owned") owned.push(candidate);
       else if (owner === "unknown") unattributable.push(candidate);
     }
@@ -885,12 +932,17 @@ export class ServerManager {
     });
   }
 
+  _getLiveProcessArgv(pid: unknown) {
+    return Promise.resolve(isWindows ? undefined : readLinuxProcessArgv(pid));
+  }
+
   async _tryPidFileFastPath() {
     const recorded = this._readPidFile();
     if (!recorded) return null;
 
     const cmd = await this._getLiveCommandLine(recorded.pid);
     if (!cmd) return null;
+    const argv = isWindows ? undefined : await this._getLiveProcessArgv(recorded.pid);
 
     const looksLikeDedicatedServer = isWindows
       ? isWindowsDedicatedServerCommandLine(cmd)
@@ -903,13 +955,14 @@ export class ServerManager {
     } catch {
       return null;
     }
-    if (classifyServerProcess(cmd, this._getOwnershipDescriptor(), peers) !== "owned") return null;
+    if (classifyServerProcess(cmd, this._getOwnershipDescriptor(), peers, argv) !== "owned") return null;
 
     log.debug(
       `getServerProcessDetails: pidfile fast path hit for pid=${recorded.pid}, skipping full scan`,
     );
     this.isRunning = true;
-    const entry = { pid: String(recorded.pid), cmd: String(cmd) };
+    const entry: AnyRecord = { pid: String(recorded.pid), cmd: String(cmd) };
+    if (argv !== undefined) entry.argv = argv;
     return {
       running: true,
       matched: [{ pid: entry.pid, cmd: entry.cmd.slice(0, 240) }],

@@ -44,7 +44,7 @@ describe("a Settings-UI config change now reaches the script a scheduled restart
       { path: shPath, content: v1.sh.replace(/\r\n/g, "\n") },
     ]);
     expect(fs.readFileSync(batPath, "utf8")).toContain(
-      `-cachedir="${oldDataPath}"`,
+      `-cachedir=^"${oldDataPath}^"`,
     );
 
     const updatedServer = { ...baseServer, zomboidDataPath: newDataPath };
@@ -54,10 +54,10 @@ describe("a Settings-UI config change now reaches the script a scheduled restart
     const scriptPzActuallyLaunches = fs.readFileSync(batPath, "utf8");
 
     expect(scriptPzActuallyLaunches).toContain(
-      `-cachedir="${newDataPath}"`,
+      `-cachedir=^"${newDataPath}^"`,
     );
     expect(scriptPzActuallyLaunches).not.toContain(
-      `-cachedir="${oldDataPath}"`,
+      `-cachedir=^"${oldDataPath}^"`,
     );
   });
 });
