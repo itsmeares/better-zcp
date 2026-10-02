@@ -359,7 +359,7 @@ export LD_LIBRARY_PATH="\${INSTDIR}/natives/:\${INSTDIR}/natives/linux64/:\${INS
 exec "$JAVA_CMD" ${linuxJvmArgs.join(" ")} -Djava.library.path=natives/:natives/linux64/:linux64/:. -cp "$PZ_CLASSPATH" zombie.network.GameServer ${gameArgs(quoteShellLiteral)}
 `;
 
-  return { bat: batchContent, sh: shellContent };
+  return { bat: batchContent.replace(/\n/g, "\r\n"), sh: shellContent };
 }
 
 const SCRIPT_FINGERPRINT_FILE = ".pz-panel-scripts.json";

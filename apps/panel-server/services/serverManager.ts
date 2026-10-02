@@ -281,13 +281,13 @@ function normalizePathForCompare(value: unknown, exactLinuxArgv = false) {
   const raw = String(value ?? "");
   if (!raw) return "";
   const normalized = exactLinuxArgv
-    ? raw.replace(/\/+$/, "")
+    ? raw.replace(/\/+/g, "/")
     : raw
         .trim()
         .replace(/^["']|["']$/g, "")
-        .replace(/[\\/]+/g, "/")
-        .replace(/\/+$/, "");
-  return isWindows ? normalized.toLowerCase() : normalized;
+        .replace(/[\\/]+/g, "/");
+  const withoutTrailingSlash = normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+  return isWindows ? withoutTrailingSlash.toLowerCase() : withoutTrailingSlash;
 }
 
 export function resolveLaunchMode(server: AnyRecord | null): LaunchMode {
