@@ -2068,57 +2068,49 @@ export const updateApi = {
   install: (): Promise<{ success: boolean; message: string }> => apiPost("/server/steam-update"),
 };
 
-export interface WorldMapLayer {
-  id: string;
-  name: string;
-  tileRoot: string;
-  width: number;
-  height: number;
-  tileSize: number;
-  format: string;
-  x0: number;
-  y0: number;
-  sqr: number;
-  scale: number;
-  minFloor: number;
-  maxFloor: number;
-  composite: boolean;
-  cellSize: number;
-  cellRects: Array<[number, number, number, number]>;
-}
-
-export interface WorldMapCoverage {
-  ground: number;
-  levels: Record<string, Record<string, Array<[number, number]>>>;
-}
-
 export interface WorldMapPoint { x: number; y: number; z: number }
-export interface WorldMapPoi extends WorldMapPoint {
-  id: string;
-  name: string;
-  tags: string[];
-}
 
-export interface WorldMapInfo {
-  version: string;
-  label: string;
-  layers: WorldMapLayer[];
-  mapOrder: string[];
+export interface WorldMapManifest {
+  key: string;
+  folders: Array<{
+    id: number;
+    name: string;
+    source: "vanilla" | "workshop";
+    image: { minZoom: number; maxZoom: number } | null;
+  }>;
+  bounds: [number, number, number, number] | null;
+  floors: { min: number; max: number };
   warnings: string[];
 }
 
+export interface WorldMapSearchResult extends WorldMapPoint {
+  kind: "town" | "place" | "street" | "building" | "room";
+  label: string;
+  area?: string;
+}
+
+/** Feature geometry is in game squares; the map converts it when loading. */
+export interface WorldMapFeatures {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: Record<string, string | number>;
+    geometry:
+      | { type: "Polygon"; coordinates: Array<Array<[number, number]>> }
+      | { type: "LineString"; coordinates: Array<[number, number]> }
+      | { type: "Point"; coordinates: [number, number] };
+  }>;
+}
+
 export const mapApi = {
-  resolve: (): Promise<WorldMapInfo> => apiGet("/map/resolve", undefined, 0),
-  coverage: (version: string, id: string): Promise<WorldMapCoverage> =>
-    apiGet(`/map/coverage?${new URLSearchParams({ version, id })}`, undefined, 0),
-  floor: (version: string, id: string, floor: number): Promise<{ format: string }> =>
-    apiGet(`/map/floor?${new URLSearchParams({ version, id, floor: String(floor) })}`, undefined, 0),
-  pois: (version: string): Promise<{ pois: WorldMapPoi[] }> =>
-    apiGet(`/map/pois?${new URLSearchParams({ version })}`, undefined, 0),
-  lootTypes: (version: string): Promise<{ types: Array<{ id: string; name: string; total: number }> }> =>
-    apiGet(`/map/loot-types?${new URLSearchParams({ version })}`, undefined, 0),
-  loot: (version: string, type: string, point: WorldMapPoint): Promise<{ points: WorldMapPoint[]; truncated: boolean }> =>
-    apiGet(`/map/loot?${new URLSearchParams({ version, type, x: String(point.x), y: String(point.y), z: String(point.z) })}`, undefined, 0),
+  manifest: (): Promise<WorldMapManifest> => apiGet("/map/manifest", undefined, 0),
+  features: (key: string): Promise<WorldMapFeatures> => apiGet(`/map/${key}/features`, undefined, 0),
+  rooms: (key: string, floor: number): Promise<Array<[string, Array<[number, number, number, number]>]>> =>
+    apiGet(`/map/${key}/rooms/${floor}`, undefined, 0),
+  density: (key: string): Promise<{ chunk: number; runs: number[] }> => apiGet(`/map/${key}/density`, undefined, 0),
+  search: (key: string, query: string, near: { x: number; y: number }): Promise<{ results: WorldMapSearchResult[] }> =>
+    apiGet(`/map/${key}/search?${new URLSearchParams({ q: query, x: String(Math.round(near.x)), y: String(Math.round(near.y)) })}`, undefined, 0),
+  tileUrl: (key: string, folder: number): string => `${apiUrl(`/map/${key}/tiles/${folder}`)}/{z}/{x}/{y}`,
 };
 
 export const panelUpdateApi = {

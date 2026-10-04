@@ -1,74 +1,65 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import OpenSeadragon from 'openseadragon'
+import { LngLatBounds, Map as MapLibreMap, setWorkerUrl, type GeoJSONSource, type LngLat, type PointLike } from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { Link, useSearch } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowUpRight,
+  Biohazard,
   ChevronDown,
   ChevronUp,
   Copy,
-  Crosshair,
   Heart,
-  Layers,
   Loader2,
   Locate,
   Map as MapIcon,
-  MapPin,
-  Maximize2,
-  PackageSearch,
+  Minus,
+  Plus,
   RefreshCw,
   Search,
   Shield,
   Users,
   X,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
-import { GameIntegrationStatusBadge } from '@/components/GameIntegrationStatusBadge'
-import { HelpTip } from '@/components/HelpTip'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/components/ui/use-toast'
 import {
   gameIntegrationApi,
   mapApi,
   playersApi,
   serversApi,
-  type WorldMapInfo,
-  type WorldMapLayer,
+  type WorldMapManifest,
   type WorldMapPoint,
-  type WorldMapPoi,
+  type WorldMapSearchResult,
 } from '@/lib/api'
+import { getAccessToken } from '@/lib/authToken'
 import { createInFlightGate } from '@/lib/inFlightGate'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { cn, copyText } from '@/lib/utils'
+import { fromLngLat, toLngLat } from './worldMap/coords'
 import {
-  availableTileFloors,
-  buildTileUrl,
-  indexLayerCoverage,
-  imageToWorld,
-  layerClipPolygons,
-  layersForFloor,
-  mapFloorRange,
-  mapCoverageIsValid,
-  mapMetadataIsValid,
-  normalizeMapSearch,
-  placeLayer,
-  tileFloorFor,
-  worldToImage,
-  type LayerCoverageLookup,
-} from './worldMapHelpers'
+  EMPTY,
+  applyFloorStyle,
+  createMapStyle,
+  densityToLngLat,
+  featuresToLngLat,
+  roomsToLngLat,
+} from './worldMap/mapStyle'
+
+setWorkerUrl(workerUrl)
 
 const PLAYER_POLL_MS = 3000
-const MIN_MARKER_HIT_RADIUS = 14
+const MOVE_MS = 450
+const CELL = 256
+const DENSITY_KEY = 'worldMap.density'
 
 interface MapPlayer extends WorldMapPoint {
   username: string
-  displayName?: string
+  displayName: string
   health?: number
   isAlive?: boolean
   isInfected?: boolean
@@ -82,367 +73,171 @@ interface MapPlayer extends WorldMapPoint {
 }
 
 interface ContextMenu {
-  x: number
-  y: number
+  left: number
+  top: number
   point: WorldMapPoint
   player?: MapPlayer
 }
 
-interface LootResult {
-  point: WorldMapPoint
-  type: string
-  locations: WorldMapPoint[]
-  truncated: boolean
+const isStaff = (player: MapPlayer) => !!player.accessLevel && !['none', 'user'].includes(player.accessLevel)
+
+function playerState(player: MapPlayer): string {
+  if (player.isAlive === false) return 'dead'
+  if (player.isInfected) return 'infected'
+  return isStaff(player) ? 'staff' : 'normal'
 }
 
-interface LayerCoverage {
-  ground: number
-  tiles: LayerCoverageLookup
-}
-
-interface TileLoadStatus {
-  generation: number
-  failures: number
-  successes: number
-  timer: number | null
-}
-
-function floorLabel(floor: number): string {
-  return floor === 0 ? 'Ground' : floor > 0 ? `Floor ${floor}` : `B${Math.abs(floor)}`
-}
-
-function getPlayerColor(player: MapPlayer, alpha = 1): string {
-  return `hsl(var(${playerColorToken(player)}) / ${alpha})`
-}
-
-function playerColorToken(player: MapPlayer): string {
-  if (player.isAlive === false) return '--muted-foreground'
-  if (player.isInfected) return '--destructive'
-  if (player.accessLevel && player.accessLevel !== 'none' && player.accessLevel !== 'user') {
-    return '--warning'
-  }
-  return '--info'
-}
-
-function referenceLayer(info: WorldMapInfo | null): WorldMapLayer | null {
-  return info?.layers.find((layer) => layer.id === 'base') ?? info?.layers[0] ?? null
-}
-
-function interpolatePlayer(player: MapPlayer, now: number): WorldMapPoint {
-  const progress = Math.max(0, Math.min(1, (now - player.movedAt) / 450))
+function interpolate(player: MapPlayer, now: number): { x: number; y: number } {
+  const progress = Math.max(0, Math.min(1, (now - player.movedAt) / MOVE_MS))
   const eased = 1 - Math.pow(1 - progress, 3)
   return {
     x: player.previousX + (player.x - player.previousX) * eased,
     y: player.previousY + (player.y - player.previousY) * eased,
-    z: player.z,
   }
 }
 
+const floorName = (floor: number) => (floor === 0 ? 'Ground floor' : floor < 0 ? `Basement ${-floor}` : `Floor ${floor}`)
+
 export default function WorldMap() {
   const socket = useSocket()
-  const { theme } = useTheme()
   const { toast } = useToast()
   const confirm = useConfirm()
   const routeSearch = useSearch({ strict: false }) as Record<string, unknown>
-  const sharedPoint = useMemo(() => {
-    const x = typeof routeSearch.x === 'number' ? routeSearch.x : Number(routeSearch.x)
-    const y = typeof routeSearch.y === 'number' ? routeSearch.y : Number(routeSearch.y)
-    const z = typeof routeSearch.z === 'number' ? routeSearch.z : Number(routeSearch.z)
-    return Number.isFinite(x) && Number.isFinite(y)
-      ? { x, y, z: Number.isInteger(z) ? z : 0 }
-      : null
-  }, [routeSearch.x, routeSearch.y, routeSearch.z])
 
-  const mapWrapperRef = useRef<HTMLDivElement>(null)
-  const viewerHostRef = useRef<HTMLDivElement>(null)
-  const markerCanvasRef = useRef<HTMLCanvasElement>(null)
-  const viewerRef = useRef<OpenSeadragon.Viewer | null>(null)
-  const mapRequestRef = useRef(0)
-  const serverGenerationRef = useRef(0)
-  const serverProfileRef = useRef(routeSearch.server)
-  const layerGenerationRef = useRef(0)
-  const layerCoverageRef = useRef(new Map<string, LayerCoverage>())
-  const coverageRequestsRef = useRef(new Map<string, Promise<LayerCoverage>>())
-  const layerFormatsRef = useRef(new Map<string, string>())
-  const formatRequestsRef = useRef(new Map<string, Promise<string>>())
-  const tileLoadStatusRef = useRef<TileLoadStatus>({ generation: 0, failures: 0, successes: 0, timer: null })
-  const playersGateRef = useRef(createInFlightGate())
-  const mountedRef = useRef(false)
-  const mapInfoRef = useRef<WorldMapInfo | null>(null)
-  const referenceLayerRef = useRef<WorldMapLayer | null>(null)
-  const floorRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<MapLibreMap | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const manifestRef = useRef<WorldMapManifest | null>(null)
+  const floorRef = useRef(Number.isInteger(routeSearch.z) ? (routeSearch.z as number) : 0)
   const playersRef = useRef<MapPlayer[]>([])
-  const selectedPlayerRef = useRef<MapPlayer | null>(null)
-  const selectedPoiRef = useRef<WorldMapPoi | null>(null)
-  const lootResultRef = useRef<LootResult | null>(null)
-  const drawRef = useRef<() => void>(() => undefined)
-  const drawFrameRef = useRef(0)
-  const lastSharedPointRef = useRef('')
-  const hasFitMapRef = useRef(false)
+  const selectedRef = useRef<string | null>(null)
+  const roomsCacheRef = useRef(new Map<string, Promise<ReturnType<typeof roomsToLngLat>>>())
+  const densityLoadedRef = useRef<string | null>(null)
+  const playersGateRef = useRef(createInFlightGate())
+  const generationRef = useRef(0)
+  const serverProfileRef = useRef(routeSearch.server)
 
-  const [mapInfo, setMapInfo] = useState<WorldMapInfo | null>(null)
-  const [mapLoading, setMapLoading] = useState(true)
+  const [manifest, setManifest] = useState<WorldMapManifest | null>(null)
+  const [mapReady, setMapReady] = useState(false)
+  const mapReadyRef = useRef(false)
   const [mapError, setMapError] = useState<string | null>(null)
-  const [layerLoading, setLayerLoading] = useState(false)
-  const [layerError, setLayerError] = useState<string | null>(null)
-  const [layerErrorRetryable, setLayerErrorRetryable] = useState(false)
-  const [layerMetadataRevision, setLayerMetadataRevision] = useState(0)
-  const [tileError, setTileError] = useState(false)
-  const [tileRetryNonce, setTileRetryNonce] = useState(0)
-  const [poiError, setPoiError] = useState<string | null>(null)
-  const [lootTypeError, setLootTypeError] = useState<string | null>(null)
-  const [pois, setPois] = useState<WorldMapPoi[]>([])
-  const [poiLoading, setPoiLoading] = useState(false)
-  const [lootTypes, setLootTypes] = useState<Array<{ id: string; name: string; total: number }>>([])
-  const [lootType, setLootType] = useState('')
-  const [poiSearch, setPoiSearch] = useState('')
-  const [selectedPoi, setSelectedPoi] = useState<WorldMapPoi | null>(null)
-  const [lootResult, setLootResult] = useState<LootResult | null>(null)
-  const [lootLoading, setLootLoading] = useState(false)
-  const [viewerReady, setViewerReady] = useState(false)
-  const [renderedGeneration, setRenderedGeneration] = useState(0)
-  const renderedFloorRef = useRef<number | null>(null)
-  const [mapSize, setMapSize] = useState({ width: 0, height: 0 })
-  const [floor, setFloor] = useState(0)
-  const [players, setPlayers] = useState<MapPlayer[]>([])
-  const [playersLoading, setPlayersLoading] = useState(true)
-  const [gameIntegrationConnected, setGameIntegrationConnected] = useState(false)
-  const [gameIntegrationLoading, setGameIntegrationLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [floor, setFloorState] = useState(floorRef.current)
+  const [density, setDensity] = useState(() => localStorage.getItem(DENSITY_KEY) === '1')
+  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
+  const [center, setCenter] = useState<{ x: number; y: number } | null>(null)
   const [hasActiveServer, setHasActiveServer] = useState(false)
-  const [rosterCollapsed, setRosterCollapsed] = useState(false)
-  const [selectedPlayer, setSelectedPlayer] = useState<MapPlayer | null>(null)
-  const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null)
-  const [cursorPoint, setCursorPoint] = useState<WorldMapPoint | null>(null)
+  const [integrationConnected, setIntegrationConnected] = useState(false)
+  const [players, setPlayers] = useState<MapPlayer[]>([])
+  const [rosterOpen, setRosterOpen] = useState(false)
+  const [selectedName, setSelectedName] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<WorldMapSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [activeResult, setActiveResult] = useState(0)
+  const [warningsOpen, setWarningsOpen] = useState(false)
 
-  mapInfoRef.current = mapInfo
-  referenceLayerRef.current = referenceLayer(mapInfo)
-  floorRef.current = floor
+  manifestRef.current = manifest
   playersRef.current = players
-  selectedPlayerRef.current = selectedPlayer
-  selectedPoiRef.current = selectedPoi
-  lootResultRef.current = lootResult
+  selectedRef.current = selectedName
+  const selectedPlayer = players.find((player) => player.username === selectedName) ?? null
 
-  const mapFloors = mapFloorRange(mapInfo?.layers ?? [])
-  const floorMin = mapFloors.min
-  const floorMax = mapFloors.max
-  const floorLabelText = floorLabel(floor)
+  // ---------- data ----------
 
-  const requestDraw = useCallback(() => {
-    if (drawFrameRef.current) return
-    drawFrameRef.current = requestAnimationFrame(() => {
-      drawFrameRef.current = 0
-      drawRef.current()
-    })
-  }, [])
-
-  const loadMap = useCallback(async () => {
-    const request = ++mapRequestRef.current
-    setMapLoading(true)
+  const loadManifest = useCallback(async () => {
+    const generation = ++generationRef.current
+    setLoading(true)
     setMapError(null)
-    setLayerError(null)
-    setLayerErrorRetryable(false)
-    setLayerLoading(false)
-    setTileError(false)
-    setPoiLoading(false)
-    setMapInfo(null)
-    mapInfoRef.current = null
-    referenceLayerRef.current = null
-    renderedFloorRef.current = null
-    setPois([])
-    setPoiError(null)
-    setLootTypes([])
-    setLootType('')
-    setLootTypeError(null)
-    setSelectedPoi(null)
-    setLootResult(null)
-    viewerRef.current?.world.removeAll()
-    hasFitMapRef.current = false
     try {
-      const info = await mapApi.resolve()
-      if (!mountedRef.current || request !== mapRequestRef.current) return
-      if (!mapMetadataIsValid(info)) throw new Error('The map provider returned invalid map metadata.')
-      if (info.layers.length === 0) {
-        throw new Error(info.warnings.filter(Boolean).join(' ') || 'No configured map layer is available from the live provider.')
-      }
-      const { min, max } = mapFloorRange(info.layers)
-      const nextFloor = Math.max(min, Math.min(max, floorRef.current))
-      floorRef.current = nextFloor
-      setFloor(nextFloor)
-      setMapInfo(info)
-      setMapError(null)
-      setPoiLoading(true)
-      setPoiError(null)
-      setLootTypeError(null)
-      void Promise.allSettled([mapApi.pois(info.version), mapApi.lootTypes(info.version)]).then(
-        ([poiResult, typeResult]) => {
-          if (!mountedRef.current || request !== mapRequestRef.current) return
-          if (poiResult.status === 'fulfilled') {
-            setPois(poiResult.value.pois)
-            setPoiError(null)
-          } else {
-            setPois([])
-            setPoiError(getUserErrorMessage(poiResult.reason, 'POI search is unavailable.'))
-          }
-          if (typeResult.status === 'fulfilled') {
-            setLootTypes(typeResult.value.types)
-            setLootType((current) => current || typeResult.value.types[0]?.id || '')
-            setLootTypeError(null)
-          } else {
-            setLootTypes([])
-            setLootType('')
-            setLootTypeError(getUserErrorMessage(typeResult.reason, 'Container location search is unavailable.'))
-          }
-          setPoiLoading(false)
-        },
-      )
+      const next = await mapApi.manifest()
+      if (generation !== generationRef.current) return
+      roomsCacheRef.current.clear()
+      densityLoadedRef.current = null
+      setManifest((previous) => (previous?.key === next.key ? previous : next))
+      if (next.folders.length === 0) setMapError(next.warnings.join(' ') || 'No map files were found for this server.')
     } catch (error) {
-      if (!mountedRef.current || request !== mapRequestRef.current) return
-      setMapError(getUserErrorMessage(error, 'Live map provider metadata is unavailable.'))
+      if (generation === generationRef.current) setMapError(getUserErrorMessage(error, 'The map data could not be loaded.'))
     } finally {
-      if (mountedRef.current && request === mapRequestRef.current) setMapLoading(false)
+      if (generation === generationRef.current) setLoading(false)
     }
   }, [])
 
   const refreshActiveServer = useCallback(async () => {
-    const generation = serverGenerationRef.current
     try {
-      const result = await serversApi.getResolvedActive()
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setHasActiveServer(!!result.server)
-      }
+      setHasActiveServer(!!(await serversApi.getResolvedActive()).server)
     } catch {
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setHasActiveServer(false)
-      }
+      setHasActiveServer(false)
     }
   }, [])
 
-  const fetchPlayerPositions = useCallback(async () => {
+  const fetchPlayers = useCallback(async () => {
     if (!hasActiveServer) {
       setPlayers([])
-      setSelectedPlayer(null)
-      setGameIntegrationConnected(false)
-      setPlayersLoading(false)
+      setIntegrationConnected(false)
       return
     }
     if (!playersGateRef.current.enter()) return
-    const generation = serverGenerationRef.current
+    const generation = generationRef.current
     try {
       const response = await gameIntegrationApi.getServerInfo()
-      if (!mountedRef.current || generation !== serverGenerationRef.current) return
-      const rawPlayers = response.success ? response.data?.players ?? [] : null
-      if (rawPlayers) {
-        setGameIntegrationConnected(true)
-        setPlayers((previous) => {
-          const previousByName = new Map(previous.map((player) => [player.username, player]))
-          const now = performance.now()
-          return rawPlayers.flatMap((player) => {
-            if (
-              typeof player.username !== 'string' ||
-              typeof player.x !== 'number' || !Number.isFinite(player.x) ||
-              typeof player.y !== 'number' || !Number.isFinite(player.y)
-            ) return []
-            const old = previousByName.get(player.username)
-            return [{
-              username: player.username,
-              displayName: player.displayName || player.username,
-              x: player.x,
-              y: player.y,
-              z: typeof player.z === 'number' && Number.isFinite(player.z) ? player.z : 0,
-              health: player.health?.overallBodyHealth,
-              isAlive: player.isAlive,
-              isInfected: player.health?.isInfected,
-              accessLevel: player.accessLevel,
-              hunger: player.stats?.hunger,
-              thirst: player.stats?.thirst,
-              fatigue: player.stats?.fatigue,
-              previousX: old?.x ?? player.x,
-              previousY: old?.y ?? player.y,
-              movedAt: old && (old.x !== player.x || old.y !== player.y) ? now : now - 500,
-            }]
-          })
+      if (generation !== generationRef.current) return
+      const raw = response.success ? response.data?.players ?? [] : null
+      setIntegrationConnected(raw !== null)
+      setPlayers((previous) => {
+        if (!raw) return []
+        const byName = new Map(previous.map((player) => [player.username, player]))
+        const now = performance.now()
+        return raw.flatMap((player) => {
+          if (typeof player.username !== 'string' || typeof player.x !== 'number' || typeof player.y !== 'number' || !Number.isFinite(player.x + player.y)) return []
+          const old = byName.get(player.username)
+          const moved = !!old && (old.x !== player.x || old.y !== player.y)
+          const from = old ? interpolate(old, now) : { x: player.x, y: player.y }
+          return [{
+            username: player.username,
+            displayName: player.displayName || player.username,
+            x: player.x,
+            y: player.y,
+            z: typeof player.z === 'number' && Number.isFinite(player.z) ? Math.round(player.z) : 0,
+            health: player.health?.overallBodyHealth,
+            isAlive: player.isAlive,
+            isInfected: player.health?.isInfected,
+            accessLevel: player.accessLevel,
+            hunger: player.stats?.hunger,
+            thirst: player.stats?.thirst,
+            fatigue: player.stats?.fatigue,
+            previousX: moved ? from.x : player.x,
+            previousY: moved ? from.y : player.y,
+            movedAt: moved ? now : now - MOVE_MS,
+          }]
         })
-      } else {
-        setPlayers([])
-        setSelectedPlayer(null)
-        setGameIntegrationConnected(false)
-      }
+      })
     } catch {
-      if (mountedRef.current && generation === serverGenerationRef.current) {
+      if (generation === generationRef.current) {
         setPlayers([])
-        setSelectedPlayer(null)
-        setGameIntegrationConnected(false)
+        setIntegrationConnected(false)
       }
     } finally {
       playersGateRef.current.leave()
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setPlayersLoading(false)
-      }
     }
   }, [hasActiveServer])
-
-  const refreshGameIntegrationStatus = useCallback(async () => {
-    if (!hasActiveServer) {
-      setGameIntegrationConnected(false)
-      setGameIntegrationLoading(false)
-      return
-    }
-    const generation = serverGenerationRef.current
-    setGameIntegrationLoading(true)
-    try {
-      const result = await gameIntegrationApi.getStatus()
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setGameIntegrationConnected(result.modConnected === true)
-      }
-    } catch {
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setGameIntegrationConnected(false)
-      }
-    } finally {
-      if (mountedRef.current && generation === serverGenerationRef.current) {
-        setGameIntegrationLoading(false)
-      }
-    }
-  }, [hasActiveServer])
-
-  useEffect(() => {
-    mountedRef.current = true
-    void loadMap()
-    void refreshActiveServer()
-    return () => {
-      mountedRef.current = false
-    }
-  }, [loadMap, refreshActiveServer])
 
   const resetForServerChange = useCallback(() => {
-    serverGenerationRef.current++
-    setHasActiveServer(false)
+    generationRef.current++
     setPlayers([])
-    setPlayersLoading(true)
-    setGameIntegrationConnected(false)
-    setSelectedPlayer(null)
-    setSelectedPoi(null)
-    setPoiSearch('')
+    setSelectedName(null)
     setContextMenu(null)
-    setCursorPoint(null)
-    setFloor(0)
-    floorRef.current = 0
-    setMapInfo(null)
-    setPois([])
-    setPoiError(null)
-    setPoiLoading(false)
-    setLootTypes([])
-    setLootType('')
-    setLootTypeError(null)
-    setLootResult(null)
-    setMapError(null)
-    lastSharedPointRef.current = ''
-    hasFitMapRef.current = false
+    setQuery('')
+    setResults([])
     void refreshActiveServer()
-    void loadMap()
-  }, [loadMap, refreshActiveServer])
+    void loadManifest()
+  }, [loadManifest, refreshActiveServer])
+
+  useEffect(() => {
+    void loadManifest()
+    void refreshActiveServer()
+  }, [loadManifest, refreshActiveServer])
 
   useEffect(() => {
     if (!socket) return
@@ -459,1127 +254,625 @@ export default function WorldMap() {
   }, [routeSearch.server, resetForServerChange])
 
   useEffect(() => {
-    void fetchPlayerPositions()
-    void refreshGameIntegrationStatus()
-  }, [fetchPlayerPositions, refreshGameIntegrationStatus])
-
-  useEffect(() => {
+    void fetchPlayers()
     if (!hasActiveServer) return
     const interval = window.setInterval(() => {
-      if (document.visibilityState !== 'hidden') void fetchPlayerPositions()
+      if (document.visibilityState !== 'hidden') void fetchPlayers()
     }, PLAYER_POLL_MS)
     return () => window.clearInterval(interval)
-  }, [fetchPlayerPositions, hasActiveServer])
+  }, [fetchPlayers, hasActiveServer])
 
-  useEffect(() => {
-    const area = mapWrapperRef.current
-    if (!area) return
-    const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0]?.contentRect ?? { width: 0, height: 0 }
-      setMapSize({ width: Math.floor(width), height: Math.floor(height) })
-      requestDraw()
-      viewerRef.current?.forceResize()
+  // ---------- map ----------
+
+  const source = useCallback((id: string) => mapRef.current?.getSource(id) as GeoJSONSource | undefined, [])
+
+  const drawPlayers = useCallback(() => {
+    const now = performance.now()
+    source('players')?.setData({
+      type: 'FeatureCollection',
+      features: playersRef.current.map((player) => {
+        const { x, y } = interpolate(player, now)
+        const here = player.z === floorRef.current
+        return {
+          type: 'Feature' as const,
+          properties: {
+            name: player.username,
+            label: here ? player.displayName : `${player.displayName} · ${player.z > 0 ? '+' : ''}${player.z}`,
+            state: playerState(player),
+            here,
+            selected: player.username === selectedRef.current,
+          },
+          geometry: { type: 'Point' as const, coordinates: toLngLat(x, y) },
+        }
+      }),
     })
-    observer.observe(area)
-    return () => observer.disconnect()
-  }, [requestDraw])
+  }, [source])
 
-  useEffect(() => {
-    const host = viewerHostRef.current
-    if (!host) return
-    const viewer = OpenSeadragon({
-        element: host,
-        drawer: 'canvas',
-        crossOriginPolicy: false,
-        showNavigationControl: false,
-        showNavigator: false,
-        keyboardNavEnabled: false,
-        mouseNavEnabled: true,
-        autoResize: true,
-        maxZoomPixelRatio: 4,
-        animationTime: 0.18,
-        gestureSettingsMouse: {
-          dragToPan: true,
-          scrollToZoom: true,
-          clickToZoom: false,
-          dblClickToZoom: false,
-          zoomToRefPoint: true,
-        },
-        gestureSettingsTouch: {
-          dragToPan: true,
-          pinchToZoom: true,
-          flickEnabled: true,
-          zoomToRefPoint: true,
-        },
-      })
-    viewerRef.current = viewer
-    viewer.canvas.tabIndex = 0
-    viewer.canvas.setAttribute('role', 'application')
-    viewer.canvas.setAttribute('aria-label', 'World map. Use arrow keys to pan and plus or minus to zoom. Right-click for map actions.')
-    viewer.canvas.classList.add('outline-none', 'focus-visible:ring-2', 'focus-visible:ring-primary/50')
+  const showFloor = useCallback(async (next: number) => {
+    const map = mapRef.current
+    const current = manifestRef.current
+    if (!map || !current || !mapReadyRef.current) return
+    applyFloorStyle(map, current, next)
+    drawPlayers()
+    const cacheKey = `${current.key}:${next}`
+    let rooms = roomsCacheRef.current.get(cacheKey)
+    if (!rooms) {
+      rooms = mapApi.rooms(current.key, next).then(roomsToLngLat)
+      roomsCacheRef.current.set(cacheKey, rooms)
+      rooms.catch(() => roomsCacheRef.current.delete(cacheKey))
+    }
+    try {
+      const data = await rooms
+      if (mapRef.current === map && floorRef.current === next) source('rooms')?.setData(data)
+    } catch (error) {
+      toast({ title: 'Rooms could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), variant: 'destructive' })
+    }
+  }, [drawPlayers, source, toast])
 
-    const worldAtPixel = (x: number, y: number): WorldMapPoint | null => {
-        const reference = referenceLayerRef.current
-        if (!reference) return null
-        const point = viewer!.viewport.pointFromPixel(new OpenSeadragon.Point(x, y), true)
-        return imageToWorld(
-          { x: point.x * reference.width, y: point.y * reference.width },
-          reference,
-          floorRef.current,
-        )
-    }
-    const pixelForWorld = (point: WorldMapPoint): OpenSeadragon.Point | null => {
-        const reference = referenceLayerRef.current
-        if (!reference) return null
-        const image = worldToImage(point, reference)
-        return viewer!.viewport.pixelFromPoint(
-          new OpenSeadragon.Point(image.x / reference.width, image.y / reference.width),
-          true,
-        )
-    }
-    const playerAtPixel = (x: number, y: number): MapPlayer | null => {
-        let result: MapPlayer | null = null
-        let distance = MIN_MARKER_HIT_RADIUS
-        for (const player of playersRef.current) {
-          if (Math.round(player.z) !== floorRef.current) continue
-          const point = pixelForWorld(interpolatePlayer(player, performance.now()))
-          if (!point) continue
-          const next = Math.hypot(x - point.x, y - point.y)
-          if (next < distance) {
-            result = player
-            distance = next
-          }
-        }
-        return result
-    }
-
-      const pointerMove = (event: PointerEvent) => {
-        const rect = viewer!.canvas.getBoundingClientRect()
-        const x = event.clientX - rect.left
-        const y = event.clientY - rect.top
-        setCursorPoint(worldAtPixel(x, y))
-        setHoveredPlayer(playerAtPixel(x, y)?.username ?? null)
-        requestDraw()
-      }
-      const pointerLeave = () => {
-        setCursorPoint(null)
-        setHoveredPlayer(null)
-        requestDraw()
-    }
-    const context = (event: MouseEvent) => {
-        if ((event.target as HTMLElement).closest('button, input, select')) return
-        event.preventDefault()
-        const rect = viewer!.canvas.getBoundingClientRect()
-        const pageRect = mapWrapperRef.current?.getBoundingClientRect()
-        if (!pageRect) return
-        const localX = event.clientX - rect.left
-        const localY = event.clientY - rect.top
-        const point = worldAtPixel(localX, localY)
-        if (!point) return
-        setContextMenu({
-          x: event.clientX - pageRect.left,
-          y: event.clientY - pageRect.top,
-          point,
-          player: playerAtPixel(localX, localY) ?? undefined,
-        })
-    }
-    const keydown = (event: KeyboardEvent) => {
-        if (event.target instanceof HTMLElement && event.target.closest('button, input, select')) return
-        const step = viewer!.viewport.deltaPointsFromPixels(new OpenSeadragon.Point(40, 40))
-        switch (event.key) {
-          case 'ArrowUp':
-            event.preventDefault()
-            viewer!.viewport.panBy(new OpenSeadragon.Point(0, -step.y), true)
-            break
-          case 'ArrowDown':
-            event.preventDefault()
-            viewer!.viewport.panBy(new OpenSeadragon.Point(0, step.y), true)
-            break
-          case 'ArrowLeft':
-            event.preventDefault()
-            viewer!.viewport.panBy(new OpenSeadragon.Point(-step.x, 0), true)
-            break
-          case 'ArrowRight':
-            event.preventDefault()
-            viewer!.viewport.panBy(new OpenSeadragon.Point(step.x, 0), true)
-            break
-          case '+':
-          case '=':
-            event.preventDefault()
-            viewer!.viewport.zoomBy(1.4, undefined, true)
-            break
-          case '-':
-            event.preventDefault()
-            viewer!.viewport.zoomBy(1 / 1.4, undefined, true)
-            break
-          case 'Escape':
-            setContextMenu(null)
-            setSelectedPlayer(null)
-            break
-        }
-    }
-
-    viewer.canvas.addEventListener('pointermove', pointerMove)
-    viewer.canvas.addEventListener('pointerleave', pointerLeave)
-    viewer.canvas.addEventListener('contextmenu', context)
-    viewer.canvas.addEventListener('keydown', keydown)
-    viewer.addHandler('canvas-click', (event) => {
-      if (!event.quick) return
-      setSelectedPlayer(playerAtPixel(event.position.x, event.position.y))
-      setContextMenu(null)
-    })
-    viewer.addHandler('animation', requestDraw)
-    viewer.addHandler('viewport-change', requestDraw)
-    viewer.addHandler('resize', requestDraw)
-    viewer.addHandler('tile-loaded', requestDraw)
-    setViewerReady(true)
-    requestDraw()
-
-    viewer.addHandler('before-destroy', () => {
-      viewer.canvas.removeEventListener('pointermove', pointerMove)
-      viewer.canvas.removeEventListener('pointerleave', pointerLeave)
-      viewer.canvas.removeEventListener('contextmenu', context)
-      viewer.canvas.removeEventListener('keydown', keydown)
-    })
-    return () => {
-      setViewerReady(false)
-      if (viewerRef.current === viewer) viewerRef.current = null
-      viewer.destroy()
-    }
-  }, [requestDraw])
-
-  useEffect(() => {
-    const viewer = viewerRef.current
-    if (!viewerReady || !viewer || !mapInfo) return
-    const reference = referenceLayer(mapInfo)
-    if (!reference) return
-    referenceLayerRef.current = reference
-
-    const generation = ++layerGenerationRef.current
-    const previousStatus = tileLoadStatusRef.current
-    if (previousStatus.timer !== null) window.clearTimeout(previousStatus.timer)
-    tileLoadStatusRef.current = { generation, failures: 0, successes: 0, timer: null }
-    setTileError(false)
-    setLayerError(null)
-    setLayerErrorRetryable(false)
-    setLayerLoading(false)
-    renderedFloorRef.current = null
-    const hadView = hasFitMapRef.current
-    const center = hadView ? viewer.viewport.getCenter(true) : null
-    const zoom = hadView ? viewer.viewport.getZoom(true) : null
-
-    const allVisibleLayers = layersForFloor(mapInfo.layers, floor)
-    if (allVisibleLayers.length === 0) {
-      viewer.world.removeAll()
-      setMapError(`No configured map layer contains ${floorLabel(floor)}.`)
-      return
-    }
-    setMapError(null)
-    const unsupportedLayers = floor !== 0
-      ? allVisibleLayers.filter((layer) => !layer.composite)
-      : []
-    const visibleLayers = allVisibleLayers.filter((layer) => !unsupportedLayers.includes(layer))
-    if (unsupportedLayers.length > 0) {
-      setLayerError(`Some configured layers do not provide validated composite tiles for ${floorLabel(floor)} and were skipped.`)
-    }
-    if (visibleLayers.length === 0) {
-      viewer.world.removeAll()
-      return
-    }
-
-    const cacheKey = (layer: WorldMapLayer) => `${mapInfo.version}\u0000${layer.id}`
-    const formatKey = (layer: WorldMapLayer, value: number) => `${cacheKey(layer)}\u0000${value}`
-    const ensureCoverage = (layer: WorldMapLayer): Promise<LayerCoverage> => {
-      const key = cacheKey(layer)
-      const cached = layerCoverageRef.current.get(key)
-      if (cached) return Promise.resolve(cached)
-      const existing = coverageRequestsRef.current.get(key)
-      if (existing) return existing
-      const request = mapApi.coverage(mapInfo.version, layer.id).then((coverage) => {
-        if (!mapCoverageIsValid(coverage)) throw new Error('The map provider returned invalid floor coverage.')
-        const value = { ground: coverage.ground, tiles: indexLayerCoverage(coverage) }
-        layerCoverageRef.current.set(key, value)
-        return value
-      }).finally(() => coverageRequestsRef.current.delete(key))
-      coverageRequestsRef.current.set(key, request)
-      return request
-    }
-    const ensureFloorFormat = (layer: WorldMapLayer, requestedFloor: number): Promise<string> => {
-      if (requestedFloor === 0) return Promise.resolve(layer.format)
-      const key = formatKey(layer, requestedFloor)
-      const cached = layerFormatsRef.current.get(key)
-      if (cached) return Promise.resolve(cached)
-      const existing = formatRequestsRef.current.get(key)
-      if (existing) return existing
-      const request = mapApi.floor(mapInfo.version, layer.id, requestedFloor).then(({ format }) => {
-        if (typeof format !== 'string' || !/^[a-z0-9]+$/i.test(format)) {
-          throw new Error('The map provider returned an invalid tile format.')
-        }
-        layerFormatsRef.current.set(key, format)
-        return format
-      }).finally(() => formatRequestsRef.current.delete(key))
-      formatRequestsRef.current.set(key, request)
-      return request
-    }
-
-    const pending = new Set<Promise<unknown>>()
-    for (const layer of visibleLayers) {
-      const key = cacheKey(layer)
-      const needsCoverage = layer.composite && floor > 0
-      const coverage = needsCoverage ? layerCoverageRef.current.get(key) : undefined
-      if (needsCoverage && !coverage) {
-        const request = ensureCoverage(layer)
-        pending.add(request)
-        continue
-      }
-      const floors = coverage
-        ? availableTileFloors(coverage.tiles, coverage.ground, floor)
-        : floor === 0 ? [] : [floor]
-      for (const requestedFloor of floors) {
-        if (requestedFloor === 0) continue
-        if (requestedFloor < layer.minFloor || requestedFloor > layer.maxFloor) {
-          setLayerError(`The map provider reported unsupported ${floorLabel(requestedFloor)} tile coverage for ${layer.name}.`)
-          setLayerErrorRetryable(true)
-          return
-        }
-        const format = layerFormatsRef.current.get(formatKey(layer, requestedFloor))
-        if (!format) pending.add(ensureFloorFormat(layer, requestedFloor))
-      }
-    }
-    if (pending.size > 0) {
-      setLayerLoading(true)
-      void Promise.all(pending).then(() => {
-        if (generation === layerGenerationRef.current) setLayerMetadataRevision((value) => value + 1)
-      }).catch((error: unknown) => {
-        if (generation !== layerGenerationRef.current) return
-        viewer.world.removeAll()
-        setLayerError(getUserErrorMessage(error, 'Floor map data is unavailable.'))
-        setLayerErrorRetryable(true)
-      }).finally(() => {
-        if (generation === layerGenerationRef.current) setLayerLoading(false)
-      })
-      return () => {
-        const status = tileLoadStatusRef.current
-        if (status.generation === generation && status.timer !== null) {
-          window.clearTimeout(status.timer)
-          status.timer = null
-        }
-      }
-    }
-
-    viewer.world.removeAll()
-    let remaining = visibleLayers.length
-    const placements = visibleLayers.map((layer) => placeLayer(layer, reference))
-    const recordTileLoad = (loaded: boolean) => {
-      const status = tileLoadStatusRef.current
-      if (status.generation !== generation) return
-      if (loaded) {
-        status.successes++
-        if (status.timer !== null) window.clearTimeout(status.timer)
-        status.timer = null
-        setTileError(false)
-        return
-      }
-      status.failures++
-      if (status.successes > 0 || status.failures < 3 || status.timer !== null) return
-      status.timer = window.setTimeout(() => {
-        const current = tileLoadStatusRef.current
-        if (current.generation === generation && current.successes === 0 && current.failures >= 3) {
-          setTileError(true)
-        }
-        current.timer = null
-      }, 1800)
-    }
-
-    for (const [index, layer] of visibleLayers.entries()) {
-      const maxLevel = Math.ceil(Math.log2(Math.max(layer.width, layer.height)))
-      const coverage = layer.composite && floor > 0
-        ? layerCoverageRef.current.get(cacheKey(layer))
-        : undefined
-      const tileFloorAt = (level: number, x: number, y: number) => coverage
-        ? tileFloorFor(coverage.tiles, coverage.ground, floor, level, x, y)
-        : floor
-      const tileFormatAt = (requestedFloor: number) => requestedFloor === 0
-        ? layer.format
-        : layerFormatsRef.current.get(formatKey(layer, requestedFloor))
-      const tileSource = new OpenSeadragon.TileSource({
-        ready: true,
-        width: layer.width,
-        height: layer.height,
-        tileSize: layer.tileSize,
-        tileOverlap: 0,
-        minLevel: 0,
-        maxLevel,
-      })
-      const tileExists = tileSource.tileExists.bind(tileSource)
-      tileSource.tileExists = (level, x, y) => {
-        if (!tileExists(level, x, y)) return false
-        const requestedFloor = tileFloorAt(level, x, y)
-        return requestedFloor !== null && !!tileFormatAt(requestedFloor)
-      }
-      tileSource.getTileUrl = (level, x, y) => {
-        const requestedFloor = tileFloorAt(level, x, y) ?? floor
-        const format = tileFormatAt(requestedFloor)
-        return format ? buildTileUrl(layer, requestedFloor, level, x, y, format) : ''
-      }
-      tileSource.downloadTileStart = (job) => {
-        const image = new window.Image()
-        image.referrerPolicy = 'no-referrer'
-        job.userData = { image }
-        image.onload = () => {
-          recordTileLoad(true)
-          job.finish(image, null, 'image')
-        }
-        image.onerror = () => {
-          recordTileLoad(false)
-          job.fail('Map tile could not be loaded.', null)
-        }
-        image.src = job.src
-      }
-      tileSource.downloadTileAbort = (job) => {
-        const image = (job.userData as { image?: HTMLImageElement } | null)?.image
-        if (!image) return
-        image.onload = null
-        image.onerror = null
-        image.src = ''
-      }
-
-      viewer.addTiledImage({
-        tileSource,
-        x: placements[index].x,
-        y: placements[index].y,
-        width: placements[index].width,
-        height: placements[index].height,
-        index,
-        success: (event) => {
-          if (generation !== layerGenerationRef.current) return
-          if (layer.id !== 'base' && layer.cellRects.length > 0) {
-            const item = (event as Event & { item?: OpenSeadragon.TiledImage }).item
-            const polygons = layerClipPolygons(layer, floor).map((polygon) =>
-              polygon.map((point) => new OpenSeadragon.Point(point.x, point.y)),
-            )
-            item?.setCroppingPolygons(polygons)
-          }
-          remaining--
-          if (remaining !== 0) return
-          const left = Math.min(...placements.map((item) => item.x))
-          const top = Math.min(...placements.map((item) => item.y))
-          const right = Math.max(...placements.map((item) => item.x + item.width))
-          const bottom = Math.max(...placements.map((item) => item.y + item.height))
-          if (center && zoom !== null) {
-            viewer.viewport.panTo(center, true)
-            viewer.viewport.zoomTo(zoom, undefined, true)
-          } else {
-            viewer.viewport.fitBounds(
-              new OpenSeadragon.Rect(left, top, right - left, bottom - top),
-              true,
-            )
-            hasFitMapRef.current = true
-          }
-          renderedFloorRef.current = floor
-          setRenderedGeneration((value) => value + 1)
-          requestDraw()
-        },
-      })
-    }
-    return () => {
-      const status = tileLoadStatusRef.current
-      if (status.generation === generation && status.timer !== null) {
-        window.clearTimeout(status.timer)
-        status.timer = null
-      }
-    }
-  }, [mapInfo, floor, viewerReady, layerMetadataRevision, tileRetryNonce, requestDraw])
-
-  const matchingPois = useMemo(() => {
-    const query = normalizeMapSearch(poiSearch)
-    if (!query) return []
-    return pois
-      .filter((poi) =>
-        normalizeMapSearch(`${poi.name} ${poi.tags.join(' ')}`).includes(query),
-      )
-      .slice(0, 30)
-  }, [poiSearch, pois])
-
-  const setMapFloor = useCallback((value: number) => {
-    const mapFloors = mapFloorRange(mapInfoRef.current?.layers ?? [])
-    const next = Math.max(mapFloors.min, Math.min(mapFloors.max, value))
+  const setFloor = useCallback((value: number) => {
+    const range = manifestRef.current?.floors ?? { min: 0, max: 0 }
+    const next = Math.max(range.min, Math.min(range.max, value))
     if (next === floorRef.current) return
     floorRef.current = next
-    renderedFloorRef.current = null
-    setFloor(next)
-    setLootResult(null)
+    setFloorState(next)
     setContextMenu(null)
-    setHoveredPlayer(null)
-    requestDraw()
-  }, [requestDraw])
+    void showFloor(next)
+  }, [showFloor])
 
-  const panToPoint = useCallback((point: WorldMapPoint) => {
-    const viewer = viewerRef.current
-    const reference = referenceLayerRef.current
-    if (!viewer || !reference) return
-    const mapFloors = mapFloorRange(mapInfoRef.current?.layers ?? [])
-    const nextFloor = Math.max(mapFloors.min, Math.min(mapFloors.max, Math.round(point.z)))
-    if (nextFloor !== floorRef.current) setMapFloor(nextFloor)
-    const image = worldToImage({ ...point, z: nextFloor }, reference)
-    const target = new OpenSeadragon.Point(
-      image.x / reference.width,
-      image.y / reference.width,
-    )
-    viewer.viewport.zoomTo(
-      Math.max(viewer.viewport.getZoom(true), viewer.viewport.getHomeZoom() * 5),
-      target,
-      true,
-    )
-    viewer.viewport.panTo(target, true)
-    requestDraw()
-  }, [requestDraw, setMapFloor])
+  const flyTo = useCallback((point: { x: number; y: number }, zoom?: number) => {
+    const map = mapRef.current
+    if (!map) return
+    map.flyTo({ center: toLngLat(point.x, point.y), zoom: Math.max(map.getZoom(), zoom ?? 9.5), speed: 1.6 })
+  }, [])
+
+  // Create the map once per manifest. Everything else updates its sources.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !manifest || manifest.folders.length === 0) return
+    const bounds = manifest.bounds ?? [0, 0, CELL, CELL]
+    const map = new MapLibreMap({
+      container,
+      style: createMapStyle(manifest, (folder) => mapApi.tileUrl(manifest.key, folder)),
+      center: toLngLat((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2),
+      zoom: 3,
+      minZoom: 2,
+      maxZoom: 12,
+      renderWorldCopies: false,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      attributionControl: false,
+      transformRequest: (url) => {
+        const token = getAccessToken()
+        // Only panel requests carry the token; tile URLs arrive relative.
+        return token && new URL(url, window.location.href).origin === window.location.origin
+          ? { url, headers: { Authorization: `Bearer ${token}` } }
+          : { url }
+      },
+    })
+    map.touchZoomRotate.disableRotation()
+    mapRef.current = map
+
+    const pointAt = (lngLat: LngLat) => fromLngLat(lngLat.lng, lngLat.lat)
+    const playerAt = (point: PointLike) => {
+      const hit = map.queryRenderedFeatures(point, { layers: ['players'] })[0]
+      return hit ? playersRef.current.find((player) => player.username === hit.properties.name) : undefined
+    }
+
+    map.on('load', () => {
+      mapReadyRef.current = true
+      setMapReady(true)
+      void mapApi.features(manifest.key).then((data) => source('features')?.setData(featuresToLngLat(data))).catch((error) => {
+        toast({ title: 'Map labels could not be loaded', description: getUserErrorMessage(error, 'Try reloading the map.'), variant: 'destructive' })
+      })
+      void showFloor(floorRef.current)
+      const shared = routeSearch
+      if (typeof shared.x === 'number' && typeof shared.y === 'number') {
+        map.jumpTo({ center: toLngLat(shared.x, shared.y), zoom: typeof shared.zoom === 'number' ? shared.zoom : 9.5 })
+      } else {
+        map.fitBounds([toLngLat(bounds[0], bounds[3]), toLngLat(bounds[2], bounds[1])], { padding: 24, animate: false })
+      }
+      setCenter(pointAt(map.getCenter()))
+    })
+    map.on('moveend', () => setCenter(pointAt(map.getCenter())))
+    map.on('mousemove', (event) => {
+      setCursor(pointAt(event.lngLat))
+      map.getCanvas().style.cursor = playerAt(event.point) ? 'pointer' : ''
+    })
+    map.on('mouseout', () => setCursor(null))
+    map.on('click', (event) => {
+      setContextMenu(null)
+      setSelectedName(playerAt(event.point)?.username ?? null)
+    })
+    map.on('contextmenu', (event) => {
+      const { x, y } = pointAt(event.lngLat)
+      setContextMenu({
+        left: event.point.x,
+        top: event.point.y,
+        point: { x, y, z: floorRef.current },
+        player: playerAt(event.point),
+      })
+    })
+    map.on('movestart', () => setContextMenu(null))
+
+    // Shift + wheel changes floor instead of zooming, like the in-game map.
+    const wheel = (event: WheelEvent) => {
+      if (!event.shiftKey) return
+      event.preventDefault()
+      event.stopPropagation()
+      setFloor(floorRef.current + (event.deltaY < 0 ? 1 : -1))
+    }
+    container.addEventListener('wheel', wheel, { capture: true, passive: false })
+    return () => {
+      container.removeEventListener('wheel', wheel, { capture: true })
+      if (mapRef.current === map) mapRef.current = null
+      mapReadyRef.current = false
+      setMapReady(false)
+      map.remove()
+    }
+    // routeSearch is read once for the initial view; later changes come from the map itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifest, setFloor, showFloor, source, toast])
 
   useEffect(() => {
-    if (!sharedPoint || !mapInfo || !viewerReady || !renderedGeneration) return
-    const key = `${sharedPoint.x},${sharedPoint.y},${sharedPoint.z}`
-    if (lastSharedPointRef.current === key) return
-    const reference = referenceLayer(mapInfo)
-    const viewer = viewerRef.current
-    if (!reference || !viewer) return
-    const mapFloors = mapFloorRange(mapInfo.layers)
-    const nextFloor = Math.max(mapFloors.min, Math.min(mapFloors.max, Math.round(sharedPoint.z)))
-    if (nextFloor !== floorRef.current) {
-      setMapFloor(nextFloor)
-      return
-    }
-    if (renderedFloorRef.current !== nextFloor) return
-    const image = worldToImage({ ...sharedPoint, z: nextFloor }, reference)
-    const target = new OpenSeadragon.Point(image.x / reference.width, image.y / reference.width)
-    viewer.viewport.zoomTo(
-      Math.max(viewer.viewport.getZoom(true), viewer.viewport.getHomeZoom() * 5),
-      target,
-      true,
-    )
-    viewer.viewport.panTo(target, true)
-    lastSharedPointRef.current = key
-  }, [sharedPoint, mapInfo, viewerReady, renderedGeneration, floor, setMapFloor])
+    const map = mapRef.current
+    const current = manifest
+    if (!map || !current || !mapReady) return
+    map.setLayoutProperty('density', 'visibility', density ? 'visible' : 'none')
+    if (!density || densityLoadedRef.current === current.key) return
+    densityLoadedRef.current = current.key
+    mapApi.density(current.key).then((data) => source('density')?.setData(densityToLngLat(data))).catch((error) => {
+      densityLoadedRef.current = null
+      toast({ title: 'Zombie density could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), variant: 'destructive' })
+    })
+  }, [density, manifest, mapReady, source, toast])
 
+  useEffect(() => {
+    localStorage.setItem(DENSITY_KEY, density ? '1' : '0')
+  }, [density])
+
+  // Animate moved players toward their new position, then stop redrawing.
   useEffect(() => {
     let frame = 0
-    const changedPlayers = players.some((player) => performance.now() - player.movedAt < 450)
-    if (!changedPlayers) {
-      requestDraw()
-      return
+    const step = () => {
+      drawPlayers()
+      if (playersRef.current.some((player) => performance.now() - player.movedAt < MOVE_MS)) frame = requestAnimationFrame(step)
     }
-    const animate = () => {
-      requestDraw()
-      if (playersRef.current.some((player) => performance.now() - player.movedAt < 450)) {
-        frame = requestAnimationFrame(animate)
-      }
-    }
-    frame = requestAnimationFrame(animate)
+    step()
     return () => cancelAnimationFrame(frame)
-  }, [players, selectedPlayer, selectedPoi, lootResult, pois, cursorPoint, hoveredPlayer, floor, theme, requestDraw])
+  }, [players, selectedName, drawPlayers])
 
-  const drawMapMarkers = useCallback(() => {
-    const canvas = markerCanvasRef.current
-    const area = mapWrapperRef.current
-    const viewer = viewerRef.current
-    const reference = referenceLayerRef.current
-    if (!canvas || !area) return
-    const width = area.clientWidth
-    const height = area.clientHeight
-    if (!width || !height) return
-    const ratio = window.devicePixelRatio || 1
-    if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
-      canvas.width = Math.floor(width * ratio)
-      canvas.height = Math.floor(height * ratio)
-    }
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const rootStyle = getComputedStyle(document.documentElement)
-    const canvasColor = (token: string, alpha = 1) => {
-      const value = rootStyle.getPropertyValue(token).trim()
-      return value ? `hsl(${value} / ${alpha})` : `rgba(128,128,128,${alpha})`
-    }
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    ctx.clearRect(0, 0, width, height)
-    if (!viewer || !reference || !mapInfoRef.current || renderedFloorRef.current !== floorRef.current) return
-
-    const toPixel = (point: WorldMapPoint) => {
-      const image = worldToImage(point, reference)
-      return viewer.viewport.pixelFromPoint(
-        new OpenSeadragon.Point(image.x / reference.width, image.y / reference.width),
-        true,
-      )
-    }
-
-    const zoomRatio = viewer.viewport.getZoom(true) / viewer.viewport.getHomeZoom()
-    if (zoomRatio > 2) {
-      for (const poi of pois) {
-        if (Math.round(poi.z) !== floorRef.current) continue
-        const point = toPixel(poi)
-        if (point.x < -8 || point.x > width + 8 || point.y < -8 || point.y > height + 8) continue
-        ctx.beginPath()
-        ctx.arc(point.x, point.y, 2.5, 0, Math.PI * 2)
-        ctx.fillStyle = canvasColor('--accent', 0.75)
-        ctx.fill()
-      }
-    }
-
-    const now = performance.now()
-    for (const player of playersRef.current) {
-      if (Math.round(player.z) !== floorRef.current) continue
-      const point = toPixel(interpolatePlayer(player, now))
-      if (point.x < -48 || point.x > width + 48 || point.y < -48 || point.y > height + 48) continue
-      const selected = selectedPlayerRef.current?.username === player.username
-      const hovered = hoveredPlayer === player.username
-      const radius = hovered || selected ? 9 : 7
-      ctx.beginPath()
-      ctx.arc(point.x, point.y, radius + 2, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(0,0,0,0.72)'
-      ctx.fill()
-      ctx.beginPath()
-      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-      ctx.fillStyle = canvasColor(playerColorToken(player), 0.96)
-      ctx.fill()
-      if (player.isInfected && player.isAlive !== false) {
-        ctx.beginPath()
-        ctx.setLineDash([2, 2])
-        ctx.arc(point.x, point.y, radius + 4, 0, Math.PI * 2)
-        ctx.strokeStyle = canvasColor('--destructive', 0.9)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-      if (player.isAlive === false) {
-        ctx.strokeStyle = canvasColor('--foreground', 0.9)
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.moveTo(point.x - 3, point.y - 3)
-        ctx.lineTo(point.x + 3, point.y + 3)
-        ctx.moveTo(point.x + 3, point.y - 3)
-        ctx.lineTo(point.x - 3, point.y + 3)
-        ctx.stroke()
-      }
-      if (selected || hovered || zoomRatio > 4) {
-        const label = player.displayName || player.username
-        ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.lineWidth = 3
-        ctx.strokeStyle = 'rgba(0,0,0,0.8)'
-        ctx.strokeText(label, point.x, point.y - radius - 5)
-        ctx.fillStyle = canvasColor('--foreground')
-        ctx.fillText(label, point.x, point.y - radius - 5)
-      }
-      if (player.health !== undefined && zoomRatio > 2 && player.isAlive !== false) {
-        const barWidth = 24
-        const x = point.x - barWidth / 2
-        const y = point.y + radius + 5
-        const health = Math.max(0, Math.min(100, player.health)) / 100
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'
-        ctx.fillRect(x, y, barWidth, 3)
-        ctx.fillStyle = health > 0.5
-          ? canvasColor('--success')
-          : health > 0.25
-            ? canvasColor('--warning')
-            : canvasColor('--destructive')
-        ctx.fillRect(x, y, barWidth * health, 3)
-      }
-    }
-
-    const poi = selectedPoiRef.current
-    if (poi && Math.round(poi.z) === floorRef.current) {
-      const point = toPixel(poi)
-      ctx.beginPath()
-      ctx.arc(point.x, point.y, 11, 0, Math.PI * 2)
-      ctx.strokeStyle = canvasColor('--accent', 0.95)
-      ctx.lineWidth = 2
-      ctx.stroke()
-    }
-    const search = lootResultRef.current
-    if (search) {
-      for (const location of search.locations) {
-        if (Math.round(location.z) !== floorRef.current) continue
-        const point = toPixel(location)
-        ctx.beginPath()
-        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2)
-        ctx.fillStyle = canvasColor('--warning', 0.88)
-        ctx.strokeStyle = 'rgba(0,0,0,0.75)'
-        ctx.lineWidth = 2
-        ctx.fill()
-        ctx.stroke()
-      }
-    }
-    if (cursorPoint) {
-      const point = toPixel(cursorPoint)
-      ctx.strokeStyle = canvasColor('--foreground', 0.45)
-      ctx.lineWidth = 1
-      ctx.setLineDash([3, 3])
-      ctx.beginPath()
-      ctx.moveTo(point.x - 9, point.y)
-      ctx.lineTo(point.x + 9, point.y)
-      ctx.moveTo(point.x, point.y - 9)
-      ctx.lineTo(point.x, point.y + 9)
-      ctx.stroke()
-      ctx.setLineDash([])
-    }
-  }, [cursorPoint, hoveredPlayer, pois])
-
-  drawRef.current = drawMapMarkers
+  // ---------- search ----------
 
   useEffect(() => {
-    const onEscape = (event: KeyboardEvent) => {
+    const current = manifest
+    const text = query.trim()
+    if (!current || text.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    const timer = window.setTimeout(() => {
+      const center = mapRef.current?.getCenter()
+      const near = center ? fromLngLat(center.lng, center.lat) : { x: 0, y: 0 }
+      mapApi.search(current.key, text, near).then(({ results: next }) => {
+        setResults(next)
+        setActiveResult(0)
+      }).catch(() => setResults([])).finally(() => setSearching(false))
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [query, manifest])
+
+  const pickResult = useCallback((result: WorldMapSearchResult) => {
+    setQuery(result.label)
+    setResults([])
+    setFloor(result.z)
+    source('highlight')?.setData({
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: toLngLat(result.x, result.y) } }],
+    })
+    flyTo(result, { town: 8, place: 9, street: 9.5, building: 10.5, room: 10.5 }[result.kind])
+    searchInputRef.current?.blur()
+  }, [flyTo, setFloor, source])
+
+  const clearSearch = useCallback(() => {
+    setQuery('')
+    setResults([])
+    source('highlight')?.setData(EMPTY)
+  }, [source])
+
+  // ---------- keyboard ----------
+
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
       if (event.key === 'Escape') {
         setContextMenu(null)
-        setSelectedPlayer(null)
+        setSelectedName(null)
+        setRosterOpen(false)
+        return
       }
+      if (target?.closest('input, textarea, select, [contenteditable="true"]') || event.ctrlKey || event.metaKey || event.altKey) return
+      if (!containerRef.current?.isConnected) return
+      if (event.key === ',') setFloor(floorRef.current - 1)
+      else if (event.key === '.') setFloor(floorRef.current + 1)
+      else if (event.key === '/') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      } else return
     }
-    document.addEventListener('keydown', onEscape)
-    return () => document.removeEventListener('keydown', onEscape)
-  }, [])
+    document.addEventListener('keydown', keydown)
+    return () => document.removeEventListener('keydown', keydown)
+  }, [setFloor])
 
-  useEffect(() => {
-    if (!contextMenu) return
-    const onClick = (event: MouseEvent) => {
-      const menu = mapWrapperRef.current?.querySelector('[role="menu"]')
-      if (menu && !menu.contains(event.target as Node)) setContextMenu(null)
-    }
-    document.addEventListener('mousedown', onClick, true)
-    return () => document.removeEventListener('mousedown', onClick, true)
-  }, [contextMenu])
+  // ---------- actions ----------
 
-  const zoomIn = useCallback(() => {
-    const viewer = viewerRef.current
-    if (!viewer) return
-    viewer.viewport.zoomBy(1.4)
-    viewer.viewport.applyConstraints()
-  }, [])
+  const viewCenter = () => {
+    const center = mapRef.current?.getCenter()
+    return center ? fromLngLat(center.lng, center.lat) : null
+  }
 
-  const zoomOut = useCallback(() => {
-    const viewer = viewerRef.current
-    if (!viewer) return
-    viewer.viewport.zoomBy(1 / 1.4)
-    viewer.viewport.applyConstraints()
-  }, [])
-
-  const fitToPlayers = useCallback(() => {
-    const viewer = viewerRef.current
-    const reference = referenceLayerRef.current
-    const online = playersRef.current.filter((player) => Math.round(player.z) === floorRef.current)
-    if (!viewer || !reference || online.length === 0) {
-      viewer?.viewport.goHome()
-      return
-    }
-    const points = online.map((player) => {
-      const image = worldToImage(player, reference)
-      return { x: image.x / reference.width, y: image.y / reference.width }
-    })
-    const minX = Math.min(...points.map((point) => point.x))
-    const maxX = Math.max(...points.map((point) => point.x))
-    const minY = Math.min(...points.map((point) => point.y))
-    const maxY = Math.max(...points.map((point) => point.y))
-    const padding = Math.max(maxX - minX, maxY - minY, viewer.viewport.getHomeZoom() * 0.15) * 0.6
-    viewer.viewport.fitBounds(
-      new OpenSeadragon.Rect(minX - padding, minY - padding, maxX - minX + padding * 2, maxY - minY + padding * 2),
-      true,
-    )
-  }, [])
-
-  const panToPlayer = useCallback((player: MapPlayer) => {
-    setSelectedPlayer(player)
-    panToPoint(player)
-  }, [panToPoint])
-
-  const setPoi = useCallback((poi: WorldMapPoi) => {
-    setSelectedPoi(poi)
-    setPoiSearch(poi.name)
-    setContextMenu(null)
-    panToPoint(poi)
-  }, [panToPoint])
-
-  const copyCoordinates = useCallback(async (point: WorldMapPoint) => {
-    const text = `${Math.round(point.x)}, ${Math.round(point.y)}, ${Math.round(point.z)}`
-    const ok = await copyText(text)
-    toast(ok
-      ? { title: 'Copied coordinates', description: text }
-      : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
+  const copyLink = useCallback(async () => {
+    const center = viewCenter()
+    const map = mapRef.current
+    if (!center || !map) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('x', String(Math.round(center.x)))
+    url.searchParams.set('y', String(Math.round(center.y)))
+    url.searchParams.set('z', String(floorRef.current))
+    url.searchParams.set('zoom', map.getZoom().toFixed(1))
+    const ok = await copyText(url.toString())
+    toast(ok ? { title: 'Map link copied' } : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
   }, [toast])
 
-  const copyShareLink = useCallback(async () => {
-    const viewer = viewerRef.current
-    const reference = referenceLayerRef.current
-    if (!viewer || !reference) return
-    let point = cursorPoint ?? (selectedPlayer ? { ...selectedPlayer, z: floorRef.current } : null)
-    if (!point) {
-      const center = viewer.viewport.getCenter(true)
-      point = imageToWorld(
-        { x: center.x * reference.width, y: center.y * reference.width },
-        reference,
-        floorRef.current,
-      )
-    }
-    const url = new URL(window.location.href)
-    url.searchParams.set('x', String(Math.round(point.x)))
-    url.searchParams.set('y', String(Math.round(point.y)))
-    url.searchParams.set('z', String(Math.round(floorRef.current)))
-    const ok = await copyText(url.toString())
-    toast(ok
-      ? { title: 'Map link copied', description: `${Math.round(point.x)}, ${Math.round(point.y)}, ${Math.round(floorRef.current)}` }
-      : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
-  }, [cursorPoint, selectedPlayer, toast])
+  const copyCoordinates = useCallback(async (point: WorldMapPoint) => {
+    const text = `${Math.round(point.x)}, ${Math.round(point.y)}, ${point.z}`
+    const ok = await copyText(text)
+    toast(ok ? { title: 'Coordinates copied', description: text } : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
+    setContextMenu(null)
+  }, [toast])
 
-  const teleportPlayerTo = useCallback(async (player: string, point: WorldMapPoint) => {
-    const coordinates = {
-      x: Math.round(point.x),
-      y: Math.round(point.y),
-      z: Math.round(point.z),
+  const fitToPlayers = useCallback(() => {
+    const map = mapRef.current
+    const online = playersRef.current
+    if (!map || online.length === 0) return
+    if (online.length === 1) return flyTo(online[0], 9.5)
+    const box = new LngLatBounds()
+    for (const player of online) box.extend(toLngLat(player.x, player.y))
+    map.fitBounds(box, { padding: 80, maxZoom: 10 })
+  }, [flyTo])
+
+  const focusPlayer = useCallback((player: MapPlayer) => {
+    setSelectedName(player.username)
+    setRosterOpen(false)
+    setFloor(player.z)
+    flyTo(player)
+  }, [flyTo, setFloor])
+
+  const healPlayer = useCallback(async (username: string) => {
+    setActionLoading(`heal:${username}`)
+    setContextMenu(null)
+    try {
+      const result = await gameIntegrationApi.healPlayer(username)
+      if (!result.success) throw new Error(result.error || 'Heal failed.')
+      toast({ title: 'Player healed', description: username })
+      void fetchPlayers()
+    } catch (error) {
+      toast({ title: 'Heal failed', description: getUserErrorMessage(error, 'Could not heal player.'), variant: 'destructive' })
+    } finally {
+      setActionLoading(null)
     }
+  }, [fetchPlayers, toast])
+
+  const enableGodMode = useCallback(async (username: string) => {
+    setActionLoading(`god:${username}`)
+    try {
+      await playersApi.setGodMode(username, true)
+      toast({ title: 'God mode enabled', description: username })
+    } catch (error) {
+      toast({ title: 'God mode failed', description: getUserErrorMessage(error, 'Could not enable god mode.'), variant: 'destructive' })
+    } finally {
+      setActionLoading(null)
+    }
+  }, [toast])
+
+  const teleportPlayer = useCallback(async (username: string, point: WorldMapPoint) => {
+    setContextMenu(null)
+    const target = { x: Math.round(point.x), y: Math.round(point.y), z: point.z }
     const accepted = await confirm({
-      title: `Teleport ${player}?`,
-      description: `Move ${player} to ${coordinates.x}, ${coordinates.y}, floor ${coordinates.z}.`,
+      title: `Teleport ${username}?`,
+      description: `Move ${username} to ${target.x}, ${target.y} on ${floorName(target.z).toLowerCase()}.`,
       confirmLabel: 'Teleport player',
       variant: 'warning',
     })
     if (!accepted) return
-    setActionLoading(player)
+    setActionLoading(`teleport:${username}`)
     try {
-      await playersApi.teleport(player, coordinates)
-      toast({ title: 'Player teleported', description: `${player} → ${coordinates.x}, ${coordinates.y}, ${coordinates.z}` })
-      void fetchPlayerPositions()
+      await playersApi.teleport(username, target)
+      toast({ title: 'Player teleported', description: `${username} → ${target.x}, ${target.y}, ${target.z}` })
+      void fetchPlayers()
     } catch (error) {
-      toast({ title: 'Teleport error', description: getUserErrorMessage(error, 'Could not teleport player.'), variant: 'destructive' })
+      toast({ title: 'Teleport failed', description: getUserErrorMessage(error, 'Could not teleport player.'), variant: 'destructive' })
     } finally {
       setActionLoading(null)
     }
-  }, [confirm, fetchPlayerPositions, toast])
+  }, [confirm, fetchPlayers, toast])
 
-  const searchLootNear = useCallback(async (point: WorldMapPoint) => {
-    if (!mapInfo || !lootType) return
-    setLootLoading(true)
-    setContextMenu(null)
-    try {
-      const result = await mapApi.loot(mapInfo.version, lootType, point)
-      const next = { point, type: lootType, locations: result.points, truncated: result.truncated }
-      setLootResult(next)
-      toast({
-        title: 'Container locations found',
-        description: `${result.points.length} nearby ${lootTypes.find((type) => type.id === lootType)?.name ?? 'container'} locations.`,
-      })
-    } catch (error) {
-      toast({ title: 'Location search failed', description: getUserErrorMessage(error, 'Could not search nearby container locations.'), variant: 'destructive' })
-    } finally {
-      setLootLoading(false)
-    }
-  }, [mapInfo, lootType, lootTypes, toast])
+  // ---------- render ----------
 
-  const handleRefresh = useCallback(() => {
-    void loadMap()
-    void fetchPlayerPositions()
-    void refreshGameIntegrationStatus()
-  }, [loadMap, fetchPlayerPositions, refreshGameIntegrationStatus])
+  const readout = cursor ?? center
+  const floorRange = manifest?.floors ?? { min: 0, max: 0 }
+  const menuFlip = useMemo(() => {
+    const box = containerRef.current?.getBoundingClientRect()
+    return contextMenu && box
+      ? { x: contextMenu.left > box.width / 2, y: contextMenu.top > box.height / 2 }
+      : { x: false, y: false }
+  }, [contextMenu])
 
   return (
     <div className="space-y-4 page-transition">
       <PageHeader
         title="World Map"
-        description="Live player positions and configured map layers. Right-click for actions."
+        description="Right-click the map to move or heal players."
         icon={<MapIcon className="h-5 w-5" />}
         tone="world"
-        actions={
-          <div className="flex items-center gap-2">
-            <GameIntegrationStatusBadge connected={gameIntegrationConnected} loading={gameIntegrationLoading} />
-            <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2" disabled={mapLoading}>
-              {mapLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh
-            </Button>
-          </div>
-        }
       />
 
-      <div
-        ref={mapWrapperRef}
-        className="relative overflow-hidden rounded-md border border-border/60 bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
-      >
-        <span aria-hidden className="pointer-events-none absolute start-0 top-0 z-30 h-3 w-3 border-s-2 border-t-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute end-0 top-0 z-30 h-3 w-3 border-e-2 border-t-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute bottom-0 start-0 z-30 h-3 w-3 border-s-2 border-b-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute bottom-0 end-0 z-30 h-3 w-3 border-e-2 border-b-2 border-primary/50" />
+      <div className="relative overflow-hidden rounded-md border border-border/60 bg-[#14130f]" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
+        <div ref={containerRef} className="h-full w-full" role="application" aria-label="World map. Drag to pan, scroll to zoom, comma and period change floor." />
 
-        <div className="relative w-full" style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
-          <div ref={viewerHostRef} className="absolute inset-0 bg-background" />
-          <canvas ref={markerCanvasRef} aria-hidden className="pointer-events-none absolute inset-0 z-[1] h-full w-full" />
+        {(loading || mapError) && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center p-6" role={mapError ? 'alert' : 'status'}>
+            {mapError ? (
+              <div className="max-w-md rounded-lg border border-border/60 bg-card/95 p-5 text-center shadow-xl">
+                <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-warning" />
+                <p className="text-sm font-medium text-foreground">The map could not be shown</p>
+                <p className="mt-1 text-sm text-muted-foreground">{mapError}</p>
+                <Button size="sm" variant="outline" className="mt-4 gap-2" onClick={() => void loadManifest()}>
+                  <RefreshCw className="h-4 w-4" />Try again
+                </Button>
+              </div>
+            ) : (
+              <span className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white/80"><Loader2 className="h-4 w-4 animate-spin" />Loading map</span>
+            )}
+          </div>
+        )}
 
-          <div className="absolute start-3 top-3 z-10 w-14 overflow-hidden rounded-md border border-border/55 bg-card/85 shadow-lg backdrop-blur-md">
-            <div className="flex items-center justify-center border-b border-border/40 bg-muted/40 px-1 py-1 font-mono text-[9px] uppercase tracking-[0.18em] text-primary/70">
-              <span><span className="text-primary/60">//</span> ctrl</span>
-            </div>
-            <div className="flex flex-col items-center gap-1 p-1">
-              <button type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in" className="flex h-11 w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
-                <ZoomIn className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={zoomOut} aria-label="Zoom out" title="Zoom out" className="flex h-11 w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
-                <ZoomOut className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={fitToPlayers} aria-label="Fit map to online players" title="Fit to players" className="flex h-11 w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
-                <Maximize2 className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="border-y border-border/40 bg-muted/30 px-1 py-1 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">floor</div>
-            <div className="flex flex-col items-center gap-1 p-1">
-              <button type="button" onClick={() => setMapFloor(floor + 1)} disabled={!mapInfo || floor >= floorMax} aria-label="Floor up" className="flex h-11 w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-30">
-                <ChevronUp className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => setMapFloor(0)} aria-label={`Current floor: ${floorLabelText}; click to reset to ground`} title={`${floorLabelText} — click to reset to ground`} className={cn('flex h-11 w-11 items-center justify-center rounded-sm border font-mono text-[10px] font-semibold tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60', floor !== 0 ? 'border-accent/40 bg-accent/20 text-accent' : 'border-border/40 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground')}>
-                {floor === 0 ? <Layers className="h-4 w-4" /> : floor > 0 ? `+${floor}` : floor}
-              </button>
-              <button type="button" onClick={() => setMapFloor(floor - 1)} disabled={!mapInfo || floor <= floorMin} aria-label="Floor down" className="flex h-11 w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-30">
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            </div>
+        {manifest && !mapError && <>
+          {/* Search */}
+          <div className="absolute left-1/2 top-3 z-10 w-[min(26rem,calc(100%-7rem))] -translate-x-1/2">
+            <label className="map-glass flex h-11 items-center gap-2 rounded-full px-4">
+              {searching ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-white/60" /> : <Search className="h-4 w-4 shrink-0 text-white/60" />}
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') { event.preventDefault(); setActiveResult((index) => Math.min(results.length - 1, index + 1)) }
+                  else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveResult((index) => Math.max(0, index - 1)) }
+                  else if (event.key === 'Enter' && results[activeResult]) pickResult(results[activeResult])
+                  else if (event.key === 'Escape') { clearSearch(); event.currentTarget.blur() }
+                }}
+                placeholder="Search towns, streets, buildings and rooms"
+                aria-label="Search the map"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/45 focus:outline-none"
+              />
+              {query && <button type="button" onClick={clearSearch} aria-label="Clear search" className="rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>}
+            </label>
+            {results.length > 0 && (
+              <ul className="map-glass mt-2 max-h-80 overflow-y-auto rounded-xl py-1" role="listbox" aria-label="Search results">
+                {results.map((result, index) => (
+                  <li key={`${result.kind}:${result.label}:${result.x}:${result.y}:${result.z}`} role="option" aria-selected={index === activeResult}>
+                    <button
+                      type="button"
+                      onMouseEnter={() => setActiveResult(index)}
+                      onClick={() => pickResult(result)}
+                      className={cn('flex w-full items-baseline justify-between gap-3 px-4 py-2 text-start text-sm text-white/90', index === activeResult && 'bg-white/10')}
+                    >
+                      <span className="truncate first-letter:uppercase">{result.label}</span>
+                      <span className="shrink-0 text-xs text-white/50">{[result.kind === 'room' && floorName(result.z), result.area].filter(Boolean).join(' · ')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          <div className="absolute start-[4.75rem] top-3 z-10 flex max-w-[calc(100%-5.5rem)] flex-wrap items-start gap-2">
-            <div className="relative w-[min(17rem,calc(100vw-8rem))] rounded-md border border-border/55 bg-card/90 shadow-lg backdrop-blur-md">
-              <label className="flex h-11 items-center gap-2 px-3">
-                {poiLoading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : <Search className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                <Input
-                  type="search"
-                  value={poiSearch}
-                  onChange={(event) => setPoiSearch(event.target.value)}
-                  placeholder="Search places or tags"
-                  aria-label="Search points of interest by name or tag"
-                  className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                />
-                {poiSearch && <button type="button" onClick={() => { setPoiSearch(''); setSelectedPoi(null) }} aria-label="Clear place search" className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/60 hover:text-foreground"><X className="h-4 w-4" /></button>}
-              </label>
-              {poiSearch && (
-                <div className="absolute start-0 top-full mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border/60 bg-card/95 p-1 shadow-xl backdrop-blur-md">
-                  {poiError ? (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">{poiError}</p>
-                  ) : matchingPois.length > 0 ? matchingPois.map((poi) => (
-                    <button key={poi.id} type="button" onClick={() => setPoi(poi)} className="flex min-h-11 w-full items-start gap-2 rounded px-2.5 py-2 text-start text-xs hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
-                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-foreground">{poi.name}</span>
-                        {poi.tags.length > 0 && <span className="block truncate text-[10px] text-muted-foreground">{poi.tags.join(' · ')}</span>}
-                      </span>
-                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">{Math.round(poi.x)}, {Math.round(poi.y)}</span>
-                    </button>
-                  )) : poiLoading ? (
-                    <p className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading places…</p>
-                  ) : <p className="px-3 py-2 text-xs text-muted-foreground">No matching places or tags.</p>}
-                </div>
+          {/* Players */}
+          {players.length > 0 && (
+            <div className="absolute left-3 top-3 z-10 w-56">
+              <button type="button" onClick={() => setRosterOpen((open) => !open)} aria-expanded={rosterOpen} className="map-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm text-white/90">
+                <Users className="h-4 w-4 text-white/60" />{players.length} online{rosterOpen ? <ChevronUp className="h-3.5 w-3.5 text-white/50" /> : <ChevronDown className="h-3.5 w-3.5 text-white/50" />}
+              </button>
+              {rosterOpen && (
+                <ul className="map-glass mt-2 max-h-72 overflow-y-auto rounded-xl py-1">
+                  {players.map((player) => (
+                    <li key={player.username}>
+                      <button type="button" onClick={() => focusPlayer(player)} className="flex w-full items-center gap-2 px-4 py-2 text-start text-sm text-white/90 hover:bg-white/10">
+                        <span className={cn('h-2 w-2 shrink-0 rounded-full', { dead: 'bg-stone-400', infected: 'bg-red-400', staff: 'bg-amber-400', normal: 'bg-sky-400' }[playerState(player)])} />
+                        <span className="flex-1 truncate">{player.displayName}</span>
+                        {player.z !== 0 && <span className="text-xs text-white/50">{player.z > 0 ? `+${player.z}` : player.z}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-            <div className="max-w-[min(15rem,calc(100vw-8rem))] rounded-md border border-border/55 bg-card/90 p-2 shadow-lg backdrop-blur-md">
-              <label className="flex min-h-8 items-center gap-2">
-                <PackageSearch className="h-4 w-4 shrink-0 text-warning" />
-                <select value={lootType} onChange={(event) => { setLootType(event.target.value); setLootResult(null) }} aria-label="Container type to find near a map point" className="min-h-8 min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-primary/60" disabled={lootTypes.length === 0}>
-                  {lootTypes.length === 0 ? <option value="">Container locations unavailable</option> : lootTypes.map((type) => <option key={type.id} value={type.id}>{type.name} ({type.total})</option>)}
-                </select>
-              </label>
-              <p className="max-w-56 text-[10px] leading-snug text-muted-foreground">Right-click a point to search nearby container locations. This is map location data, not live inventory.</p>
-              {lootTypeError && <p className="mt-1 text-[10px] text-warning">{lootTypeError}</p>}
+          )}
+
+          {/* Zoom and layers */}
+          <div className="absolute right-3 top-1/2 z-10 flex -translate-y-full flex-col gap-2">
+            <div className="map-glass flex flex-col rounded-full p-1">
+              <MapButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Plus className="h-4 w-4" /></MapButton>
+              <MapButton label="Zoom out" onClick={() => mapRef.current?.zoomOut()}><Minus className="h-4 w-4" /></MapButton>
+              {players.length > 0 && <MapButton label="Show all players" onClick={fitToPlayers}><Locate className="h-4 w-4" /></MapButton>}
+            </div>
+            <div className="map-glass flex flex-col rounded-full p-1">
+              <MapButton label={density ? 'Hide zombie density' : 'Show zombie density'} pressed={density} onClick={() => setDensity((value) => !value)}>
+                <Biohazard className="h-4 w-4" />
+              </MapButton>
             </div>
           </div>
 
-          <div className="absolute end-3 top-3 z-10 max-w-[min(14rem,calc(100%-3rem))]">
-            <div className="overflow-hidden rounded-md border border-border/55 bg-card/85 shadow-lg backdrop-blur-md">
-              <button type="button" onClick={() => setRosterCollapsed((value) => !value)} aria-expanded={!rosterCollapsed} aria-label={rosterCollapsed ? 'Expand player roster' : 'Collapse player roster'} className="flex min-h-11 w-full items-center justify-between gap-2 border-b border-border/40 bg-muted/40 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/70 hover:bg-muted/60">
-                <span className="flex min-w-0 items-center gap-1.5"><span className="text-primary/60">//</span><span>roster</span><span className="text-muted-foreground/50">·</span><span className={cn('flex items-center gap-1', gameIntegrationConnected ? 'text-emerald-400/90' : 'text-muted-foreground/60')}><span className={cn('h-1.5 w-1.5 rounded-full', gameIntegrationConnected ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/40')} />{gameIntegrationConnected ? 'live' : 'offline'}</span></span>
-                <span className="flex shrink-0 items-center gap-1.5"><span className="font-semibold tabular-nums text-foreground">{players.length}</span>{rosterCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}</span>
+          {/* Floor */}
+          <div className="absolute bottom-16 right-3 z-10">
+            <div className="map-glass flex flex-col items-center rounded-full p-1" role="group" aria-label={`Floor: ${floorName(floor)}`}>
+              <MapButton label="Floor up" disabled={floor >= floorRange.max} onClick={() => setFloor(floor + 1)}><ChevronUp className="h-4 w-4" /></MapButton>
+              <button type="button" onClick={() => setFloor(0)} title={`${floorName(floor)} (, and . change floor)`} className={cn('flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums', floor === 0 ? 'text-white' : 'bg-primary text-primary-foreground')}>
+                {floor > 0 ? `+${floor}` : floor}
               </button>
-              {!rosterCollapsed && (players.length > 0 ? (
-                <div className="max-h-60 overflow-y-auto">
-                  {players.map((player) => (
-                    <button key={player.username} type="button" onClick={() => panToPlayer(player)} aria-label={`Pan to ${player.displayName || player.username}${player.health === undefined ? '' : `, health ${Math.round(player.health)}%`}`} className={cn('flex min-h-11 w-full items-center gap-2 border-s-2 border-transparent px-2.5 py-1.5 text-start text-xs transition-colors hover:bg-muted/50', selectedPlayer?.username === player.username && 'border-primary/60 bg-muted/50')}>
-                      <span className="h-2 w-2 shrink-0 rounded-full ring-1 ring-black/30" style={{ backgroundColor: getPlayerColor(player, 0.9) }} />
-                      <span className="flex-1 truncate">{player.displayName || player.username}</span>
-                      {player.health !== undefined && <span className={cn('font-mono text-[10px] tabular-nums', player.health > 50 ? 'text-emerald-400' : player.health > 25 ? 'text-amber-400' : 'text-destructive')}>{Math.round(player.health)}%</span>}
-                    </button>
-                  ))}
-                </div>
-              ) : <div className="flex items-center gap-2 px-3 py-3 font-mono text-[11px] text-muted-foreground/70"><span className={cn('h-1.5 w-1.5 rounded-full', gameIntegrationConnected ? 'bg-muted-foreground/40' : 'bg-destructive/70')} />{playersLoading ? 'loading…' : gameIntegrationConnected ? 'no players online' : 'game integration offline'}</div>)}
+              <MapButton label="Floor down" disabled={floor <= floorRange.min} onClick={() => setFloor(floor - 1)}><ChevronDown className="h-4 w-4" /></MapButton>
             </div>
           </div>
 
-          {(mapLoading || layerLoading || mapError || layerError) && (
-            <div className={cn('absolute start-1/2 top-1/2 z-10 w-[min(28rem,calc(100%-8rem))] -translate-x-1/2 -translate-y-1/2 rounded-md border bg-card/95 p-4 text-center shadow-xl backdrop-blur-md', mapError || layerError ? 'border-warning/60' : 'border-border/50')} role={mapError || layerError ? 'alert' : 'status'} aria-live="polite">
-              {mapError || layerError ? <>
-                <div className="mb-1 flex items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-warning"><AlertTriangle className="h-4 w-4" />{mapError ? 'Live map unavailable' : 'Floor imagery unavailable'}</div>
-                <p className="text-sm text-foreground">{mapError ?? layerError}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Player status and the rest of the panel are still available.</p>
-                {(mapError || layerErrorRetryable) && <Button size="sm" variant="outline" onClick={() => mapError ? void loadMap() : setTileRetryNonce((value) => value + 1)} disabled={mapLoading || layerLoading} className="mt-3 gap-2">
-                  {mapLoading || layerLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {mapError ? 'Retry map' : 'Retry floor data'}
-                </Button>}
-              </> : <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{mapLoading ? 'Loading live map metadata…' : 'Loading floor map data…'}</div>}
+          {/* Coordinates */}
+          {readout && (
+            <button type="button" onClick={() => void copyLink()} title="Copy a link to this view" className="map-glass absolute bottom-3 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-2 text-xs tabular-nums text-white/70 hover:text-white">
+              <span className="font-semibold text-white">{Math.floor(readout.x)} × {Math.floor(readout.y)}</span>
+              <span className="mx-2 text-white/30">·</span>Cell {Math.floor(readout.x / CELL)},{Math.floor(readout.y / CELL)}
+              <span className="mx-2 text-white/30">·</span>{floorName(floor)}
+            </button>
+          )}
+
+          {/* Warnings */}
+          {manifest.warnings.length > 0 && (
+            <div className="absolute bottom-3 left-3 z-10 max-w-[min(22rem,calc(50%-6rem))]">
+              {warningsOpen && (
+                <ul className="map-glass mb-2 space-y-1 rounded-xl px-4 py-3 text-xs text-white/80">
+                  {manifest.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              )}
+              <button type="button" onClick={() => setWarningsOpen((open) => !open)} aria-expanded={warningsOpen} className="map-glass flex items-center gap-2 rounded-full px-3 py-2 text-xs text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5" />{manifest.warnings.length === 1 ? '1 map warning' : `${manifest.warnings.length} map warnings`}
+              </button>
             </div>
           )}
 
-          {tileError && !mapError && !layerError && <div className="absolute start-1/2 bottom-16 z-10 flex -translate-x-1/2 items-center gap-3 rounded-md border border-warning/50 bg-card/95 px-3 py-2 text-xs text-foreground shadow-lg backdrop-blur-md" role="alert" aria-live="polite">
-            <span>Map images failed to load from PZMap.</span>
-            <Button size="sm" variant="outline" onClick={() => { setTileError(false); setTileRetryNonce((value) => value + 1) }} className="h-8 shrink-0 gap-1.5"><RefreshCw className="h-3.5 w-3.5" />Retry tiles</Button>
-          </div>}
-
-          {mapInfo && (
-            <div className="absolute bottom-3 end-3 z-10 max-w-[min(24rem,calc(100%-6rem))] space-y-1 text-end">
-              <div className="rounded-md border border-border/55 bg-card/85 px-2.5 py-1.5 font-mono text-[10px] text-muted-foreground shadow-lg backdrop-blur-md">
-                <span className="text-foreground">{mapInfo.label}</span><span className="mx-1.5 text-border">·</span>{mapInfo.layers.length} configured layer{mapInfo.layers.length === 1 ? '' : 's'}<span className="mx-1.5 text-border">·</span><a href="https://pzmap.org/" target="_blank" rel="noreferrer" className="underline decoration-border underline-offset-2 hover:text-foreground">PZMap</a><HelpTip label="Map image privacy" className="ms-1 align-middle"><span>Map images load directly from PZMap. The provider receives your IP address and viewed map version, floor, zoom and tile coordinates; the panel URL is withheld.</span></HelpTip>
-              </div>
-              {mapInfo.warnings.length > 0 && <div className="rounded-md border border-warning/35 bg-card/90 px-2.5 py-1.5 text-start text-[10px] text-warning shadow-lg" role="note">{mapInfo.warnings.join(' ')}</div>}
-              {lootResult && <div className="rounded-md border border-warning/40 bg-card/90 px-2.5 py-1.5 text-start text-[10px] text-foreground shadow-lg backdrop-blur-md" role="status">
-                <div className="flex items-center justify-between gap-3"><span>{lootResult.locations.length} nearby container locations</span><button type="button" aria-label="Clear container locations" onClick={() => setLootResult(null)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/60 hover:text-foreground"><X className="h-3.5 w-3.5" /></button></div>
-                <p className="text-muted-foreground">Nearby map cells · location data, not inventory.</p>
-                {lootResult.truncated && <p className="text-warning">More than 100 found; showing the first 100 nearby locations.</p>}
-              </div>}
-            </div>
-          )}
-
-          <div className="absolute bottom-3 start-3 z-10 flex max-w-[calc(100%-3rem)] flex-wrap items-stretch overflow-hidden rounded-md border border-border/55 bg-card/85 font-mono text-[11px] tabular-nums shadow-lg backdrop-blur-md">
-            <div className="flex min-h-11 items-center gap-1.5 border-e border-border/40 px-2.5 py-1.5">
-              <Crosshair className={cn('h-3 w-3', cursorPoint ? 'text-primary/80' : 'text-muted-foreground/40')} />
-              {cursorPoint ? <span className="text-foreground"><span className="text-muted-foreground/60">x</span>{Math.round(cursorPoint.x)}<span className="mx-1 text-muted-foreground/40">·</span><span className="text-muted-foreground/60">y</span>{Math.round(cursorPoint.y)}</span> : <span className="text-muted-foreground/50">hover for coords</span>}
-            </div>
-            <div className="flex min-h-11 items-center gap-1 border-e border-border/40 px-2.5 py-1.5"><span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground/50">z</span><span className={floor !== 0 ? 'text-accent' : 'text-muted-foreground/70'}>{floorLabelText}</span></div>
-            <button type="button" onClick={copyShareLink} disabled={!mapInfo} aria-label="Copy map link with coordinates" className="flex min-h-11 items-center gap-1.5 px-2.5 py-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:opacity-40"><Copy className="h-3 w-3" /><span>share</span></button>
-          </div>
-
+          {/* Player card */}
           {selectedPlayer && (
-            <div className="absolute bottom-16 end-3 z-10 w-[min(15rem,calc(100%-1.5rem))] sm:bottom-3">
-              <div className="relative overflow-hidden rounded-md border border-border/55 bg-card/90 shadow-lg backdrop-blur-md">
-                <span aria-hidden className="pointer-events-none absolute start-0 top-0 h-2 w-2 border-s-2 border-t-2 border-primary/50" />
-                <span aria-hidden className="pointer-events-none absolute end-0 top-0 h-2 w-2 border-e-2 border-t-2 border-primary/50" />
-                <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/40 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/70">
-                  <span className="flex items-center gap-1.5"><span className="text-primary/60">//</span>dossier<span className="text-muted-foreground/50">·</span><span className="text-emerald-400/90">target.acquired</span></span>
-                  <button type="button" onClick={() => setSelectedPlayer(null)} aria-label="Close player details" className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-                </div>
-                <div className="flex items-center gap-2 border-b border-border/30 px-3 py-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30" style={{ backgroundColor: getPlayerColor(selectedPlayer, 0.9) }} /><span className="truncate text-sm font-semibold">{selectedPlayer.displayName || selectedPlayer.username}</span></div>
-                <div className="space-y-1.5 px-3 py-2 text-xs">
-                  <PlayerValue label="pos" value={`${Math.round(selectedPlayer.x)}, ${Math.round(selectedPlayer.y)}`} />
-                  <PlayerValue label="floor" value={String(selectedPlayer.z)} />
-                  {selectedPlayer.health !== undefined && <PlayerBar label="hp" value={selectedPlayer.health} percent />}
-                  {selectedPlayer.hunger !== undefined && <PlayerBar label="hunger" value={selectedPlayer.hunger * 100} percent />}
-                  {selectedPlayer.thirst !== undefined && <PlayerBar label="thirst" value={selectedPlayer.thirst * 100} percent />}
-                  {selectedPlayer.fatigue !== undefined && <PlayerBar label="fatigue" value={selectedPlayer.fatigue * 100} percent />}
-                  {selectedPlayer.accessLevel && !['none', 'user'].includes(selectedPlayer.accessLevel) && <PlayerValue label="role" value={selectedPlayer.accessLevel} tone="text-amber-400" />}
-                  {selectedPlayer.isInfected && <PlayerValue label="status" value="infected" tone="text-destructive" />}
-                </div>
-                <div className="space-y-1 border-t border-border/40 bg-muted/20 px-2 py-1.5">
-                  <div className="grid grid-cols-2 gap-1">
-                    <Button size="sm" variant="ghost" className="h-9 gap-1 text-xs" disabled={actionLoading !== null} onClick={() => {
-                      setActionLoading('heal-card')
-                      void gameIntegrationApi.healPlayer(selectedPlayer.username).then((result) => {
-                        if (!result.success) throw new Error(result.error || 'Heal failed.')
-                        toast({ title: 'Healed', description: `${selectedPlayer.username} healed` })
-                        void fetchPlayerPositions()
-                      }).catch((error) => toast({ title: 'Heal failed', description: getUserErrorMessage(error, 'Could not heal player.'), variant: 'destructive' })).finally(() => setActionLoading(null))
-                    }}><Heart className="h-3.5 w-3.5" />Heal</Button>
-                    <div className="flex min-w-0 items-center gap-1"><Button size="sm" variant="ghost" className="h-9 w-full gap-1 text-xs" disabled={actionLoading !== null} onClick={() => {
-                      setActionLoading('god-card')
-                      void playersApi.setGodMode(selectedPlayer.username, true).then(() => toast({ title: 'God mode enabled' })).catch((error) => toast({ title: 'God mode failed', description: getUserErrorMessage(error, 'Could not enable god mode.'), variant: 'destructive' })).finally(() => setActionLoading(null))
-                    }}><Shield className="h-3.5 w-3.5" />God</Button><HelpTip label="God"><span>Always turns God Mode on for this player. Turn it back off from Players.</span></HelpTip></div>
-                  </div>
-                  <Link to="/players" search={{ player: selectedPlayer.username }} onClick={() => setSelectedPlayer(null)} className="flex min-h-9 items-center justify-center gap-1.5 rounded-sm border border-border/50 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"><Users className="h-3.5 w-3.5" /><span>Open player controls</span><ArrowUpRight className="h-3.5 w-3.5" /></Link>
-                </div>
+            <div className="map-glass absolute bottom-16 right-16 z-10 w-64 rounded-xl p-4 text-sm text-white/90">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex-1 truncate font-semibold text-white">{selectedPlayer.displayName}</span>
+                <button type="button" onClick={() => setSelectedName(null)} aria-label="Close player details" className="rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>
               </div>
+              <dl className="space-y-1.5 text-xs">
+                <Stat label="Position" value={`${Math.round(selectedPlayer.x)}, ${Math.round(selectedPlayer.y)} · ${floorName(selectedPlayer.z)}`} />
+                {selectedPlayer.isAlive === false && <Stat label="Status" value="Dead" />}
+                {selectedPlayer.isInfected && <Stat label="Status" value="Infected" tone="text-red-300" />}
+                {isStaff(selectedPlayer) && <Stat label="Role" value={selectedPlayer.accessLevel!} />}
+                {selectedPlayer.health !== undefined && <Bar label="Health" value={selectedPlayer.health} good="high" />}
+                {selectedPlayer.hunger !== undefined && <Bar label="Hunger" value={selectedPlayer.hunger * 100} good="low" />}
+                {selectedPlayer.thirst !== undefined && <Bar label="Thirst" value={selectedPlayer.thirst * 100} good="low" />}
+                {selectedPlayer.fatigue !== undefined && <Bar label="Fatigue" value={selectedPlayer.fatigue * 100} good="low" />}
+              </dl>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button size="sm" variant="secondary" className="gap-1.5" disabled={actionLoading !== null || !integrationConnected} onClick={() => void healPlayer(selectedPlayer.username)}>
+                  {actionLoading === `heal:${selectedPlayer.username}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className="h-3.5 w-3.5" />}Heal
+                </Button>
+                <Button size="sm" variant="secondary" className="gap-1.5" disabled={actionLoading !== null} onClick={() => void enableGodMode(selectedPlayer.username)}>
+                  {actionLoading === `god:${selectedPlayer.username}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}God mode
+                </Button>
+              </div>
+              <Link to="/players" search={{ player: selectedPlayer.username }} className="mt-2 flex items-center justify-center gap-1 rounded-md py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white">
+                Open in Players<ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           )}
 
+          {/* Context menu */}
           {contextMenu && (
             <div
-              ref={(element) => element?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus()}
+              ref={(element) => element?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()}
               role="menu"
               aria-label="Map actions"
-              className="absolute z-20 max-h-[calc(100%-1.5rem)] min-w-[220px] overflow-y-auto overscroll-contain rounded-md border border-border/55 bg-card/95 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] ring-1 ring-primary/10 backdrop-blur-md sm:min-w-[260px]"
+              className="map-glass absolute z-20 min-w-56 rounded-xl py-1 text-sm text-white/90"
               style={{
-                left: contextMenu.x,
-                top: contextMenu.y,
-                transform: `${contextMenu.x > mapSize.width / 2 ? 'translateX(-100%)' : ''} ${contextMenu.y > mapSize.height / 2 ? 'translateY(-100%)' : ''}`.trim() || undefined,
+                left: contextMenu.left,
+                top: contextMenu.top,
+                transform: `translate(${menuFlip.x ? '-100%' : '0'}, ${menuFlip.y ? '-100%' : '0'})`,
               }}
               onKeyDown={(event) => {
-                const items = event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
-                const index = Array.from(items).indexOf(document.activeElement as HTMLButtonElement)
+                const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+                const index = items.indexOf(document.activeElement as HTMLButtonElement)
                 if (event.key === 'ArrowDown') { event.preventDefault(); items[(index + 1) % items.length]?.focus() }
                 else if (event.key === 'ArrowUp') { event.preventDefault(); items[(index - 1 + items.length) % items.length]?.focus() }
-                else if (event.key === 'Escape') { event.preventDefault(); setContextMenu(null) }
               }}
             >
-              <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/30 px-2.5 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/70">
-                <span className="min-w-0 truncate"><span className="text-primary/60">//</span> actions <span className="text-foreground">· {Math.round(contextMenu.point.x)}, {Math.round(contextMenu.point.y)} · {floorLabel(Math.round(contextMenu.point.z))}</span></span>
-                <button type="button" title="Copy coordinates" aria-label="Copy coordinates" className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted/60 hover:text-foreground" onClick={() => void copyCoordinates(contextMenu.point)}><Copy className="h-3.5 w-3.5" /></button>
-              </div>
-              {contextMenu.player && <>
-                <ContextMenuSection label="target" icon={<Users className="h-3 w-3" />} />
-                <ContextMenuItem icon={<Heart className="h-4 w-4 text-emerald-400" />} label="Heal player" onClick={() => {
-                  const player = contextMenu.player!
-                  void gameIntegrationApi.healPlayer(player.username).then((result) => {
-                    if (!result.success) throw new Error(result.error || 'Heal failed.')
-                    toast({ title: 'Healed', description: `${player.username} healed` })
-                    void fetchPlayerPositions()
-                  }).catch((error) => toast({ title: 'Heal failed', description: getUserErrorMessage(error, 'Could not heal player.'), variant: 'destructive' }))
-                  setContextMenu(null)
-                }} />
-              </>}
-              {lootType && <>
-                <ContextMenuSection label="container locations" icon={<PackageSearch className="h-3 w-3" />} tone="warning" />
-                <ContextMenuItem icon={lootLoading ? <Loader2 className="h-4 w-4 animate-spin text-warning" /> : <MapPin className="h-4 w-4 text-warning" />} label={`Search nearby ${lootTypes.find((type) => type.id === lootType)?.name ?? 'containers'}`} description="Nearby cells · map locations, not inventory" disabled={lootLoading} onClick={() => void searchLootNear(contextMenu.point)} />
-              </>}
+              <MenuItem onClick={() => void copyCoordinates(contextMenu.point)} icon={<Copy className="h-4 w-4" />}>
+                Copy {Math.round(contextMenu.point.x)}, {Math.round(contextMenu.point.y)}, {contextMenu.point.z}
+              </MenuItem>
+              {contextMenu.player && (
+                <MenuItem disabled={actionLoading !== null || !integrationConnected} onClick={() => void healPlayer(contextMenu.player!.username)} icon={<Heart className="h-4 w-4" />}>
+                  Heal {contextMenu.player.displayName}
+                </MenuItem>
+              )}
               {players.length > 0 && <>
-                <ContextMenuSection label="teleport to coordinates" icon={<Locate className="h-3 w-3" />} tone="primary" />
-                {players.slice(0, 6).map((player) => <ContextMenuItem key={player.username} icon={<Users className={cn('h-4 w-4', player.isInfected ? 'text-destructive' : player.accessLevel && !['none', 'user'].includes(player.accessLevel) ? 'text-amber-400' : 'text-info')} />} label={player.displayName || player.username} description={`${Math.round(player.x)}, ${Math.round(player.y)} → ${Math.round(contextMenu.point.x)}, ${Math.round(contextMenu.point.y)}, ${Math.round(contextMenu.point.z)}`} loading={actionLoading === player.username} disabled={!gameIntegrationConnected || actionLoading !== null} onClick={() => void teleportPlayerTo(player.username, contextMenu.point)} />)}
-                {players.length > 6 && <div className="px-3 py-2 font-mono text-[10px] italic text-muted-foreground/50">+{players.length - 6} more online</div>}
+                <div className="mx-3 my-1 border-t border-white/10" />
+                <p className="px-4 pb-1 pt-1.5 text-xs text-white/50">Teleport here</p>
+                {players.slice(0, 8).map((player) => (
+                  <MenuItem key={player.username} disabled={actionLoading !== null || !integrationConnected} onClick={() => void teleportPlayer(player.username, contextMenu.point)} icon={<Users className="h-4 w-4" />}>
+                    {player.displayName}
+                  </MenuItem>
+                ))}
               </>}
             </div>
           )}
-        </div>
+        </>}
       </div>
     </div>
   )
 }
 
-function PlayerValue({ label, value, tone = '' }: { label: string; value: string; tone?: string }) {
-  return <div className="flex items-baseline justify-between gap-3"><span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">{label}</span><span className={cn('truncate font-mono tabular-nums', tone)}>{value}</span></div>
-}
-
-function PlayerBar({ label, value, percent = false }: { label: string; value: number; percent?: boolean }) {
-  const amount = Math.max(0, Math.min(100, value))
-  const color = label === 'hp'
-    ? amount > 50 ? 'hsl(var(--success))' : amount > 25 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'
-    : amount < 50 ? 'hsl(var(--success))' : amount < 75 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'
-  return <div className="flex items-center justify-between gap-3"><span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">{label}</span><div className="flex items-center gap-1.5"><div className="h-1.5 w-16 overflow-hidden rounded-sm bg-muted/60 ring-1 ring-black/20"><div className="h-full" style={{ width: `${amount}%`, backgroundColor: color }} /></div><span className="w-8 text-end font-mono tabular-nums">{Math.round(amount)}{percent ? '%' : ''}</span></div></div>
-}
-
-type ContextMenuTone = 'default' | 'primary' | 'warning' | 'danger' | 'info' | 'success'
-
-function ContextMenuItem({ icon, label, onClick, loading, description, disabled, tone = 'default' }: {
-  icon: React.ReactNode
+function MapButton({ label, onClick, disabled, pressed, children }: {
   label: string
   onClick: () => void
-  loading?: boolean
-  description?: string
   disabled?: boolean
-  tone?: ContextMenuTone
+  pressed?: boolean
+  children: React.ReactNode
 }) {
-  const toneAccent: Record<ContextMenuTone, string> = {
-    default: 'group-hover:border-s-primary/60 group-focus-visible:border-s-primary/60',
-    primary: 'group-hover:border-s-primary/70 group-focus-visible:border-s-primary/70',
-    warning: 'group-hover:border-s-amber-400/80 group-focus-visible:border-s-amber-400/80',
-    danger: 'group-hover:border-s-destructive/80 group-focus-visible:border-s-destructive/80',
-    info: 'group-hover:border-s-info/80 group-focus-visible:border-s-info/80',
-    success: 'group-hover:border-s-emerald-400/80 group-focus-visible:border-s-emerald-400/80',
-  }
-  return <button role="menuitem" type="button" onClick={onClick} disabled={loading || disabled} className="group relative flex min-h-11 w-full items-stretch gap-2.5 pe-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 hover:bg-muted/45 focus-visible:bg-muted/45 focus-visible:outline-none"><span aria-hidden className={cn('my-1 w-[2px] shrink-0 border-s-2 border-transparent transition-colors', toneAccent[tone])} /><span className="flex w-5 shrink-0 items-center justify-center ps-1">{loading ? <Loader2 className="h-4 w-4 animate-spin text-primary/70" /> : icon}</span><span className="flex min-w-0 flex-1 flex-col justify-center py-1 text-start"><span className="truncate text-foreground">{label}</span>{description && <span className="truncate text-[10px] leading-tight text-muted-foreground/60">{description}</span>}</span></button>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      className={cn(
+        'flex h-9 w-9 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-30',
+        pressed && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
 }
 
-function ContextMenuSection({ label, icon, tone = 'muted' }: {
-  label: string
-  icon?: React.ReactNode
-  tone?: 'muted' | 'primary' | 'warning' | 'info' | 'success' | 'danger'
-}) {
-  const colors = {
-    muted: 'text-muted-foreground/70',
-    primary: 'text-primary/75',
-    warning: 'text-amber-400/85',
-    info: 'text-info/80',
-    success: 'text-emerald-400/85',
-    danger: 'text-destructive/85',
-  }
-  return <div className="flex items-center gap-1.5 border-t border-border/30 px-2.5 pt-2 pb-1 font-mono text-[9px] uppercase tracking-[0.2em]"><span className={colors[tone]}>{icon}</span><span className={colors[tone]}>{label}</span><span className="h-px flex-1 bg-border/40" /></div>
+function MenuItem({ icon, onClick, disabled, children }: { icon: React.ReactNode; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+  return (
+    <button type="button" role="menuitem" onClick={onClick} disabled={disabled} className="flex w-full items-center gap-3 px-4 py-2 text-start hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none disabled:opacity-40">
+      <span className="text-white/60">{icon}</span><span className="truncate">{children}</span>
+    </button>
+  )
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return <div className="flex justify-between gap-3"><dt className="text-white/50">{label}</dt><dd className={cn('truncate tabular-nums', tone)}>{value}</dd></div>
+}
+
+function Bar({ label, value, good }: { label: string; value: number; good: 'high' | 'low' }) {
+  const amount = Math.max(0, Math.min(100, value))
+  const score = good === 'high' ? amount : 100 - amount
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-white/50">{label}</dt>
+      <dd className="flex items-center gap-2">
+        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-white/10">
+          <span className={cn('block h-full rounded-full', score > 50 ? 'bg-emerald-400' : score > 25 ? 'bg-amber-400' : 'bg-red-400')} style={{ width: `${amount}%` }} />
+        </span>
+        <span className="w-8 text-end tabular-nums">{Math.round(amount)}%</span>
+      </dd>
+    </div>
+  )
 }

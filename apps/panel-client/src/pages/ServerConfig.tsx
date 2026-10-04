@@ -3950,14 +3950,13 @@ export default function ServerConfig() {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <a
-                    href="https://map.projectzomboid.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    to="/world-map"
+                    title="Right-click the map to copy coordinates"
                     className="flex h-7 items-center gap-1 rounded border border-border/60 bg-muted/30 px-2 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >
-                    <ExternalLink className="h-3 w-3" /> {'map'}
-                  </a>
+                    <Map className="h-3 w-3" /> {'map'}
+                  </Link>
                   {editorMode === 'raw' && (
                     <Button
                       onClick={handleSaveSpawnPoints}

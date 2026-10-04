@@ -411,36 +411,21 @@ server to start.
 
 ### Blank or partial World Map
 
-**What you see:** the map area shows one of:
-- **"No players on the map"** (subtitle: *"Player positions appear when
-  game integration is connected"*) — this isn't a map failure at all; it means
-  no player position data is flowing, which needs game integration connected
-  (see the section above).
-- **"Map tiles aren't loading"** (*"Panel can't reach tiles.pzmap.org. Check
-  outbound HTTPS access and try Refresh."*) — the panel's own server
-  couldn't reach the tile CDN at all. The map proxies and caches tiles
-  server-side, so this is the panel host's outbound network, not your
-  browser's.
-- **"No map tiles at this zoom"** (*"tiles.pzmap.org is reachable but
-  hasn't rendered this area at this detail level. Zoom out, or try Refresh
-  later."*) — the CDN is reachable, but doesn't have tiles for exactly this
-  area/zoom yet. Zooming out usually resolves this immediately.
+The map is drawn from the game files of each entry in the server's `Map=`
+setting, read from the server install path and its Workshop mods.
 
-**What to do:** for the two tile-related messages, check **Debug & Logs →
-Diagnostics → World Map** for the same signal in more detail — a `B42 tile
-CDN unreachable` finding there confirms it's the panel host's outbound
-HTTPS access, not something wrong with your server. Also watch for a `B42
-build auto-detect failed` warning: the panel normally detects the current
-PZ map build automatically from `tiles.pzmap.org`, but if that discovery
-fails, it silently falls back to a hardcoded older build, which will not
-track the next PZ map release and can present as a wrong/stale map layout
-rather than a missing one — the Diagnostics finding names which reason
-discovery failed.
+**What you see:**
+- **"The map could not be shown"** — no map folder was found. The message
+  says why: usually the server install path is not set, or a `Map=` entry
+  names a folder that is not installed.
+- **A map warning button in the corner** — some `Map=` entries were skipped
+  or a mod map has no map image. A mod map without a `pyramid.zip` is still
+  drawn from its building and road outlines.
+- **No players on the map** — player positions need game integration
+  connected (see the section above). The map itself works without it.
 
-`curl` must be present on the panel host for build auto-detection to work
-at all (Docker, Windows, and macOS packages already include it; a bare
-Linux tarball install might not) — without it, the map still works, it just
-never tracks a new PZ map release, and Diagnostics will flag it.
+**What to do:** open **Debug > World Map**. It lists each map folder that was
+found, which ones have a map image, the floor range, and every warning.
 
 ---
 

@@ -2123,3 +2123,11 @@ tr:hover td {
   background: hsl(var(--primary) / 0.22);
   color: hsl(var(--foreground));
 }
+
+/* Floating World Map controls. The map stays dark in both themes, so these do too. */
+.map-glass {
+  background: rgb(22 20 17 / 0.84);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(10px);
+}

@@ -31,9 +31,7 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 <td colspan="2" valign="top">
 
 ### 🗺️ Live World Map
-Live player positions, floors, pan and zoom, coordinate teleport, and POI and container-location search. The map uses PZMap's available Build 42 dataset and supported mod overlays in the server's configured map order. Its dataset version is displayed separately from the installed game version. Unsupported mod maps produce a warning. Container locations describe the map dataset, rather than the contents of your live server.
-
-Map images load directly from `tiles.pzmap.org`. Opening the map sends your IP address, map version, floor, zoom level and tile coordinates to that provider; the panel page URL is withheld. The panel fetches map metadata from PZMap. If the provider is unavailable or blocks access, the map shows an error and the rest of the panel remains usable. Map attribution links to [PZMap](https://pzmap.org/).
+Live player positions, every floor including basements, zombie density, coordinate teleport, and search for towns, streets, building types and rooms. The map is drawn from your server's own game files: the map image and building outlines, street names, town labels, and room layouts per floor. Mod maps in the server's `Map=` order are drawn with the same priority the game uses. Nothing is sent to an outside service.
 
 <img src="docs/assets/screenshots/screenshot-worldmap-v2.png" alt="World Map" />
 
@@ -163,7 +161,6 @@ Manual or scheduled world backups with configurable retention. Preview a snapsho
   DoLuaChecksum=false
   ```
   Use the actual RCON port and password configured for your server. `DoLuaChecksum=false` is needed only for game integration features.
-- **Outbound HTTPS** from the panel to `pzmap.org` and `tiles.pzmap.org` for live map metadata, and from your browser to `tiles.pzmap.org` for images. Debug > World Map reports provider access failures. The map has no fixed-build fallback.
 
 The packaged binary includes its own runtime — no Node.js, Python, or Java install needed on the panel host.
 
@@ -308,7 +305,7 @@ server {
 }
 ```
 
-Then set these before first launch (see [linux.md Phase 10](docs/install/linux.md) for the systemd equivalent):
+Then set these before first launch (see [linux.md Phase 9](docs/install/linux.md) for the systemd equivalent):
 
 ```bash
 TRUST_PROXY=1 HTTPS=true CORS_ORIGINS=https://your-domain.example.com ./start.sh

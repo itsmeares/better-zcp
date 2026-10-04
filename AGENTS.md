@@ -51,7 +51,7 @@ future needs.
 A change that works for one setup can still break another. When the changed
 behavior depends on them, check the relevant paths:
 
-- a local server and a remote server reached through SFTP;
+- a server installed natively and one managed in Docker;
 - RCON, the game integration, and direct file access;
 - source runs, packaged Windows and Linux builds, and Docker;
 - Build 42;

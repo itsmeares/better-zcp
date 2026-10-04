@@ -70,27 +70,11 @@ describe("support bundle: recursive log discovery", () => {
   });
 });
 
-describe("support bundle: World Map provider diagnostics", () => {
-  it("reports live metadata availability and direct tile delivery policy", async () => {
-    const originalFetch = global.fetch;
-    global.fetch = vi.fn(async () => {
-      throw new Error("network disabled for this test");
-    });
-    try {
-      const result = await buildWorldMapDiagnostics();
-      expect(result).toMatchObject({
-        available: false,
-        provider: { origin: "https://pzmap.org", status: "error" },
-        tiles: {
-          origin: "https://tiles.pzmap.org",
-          mode: "direct",
-          referrerPolicy: "no-referrer",
-        },
-      });
-      expect(result.error).toContain("network disabled for this test");
-    } finally {
-      global.fetch = originalFetch;
-    }
+describe("support bundle: World Map diagnostics", () => {
+  it("reports that no map files can be found for a server without an install path", async () => {
+    const result = await buildWorldMapDiagnostics();
+    expect(result).toMatchObject({ available: false, folders: [] });
+    expect(result.warnings.join(" ")).toContain("install path");
   });
 });
 

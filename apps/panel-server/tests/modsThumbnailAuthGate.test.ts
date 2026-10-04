@@ -69,7 +69,7 @@ describe("native legacy API authentication carve-outs, no Authorization header",
 
   it("requires authentication for map metadata", async () => {
     const res = await handleApiRequest(
-      new Request("http://panel.test/api/map/resolve"),
+      new Request("http://panel.test/api/map/manifest"),
     );
     expect(res?.status).toBe(401);
   });
