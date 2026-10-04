@@ -1312,7 +1312,7 @@ function buildBundleReadme() {
     "13. `server-config-summary.json` — sanitized effective server settings, mod/map lists, sandbox integrity, and whether the Mods/WorkshopItems lists are the same length (a mismatch is a cheap signal of an unresolved mod).",
     "14. `sandbox-options-diagnostics.json` — PZ/Argus versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
-    "17. `world-map-diagnostics.json` — live PZMap metadata provider status, resolved Build 42 version when available, and the browser's direct tile delivery policy.",
+    "17. `world-map-diagnostics.json` — map folders found for the active server (from Map= and workshop mods), which have map images, the floor range, and map data warnings.",
     "18. `db-write-health.json` — SQLite integrity and storage errors. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
     "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
     "## Then the raw logs",
@@ -4689,7 +4689,7 @@ router.get("/worldmap", async (req, res) => {
         diagWarn(
           "worldmap.activeServer",
           "No active server",
-          "No server is currently active in the panel. The map will load tiles but cannot show players.",
+          "No server is currently active in the panel. The map still loads, but players cannot be shown.",
           {
             category: "worldmap",
             hint: "Servers → select one and click “Set active”.",
@@ -4698,32 +4698,36 @@ router.get("/worldmap", async (req, res) => {
       );
     }
 
-    const mapDiagnostics = await getWorldMapDiagnostics();
-    if (mapDiagnostics.available) {
+    let map: Awaited<ReturnType<typeof getWorldMapDiagnostics>> | null = null;
+    try {
+      map = await getWorldMapDiagnostics();
+      const images = map.folders.filter((folder) => folder.image).length;
       checks.push(
-        diagOk(
-          "worldmap.tiles.provider",
-          "PZMap metadata provider reachable",
-          `Build ${mapDiagnostics.version} was resolved from ${mapDiagnostics.provider.origin}. Tiles are delivered directly to the browser with no referrer.`,
-          {
-            category: "worldmap",
-            params: { build: mapDiagnostics.version || "unknown" },
-          },
-        ),
+        map.available
+          ? diagOk(
+              "worldmap.files",
+              "Map files found",
+              `${map.folders.map((folder) => folder.name).join(", ")} (${images} with map images). Floors ${map.floors.min} to ${map.floors.max}.`,
+              { category: "worldmap", params: { folders: map.folders.length, images } },
+            )
+          : diagWarn(
+              "worldmap.files",
+              "Map files not found",
+              map.warnings.join(" ") || "No map folder was found for this server.",
+              {
+                category: "worldmap",
+                hint: "Check the server install path and the Map= setting in the server INI.",
+              },
+            ),
       );
-    } else {
-      const reason = mapDiagnostics.error || mapDiagnostics.provider.error || "provider unavailable";
+      for (const warning of map.available ? map.warnings : []) {
+        checks.push(diagWarn("worldmap.files.warning", "Map data warning", warning, { category: "worldmap" }));
+      }
+    } catch (error: any) {
       checks.push(
-        diagWarn(
-          "worldmap.tiles.provider",
-          "PZMap metadata provider unavailable",
-          `The map provider could not resolve live metadata: ${reason}. The map endpoint will return 503 until the provider is available.`,
-          {
-            category: "worldmap",
-            hint: "Retry when pzmap.org and tiles.pzmap.org are reachable from this panel host.",
-            params: { reason },
-          },
-        ),
+        diagWarn("worldmap.files", "Map files could not be read", error?.message || String(error), {
+          category: "worldmap",
+        }),
       );
     }
 
@@ -4737,7 +4741,7 @@ router.get("/worldmap", async (req, res) => {
         diagWarn(
           "worldmap.gameIntegration.configured",
           "Game integration not configured",
-          "The map gets live game data from the game integration. Without it, the map shows static base tiles only.",
+          "The map gets live game data from the game integration. Without it, the map shows no players.",
           {
             category: "worldmap",
             hint: "Configure the active server's Zomboid data path and server name.",
@@ -4900,11 +4904,7 @@ router.get("/worldmap", async (req, res) => {
       summary,
       checks: sanitizedChecks,
       durationMs: Date.now() - t0,
-      provider: mapDiagnostics.provider,
-      tiles: mapDiagnostics.tiles,
-      available: mapDiagnostics.available,
-      version: mapDiagnostics.version,
-      error: mapDiagnostics.error,
+      map,
       gameIntegration: {
         configured: gameIntegrationStatus.configured,
         isRunning: gameIntegrationStatus.isRunning,

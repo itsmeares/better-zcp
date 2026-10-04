@@ -3,7 +3,7 @@ import { requireServerId } from "../utils/serverScope.ts";
 import { scopedTests } from "./helpers/serverScope.ts";
 import { createServer } from "../database/init.ts";
 const it = scopedTests(async () => (await createServer({ serverName: "test" })).id);
-import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
 
 const { default: debugRouter } = await import("../routes/debug.ts");
 const gameIntegration = {
@@ -15,18 +15,6 @@ const gameIntegration = {
     modStatus: null,
   }),
 };
-
-let originalFetch;
-beforeEach(() => {
-  originalFetch = global.fetch;
-  global.fetch = vi.fn(async () => {
-    throw new Error("network disabled for this test");
-  });
-});
-
-afterEach(() => {
-  global.fetch = originalFetch;
-});
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -83,25 +71,16 @@ function findCheck(body, id) {
   return body.checks?.find((check) => check.id === id);
 }
 
-describe("GET /debug/worldmap provider diagnostics", () => {
-  it("reports provider outages as warnings and keeps the direct tile delivery DTO", async () => {
+describe("GET /debug/worldmap map file diagnostics", () => {
+  it("warns when no map files can be found and reports the map summary", async () => {
     const response = await runRoute("/worldmap", "get", adminReq());
 
     expect(response.getStatusCode()).toBe(200);
-    expect(findCheck(response.getBody(), "worldmap.tiles.provider")).toMatchObject({
+    expect(findCheck(response.getBody(), "worldmap.files")).toMatchObject({
       status: "warn",
-      label: "PZMap metadata provider unavailable",
+      label: "Map files not found",
     });
-    expect(response.getBody()).toMatchObject({
-      available: false,
-      provider: { origin: "https://pzmap.org", status: "error" },
-      tiles: {
-        origin: "https://tiles.pzmap.org",
-        mode: "direct",
-        referrerPolicy: "no-referrer",
-      },
-    });
-    expect(response.getBody()).not.toHaveProperty("tileSources");
-    expect(response.getBody()).not.toHaveProperty("proxy");
+    expect(response.getBody().map).toMatchObject({ available: false, folders: [] });
+    expect(response.getBody()).not.toHaveProperty("provider");
   });
 });

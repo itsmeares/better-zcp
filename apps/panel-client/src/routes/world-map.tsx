@@ -24,7 +24,10 @@ export const Route = createFileRoute('/world-map')({
     const x = coordinate(search.x)
     const y = coordinate(search.y)
     const z = Number.isInteger(floor) && floor >= -128 && floor <= 128 ? floor : undefined
+    const zoomValue = Number(search.zoom)
+    const zoom = search.zoom !== undefined && Number.isFinite(zoomValue) && zoomValue >= 2 && zoomValue <= 12 ? zoomValue : undefined
     return {
+      ...(zoom === undefined ? {} : { zoom }),
       ...(x === undefined ? {} : { x }),
       ...(y === undefined ? {} : { y }),
       ...(z === undefined ? {} : { z }),

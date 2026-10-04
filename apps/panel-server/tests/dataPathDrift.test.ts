@@ -25,14 +25,12 @@ vi.mock("../utils/paths.ts", async () => {
 });
 vi.mock("../routes/worldMap.ts", () => ({
   getWorldMapDiagnostics: async () => ({
-    provider: { origin: "https://pzmap.org", status: "unknown" },
-    tiles: {
-      origin: "https://tiles.pzmap.org",
-      mode: "direct",
-      referrerPolicy: "no-referrer",
-    },
     available: false,
-    error: "network disabled for this test",
+    key: "",
+    folders: [],
+    bounds: null,
+    floors: { min: 0, max: 0 },
+    warnings: [],
   }),
 }));
 

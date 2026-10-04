@@ -83,8 +83,7 @@ import { SocketContext } from '@/contexts/SocketContext'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { cn, copyText } from '@/lib/utils'
-import { apiFetch, gameIntegrationApi, mapApi } from '@/lib/api'
-import { buildTileUrl } from './worldMapHelpers'
+import { apiFetch, gameIntegrationApi } from '@/lib/api'
 import { getHealthHeadline } from './debugHealthHeadline'
 
 interface LogEntry {
@@ -208,20 +207,12 @@ interface WorldMapDiagnostics {
   summary: DiagSummary
   checks: DiagCheck[]
   durationMs: number
-  provider: {
-    origin: string
-    status: 'ok' | 'error' | 'unknown'
-    statusCode?: number
-    error?: string
-  }
-  tiles: {
-    origin: string
-    mode: 'direct'
-    referrerPolicy: 'no-referrer'
-  }
-  available: boolean
-  version?: string
-  error?: string
+  map: {
+    available: boolean
+    folders: Array<{ id: number; name: string; source: 'vanilla' | 'workshop'; image: object | null }>
+    floors: { min: number; max: number }
+    warnings: string[]
+  } | null
   save: {
     zomboidDataPath: string | null
     savesDir: string | null
@@ -314,15 +305,7 @@ export default function Debug() {
     null,
   )
   const [refreshingWorldMap, setRefreshingWorldMap] = useState(false)
-  const [worldMapTilePreviewKey, setWorldMapTilePreviewKey] = useState(0)
-  const [worldMapTileUrl, setWorldMapTileUrl] = useState<string | null>(null)
   const [worldMapHideOk, setWorldMapHideOk] = useState(false)
-  const [worldMapTileErrors, setWorldMapTileErrors] = useState<{
-    b42: boolean
-  }>({ b42: false })
-  const [worldMapTileMeta, setWorldMapTileMeta] = useState<{
-    b42: { w: number; h: number } | null
-  }>({ b42: null })
   const [worldMapError, setWorldMapError] = useState<string | null>(null)
   const [worldMapNowTick, setWorldMapNowTick] = useState(() => Date.now())
   type ProbeResult = {
@@ -348,21 +331,6 @@ export default function Debug() {
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const endpoint = url.startsWith('/api') ? url.slice(4) : url
     return apiFetch(endpoint, options)
-  }, [])
-
-  const refreshWorldMapTilePreview = useCallback(async () => {
-    setWorldMapTileErrors({ b42: false })
-    setWorldMapTileMeta({ b42: null })
-    setWorldMapTilePreviewKey((key) => key + 1)
-    try {
-      const info = await mapApi.resolve()
-      const baseLayer = info.layers.find((layer) => layer.id === 'base')
-      if (!baseLayer) throw new Error('Base map layer unavailable')
-      setWorldMapTileUrl(buildTileUrl(baseLayer, 0, 0, 0, 0))
-    } catch {
-      setWorldMapTileUrl(null)
-      setWorldMapTileErrors({ b42: true })
-    }
   }, [])
 
   const [editingPaths, setEditingPaths] = useState(false)
@@ -475,7 +443,6 @@ export default function Debug() {
       const data = await res.json()
       if (data?.checks) {
         setWorldMapDiag(data)
-        await refreshWorldMapTilePreview()
       } else {
         setWorldMapError(
           'Diagnostics endpoint returned an unexpected response.',
@@ -488,7 +455,7 @@ export default function Debug() {
     } finally {
       setRefreshingWorldMap(false)
     }
-  }, [authFetch, refreshWorldMapTilePreview])
+  }, [authFetch])
 
   const runProbe = useCallback(
     async (
@@ -1918,14 +1885,9 @@ export default function Debug() {
                 )
                 lines.push('')
                 lines.push(
-                  `Map provider: ${wm.provider.status.toUpperCase()} ${wm.provider.origin}${wm.provider.statusCode ? ` (HTTP ${wm.provider.statusCode})` : ''}${wm.provider.error ? ` — ${wm.provider.error}` : ''}`,
+                  `Map files: ${wm.map?.available ? wm.map.folders.map((folder) => `${folder.name}${folder.image ? '' : ' (outlines only)'}`).join(', ') : 'not found'}`,
                 )
-                lines.push(
-                  `Tiles: ${wm.tiles.mode} from ${wm.tiles.origin} (referrer policy: ${wm.tiles.referrerPolicy})`,
-                )
-                lines.push(
-                  `Metadata: ${wm.available ? `Build ${wm.version}` : 'unavailable'}`,
-                )
+                for (const warning of wm.map?.warnings ?? []) lines.push(`  ${warning}`)
                 lines.push('')
                 lines.push(
                   `Save: build=${wm.save.build} count=${wm.save.saveCount} active=${wm.save.activeSaveName || '—'}`,
@@ -2140,128 +2102,36 @@ export default function Debug() {
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Globe className="w-4 h-4 text-primary" />
-                            {'Map provider and tile delivery'}
+                            {'Map files'}
                           </CardTitle>
                           <CardDescription>
-                            {'The panel resolves current map metadata; the browser loads tiles directly without sending a referrer.'}
+                            {'The map is drawn from the game files of each Map= entry, read on this panel host.'}
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="flex items-start justify-between gap-3 p-3 rounded-md border bg-card">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {wm?.provider.status === 'ok' ? (
-                                  <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-                                ) : wm ? (
-                                  <AlertCircle className="w-4 h-4 text-warning shrink-0" />
-                                ) : (
-                                  <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
-                                )}
-                                <span className="font-medium text-sm">
-                                  {wm?.available
-                                    ? `Build ${wm.version} metadata available`
-                                    : wm
-                                      ? 'Live map metadata unavailable'
-                                      : 'Checking map provider…'}
+                        <CardContent className="space-y-2">
+                          {!wm ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />{'Checking map files…'}</div>
+                          ) : !wm.map?.available ? (
+                            <div className="flex items-start gap-2 rounded-md border bg-card p-3 text-sm">
+                              <AlertCircle className="mt-0.5 w-4 h-4 shrink-0 text-warning" />
+                              <span>{wm.map?.warnings.join(' ') || 'No map folder was found for this server.'}</span>
+                            </div>
+                          ) : <>
+                            {wm.map.folders.map((folder) => (
+                              <div key={folder.id} className="flex items-center justify-between gap-3 rounded-md border bg-card p-3 text-sm">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <CheckCircle className="w-4 h-4 shrink-0 text-primary" />
+                                  <span className="truncate font-medium">{folder.name}</span>
+                                  <Badge variant="outline" className="text-[10px]">{folder.source === 'workshop' ? 'Workshop' : 'Game'}</Badge>
                                 </span>
-                                {wm?.provider.statusCode && (
-                                  <Badge variant="outline" className="text-[10px]">
-                                    HTTP {wm.provider.statusCode}
-                                  </Badge>
-                                )}
+                                <span className="shrink-0 text-xs text-muted-foreground">{folder.image ? 'Map image and outlines' : 'Outlines only'}</span>
                               </div>
-                              {wm && (
-                                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                  <CopyablePath label={'Provider'} value={wm.provider.origin} />
-                                  <CopyablePath label={'Tile host'} value={wm.tiles.origin} />
-                                </div>
-                              )}
-                              {wm?.provider.error && (
-                                <p className="mt-1 text-xs text-muted-foreground break-words">
-                                  {wm.provider.error}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-3 pt-3 border-t">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                {'Direct browser tile preview'}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => void refreshWorldMapTilePreview()}
-                              >
-                                <RefreshCw className="w-3 h-3 me-1" />{' '}
-                                {'Refresh'}
-                              </Button>
-                            </div>
-                            <div className="flex flex-wrap gap-3">
-                              <div className="flex items-center gap-3 rounded-lg border border-border/55 bg-muted/20 p-2.5">
-                                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded border border-border/60 bg-muted/40">
-                                  {worldMapTileErrors.b42 ? (
-                                    <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center text-destructive">
-                                      <AlertCircle className="w-4 h-4 mb-0.5" />
-                                      <div className="text-[9px] font-medium leading-tight">
-                                        {'Failed'}
-                                      </div>
-                                    </div>
-                                  ) : worldMapTileUrl ? (
-                                    <img
-                                      key={`b42-${worldMapTilePreviewKey}`}
-                                      src={worldMapTileUrl}
-                                      alt={'B42 floor 0 / 0_0 preview'}
-                                      referrerPolicy="no-referrer"
-                                      className="h-full w-full object-cover"
-                                      onLoad={(event) => {
-                                        const img = event.currentTarget
-                                        setWorldMapTileMeta({
-                                          b42: { w: img.naturalWidth, h: img.naturalHeight },
-                                        })
-                                      }}
-                                      onError={() => setWorldMapTileErrors({ b42: true })}
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center p-1 text-center text-muted-foreground">
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                    {'B42 floor 0 / 0_0'}
-                                  </div>
-                                  <div className="mt-1">
-                                    {worldMapTileErrors.b42 ? (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-                                        <AlertCircle className="w-2.5 h-2.5" />{' '}
-                                        {'Tile failed'}
-                                      </span>
-                                    ) : worldMapTileMeta.b42 ? (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                                        <CheckCircle className="w-2.5 h-2.5" />{' '}
-                                        {'Loaded'}{' '}
-                                        <span className="font-mono tabular-nums text-primary/80">
-                                          {worldMapTileMeta.b42.w}×{worldMapTileMeta.b42.h}
-                                        </span>
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-border/55 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />{' '}
-                                        {'Loading…'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="mt-1 text-[10px] text-muted-foreground/70 leading-tight">
-                                    {'The browser requests this tile from the resolved provider URL.'}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                            ))}
+                            <p className="text-xs text-muted-foreground">{`Floors ${wm.map.floors.min} to ${wm.map.floors.max}.`}</p>
+                            {wm.map.warnings.map((warning) => (
+                              <p key={warning} className="flex items-start gap-2 text-xs text-warning"><AlertCircle className="mt-0.5 w-3.5 h-3.5 shrink-0" />{warning}</p>
+                            ))}
+                          </>}
                         </CardContent>
                       </Card>
 
