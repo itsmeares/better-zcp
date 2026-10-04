@@ -280,7 +280,7 @@ sudo yum install glibc.i686 libstdc++.i686
 ```
 
 **You know it worked when:** the SteamCMD download step in the wizard (Phase
-7) completes instead of hanging or exiting immediately.
+6) completes instead of hanging or exiting immediately.
 
 **If you skip this:** the panel's own install flow tries to detect the
 problem and will emit a warning in the install log along the lines of *"Could

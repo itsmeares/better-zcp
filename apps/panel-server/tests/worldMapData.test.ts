@@ -133,6 +133,9 @@ beforeAll(async () => {
 
   fs.writeFileSync(path.join(mod, "0_0.lotheader"), lotHeader([{ name: "modroom", z: 0, rects: [[2, 2, 3, 3]] }]));
   fs.writeFileSync(path.join(mod, "worldmap.xml"), worldMapXml([{ x: 0, y: 0, props: { building: "Industrial", RoomTone: "Factory" } }]));
+  await writeZip(path.join(mod, "pyramid.zip"), {
+    "pyramid.txt": "VERSION=1\nbounds=0 0 512 512\nimageSize=512 512\n",
+  });
 });
 
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -209,6 +212,14 @@ describe("world map data for the active server", () => {
     expect((await readPyramidTile(pyramid, 6, 0, 0))?.toString()).toBe("level1");
     expect(await readPyramidTile(pyramid, 7, 5, 5)).toBeNull();
     expect(await readPyramidTile(pyramid, 2, 0, 0)).toBeNull();
+  });
+
+  it("rejects a pyramid with valid metadata but no level directories", async () => {
+    const data = await getWorldMapData();
+    expect(data.folders[0].pyramid).toBeNull();
+    expect(data.warnings).toContain(
+      'The map image for "ModMap" uses a layout the panel cannot show yet; its outlines are still drawn.',
+    );
   });
 
   it("searches towns, streets, building types and rooms on every floor", async () => {

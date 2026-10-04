@@ -273,7 +273,7 @@ async function openPyramid(dir: string, warnings: string[], name: string): Promi
     const maxLevel = Math.max(...levels);
     // ponytail: only 1 px per square, grid-aligned pyramids map onto map tiles directly; others need resampling.
     if (
-      !Number.isFinite(x0) || x1 - x0 !== width || y1 - y0 !== height ||
+      levels.length === 0 || !Number.isFinite(x0) || x1 - x0 !== width || y1 - y0 !== height ||
       x0 % (TILE << maxLevel) !== 0 || y0 % (TILE << maxLevel) !== 0 || maxLevel > PYRAMID_ZOOM
     ) {
       warnings.push(`The map image for "${name}" uses a layout the panel cannot show yet; its outlines are still drawn.`);
