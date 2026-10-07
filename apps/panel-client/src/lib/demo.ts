@@ -354,7 +354,7 @@ function demoServer() {
     serverConfigPath: '/home/pz/Zomboid/Server',
     rconHost: '127.0.0.1',
     rconPort: 27015,
-    rconPassword: '',
+    rconPassword: '••••••••',
     serverPort: 16261,
     minMemory: 2,
     maxMemory: 4,
@@ -466,6 +466,25 @@ function demoActivity() {
   ]
 }
 
+function demoConsoleLog() {
+  const t = (minutesAgo: number) => Date.now() - minutesAgo * 60_000
+  return [
+    `LOG  : General      f:0, t:${t(192)}> Loading world DoomerZDemo`,
+    `LOG  : Network      f:0, t:${t(191)}> RCON: listening on port 27015`,
+    `LOG  : General      f:0, t:${t(190)}> *** SERVER STARTED ****`,
+    `LOG  : General      f:0, t:${t(171)}> ConnectionManager: [fully-connected] "Kate"`,
+    `LOG  : General      f:0, t:${t(140)}> moveZombie: There are no zombies in the cell`,
+    `WARN : Mod          f:0, t:${t(131)}> Brita: missing translation for item Base.M4A1`,
+    `LOG  : General      f:0, t:${t(130)}> kicked user GrieferJoe (Spawn camping)`,
+    `LOG  : General      f:0, t:${t(96)}> ConnectionManager: [fully-connected] "Baldspot"`,
+    `ERROR: General      f:0, t:${t(62)}> java.lang.NullPointerException: Cannot invoke "zombie.inventory.InventoryItem.getType()"`,
+    '    at zombie.inventory.ItemContainer.getItemCount(ItemContainer.java:1203)',
+    `LOG  : General      f:0, t:${t(41)}> ConnectionManager: [fully-connected] "nightowl_92"`,
+    `LOG  : General      f:0, t:${t(30)}> Saving world... done in 812 ms`,
+    `LOG  : General      f:0, t:${t(4)}> ConnectionManager: [fully-connected] "Marisol"`,
+  ]
+}
+
 function queryParam(input: RequestInfo | URL, name: string): string | null {
   const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
   try {
@@ -524,6 +543,24 @@ export function installDemoFetchShim(): void {
     }
     if (path === '/api/players') {
       return jsonResponse({ players: DEMO_PLAYERS.map((name) => ({ name, online: true })) })
+    }
+    if (path === '/api/server/console-log') {
+      return jsonResponse({ lines: demoConsoleLog(), size: 4096, exists: true, path: '/home/pz/Zomboid/server-console.txt' })
+    }
+    if (path === '/api/server/console-log/stream') {
+      return jsonResponse({ newLines: [], currentSize: 4096, rotated: false })
+    }
+    if (path === '/api/config/test-rcon') {
+      return jsonResponse({ success: true, connected: true })
+    }
+    if (path === '/api/rcon/history') {
+      return jsonResponse({
+        history: [
+          { id: 3, command: 'players', response: 'Players connected (4): -Kate -Baldspot -nightowl_92 -Marisol', success: 1, executed_at: new Date(Date.now() - 300_000).toISOString() },
+          { id: 2, command: 'save', response: 'World saved', success: 1, executed_at: new Date(Date.now() - 1_800_000).toISOString() },
+          { id: 1, command: 'kickuser GrieferJoe', response: 'User GrieferJoe kicked.', success: 1, executed_at: new Date(Date.now() - 7_800_000).toISOString() },
+        ],
+      })
     }
     if (path === '/api/players/activity') {
       return jsonResponse({ logs: demoActivity() })

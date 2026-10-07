@@ -2,7 +2,8 @@
 // Captures every client route in demo mode, in dark and light, on desktop and
 // phone. The images are review evidence for UI changes and are not committed.
 //
-// Usage: pnpm screenshots [label] [--routes=/,/console]
+// Usage: pnpm screenshots [label] [--routes=/,/console,/console@Commands]
+// A route can end in @Name to click the tab or button with that name first.
 // Output: .screenshots/<label>/<route>-<theme>-<viewport>.png
 
 import { spawn } from 'node:child_process';
@@ -67,11 +68,14 @@ try {
       page.on('console', (message) => {
         if (message.type() === 'error') pageErrors.push(`${current}: ${message.text()}`);
       });
-      for (const route of routes) {
-        current = `${route} (${themeName}, ${viewportName})`;
+      for (const spec of routes) {
+        const [route, click] = spec.split('@');
+        current = `${spec} (${themeName}, ${viewportName})`;
         await page.goto(`http://127.0.0.1:${PORT}/#${route}`, { waitUntil: 'networkidle' });
+        if (click) await page.getByRole('tab', { name: click }).or(page.getByRole('button', { name: click })).first().click();
         await delay(600);
-        const name = `${route === '/' ? 'overview' : route.slice(1).replace(/\//g, '_')}-${themeName}-${viewportName}.png`;
+        const slug = (route === '/' ? 'overview' : route.slice(1).replace(/\//g, '_')) + (click ? `-${click.toLowerCase().replace(/\W+/g, '-')}` : '');
+        const name = `${slug}-${themeName}-${viewportName}.png`;
         await page.screenshot({ path: path.join(outDir, name), fullPage: true });
       }
       await context.close();
