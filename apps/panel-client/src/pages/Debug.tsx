@@ -2028,7 +2028,7 @@ export default function Debug() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <Button variant="outline" size="sm" asChild>
                                 <Link
-                                  to="/world-map"
+                                  to="/map"
                                   search={{ x: undefined, y: undefined, z: undefined }}
                                 >
                                   <ExternalLink className="w-4 h-4 me-2" />

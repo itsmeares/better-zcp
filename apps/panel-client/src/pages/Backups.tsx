@@ -801,7 +801,7 @@ export default function Backups() {
         <AlertTitle>{'Recovery snapshots while the server runs'}</AlertTitle>
         <AlertDescription>
           {'Project Zomboid creates its own rotating snapshots. Set the interval and count under '}
-          <Link className="underline" to="/server-config">{'Server Config → Backups'}</Link>
+          <Link className="underline" to="/config">{'Server Config → Backups'}</Link>
           {'. New servers default to one snapshot per hour and five copies. Full backups below briefly stop the server.'}
         </AlertDescription>
       </Alert>

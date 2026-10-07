@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthScreenLoader } from './components/AuthScreenLoader'
 import { TooltipProvider } from './components/ui-legacy/tooltip'
-import { Toaster } from './components/ui-legacy/toaster'
+import { ToastProvider } from './components/ui/toast'
 
 const App = lazy(() => import('./App'))
 const Login = lazy(() => import('./pages/Login'))
@@ -18,7 +18,6 @@ function AuthGate() {
   return (
     <Suspense fallback={<AuthScreenLoader />}>
       {needsSetup ? <Setup /> : authEnabled && !isAuthenticated ? <Login /> : <App />}
-      <Toaster />
     </Suspense>
   )
 }
@@ -29,9 +28,11 @@ export default function AppShell() {
       <DirectionProvider dir="ltr">
         <ThemeProvider>
           <TooltipProvider>
-            <AuthProvider>
-              <AuthGate />
-            </AuthProvider>
+            <ToastProvider>
+              <AuthProvider>
+                <AuthGate />
+              </AuthProvider>
+            </ToastProvider>
           </TooltipProvider>
         </ThemeProvider>
       </DirectionProvider>

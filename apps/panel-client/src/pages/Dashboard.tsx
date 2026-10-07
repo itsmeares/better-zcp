@@ -1389,7 +1389,7 @@ export default function Dashboard() {
     },
     {
       id: 'schedule',
-      to: '/scheduler',
+      to: '/schedule',
       icon: CalendarClock,
       label: 'Schedule',
       state: scheduleState,
@@ -1424,7 +1424,7 @@ export default function Dashboard() {
       state: backupState,
       tone: maintenance.backupCount === 0 ? 'warning' : 'good',
     },
-    { id: 'config', to: '/server-config', icon: Server, label: 'Config' },
+    { id: 'config', to: '/config', icon: Server, label: 'Config' },
   ]
 
   const WORK_ITEM_SEVERITY: Record<

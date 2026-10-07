@@ -2590,7 +2590,7 @@ export default function ServerConfig() {
                           variant="ghost"
                           className="h-6 px-2 text-xs"
                         >
-                          <Link to="/debug">{'Re-run diagnostics'}</Link>
+                          <Link to="/diagnostics">{'Re-run diagnostics'}</Link>
                         </Button>
                       )}
                       {triage?.cause === 'absent' && (
@@ -3951,7 +3951,7 @@ export default function ServerConfig() {
                     </Tooltip>
                   </TooltipProvider>
                   <Link
-                    to="/world-map"
+                    to="/map"
                     title="Right-click the map to copy coordinates"
                     className="flex h-7 items-center gap-1 rounded border border-border/60 bg-muted/30 px-2 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >

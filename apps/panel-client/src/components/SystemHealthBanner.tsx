@@ -1,9 +1,10 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { AlertTriangle, ShieldAlert, HelpCircle, X } from 'lucide-react'
+import { AlertTriangle, ShieldAlert, X } from 'lucide-react'
 import { SocketContext } from '@/contexts/SocketContext'
 import { systemApi, type StorageHealth } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 
 const POLL_INTERVAL_MS = 30_000
 const DISK_SOCKET_EVENTS = [
@@ -107,57 +108,24 @@ export function SystemHealthBanner() {
   const Icon = isCritical ? ShieldAlert : AlertTriangle
 
   return (
-    <div
+    <Alert
+      variant={isCritical ? 'error' : 'warning'}
       role={isCritical ? 'alert' : 'status'}
       aria-live={isCritical ? 'assertive' : 'polite'}
-      className={cn(
-        'mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2',
-        isCritical
-          ? 'border-destructive/35 bg-destructive/5'
-          : 'border-warning/35 bg-warning/4',
-      )}
     >
-      <Icon
-        className={cn(
-          'h-3.5 w-3.5 shrink-0',
-          isCritical ? 'text-destructive' : 'text-warning',
-        )}
-        aria-hidden="true"
-      />
-      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <span
-          className={cn(
-            'font-mono text-[10px] font-semibold uppercase tracking-[0.18em]',
-            isCritical ? 'text-destructive' : 'text-warning',
-          )}
-        >
-          {banner.title}
-        </span>
-        <span className="min-w-0 text-xs text-muted-foreground">
-          {banner.message}
-        </span>
-      </div>
-      <div className="ms-auto flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => void navigate({ to: '/debug' })}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <HelpCircle className="h-3 w-3" aria-hidden="true" />
-          {'Diagnostics'}
-        </button>
+      <Icon aria-hidden />
+      <AlertTitle>{banner.title}</AlertTitle>
+      <AlertDescription>{banner.message}</AlertDescription>
+      <AlertAction>
+        <Button size="xs" variant="outline" onClick={() => void navigate({ to: '/diagnostics' })}>
+          Diagnostics
+        </Button>
         {banner.dismissible && (
-          <button
-            type="button"
-            onClick={() => setDismissed(true)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={'Dismiss storage warning'}
-            title={'Dismiss'}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          <Button size="icon-xs" variant="ghost" onClick={() => setDismissed(true)} aria-label="Dismiss storage warning">
+            <X aria-hidden />
+          </Button>
         )}
-      </div>
-    </div>
+      </AlertAction>
+    </Alert>
   )
 }

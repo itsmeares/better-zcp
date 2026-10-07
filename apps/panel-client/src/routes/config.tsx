@@ -4,6 +4,6 @@ import { FeatureRoute } from '../route-components'
 
 const ServerConfig = lazy(() => import('../pages/ServerConfig'))
 
-export const Route = createFileRoute('/server-config')({
+export const Route = createFileRoute('/config')({
   component: () => <FeatureRoute featureName="nav.items.serverConfiguration" Component={ServerConfig} />,
 })

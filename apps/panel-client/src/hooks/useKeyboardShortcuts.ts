@@ -1,97 +1,59 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { NAV_ITEMS } from '@/components/shell/nav'
 
 export interface ShortcutDef {
   key: string
   label: string
-  path?: string
-  action?: () => void
   group: string
 }
 
-function buildNavShortcuts(): ShortcutDef[] {
-  const group = 'Navigation'
-  return [
-    { key: '1', label: 'Dashboard', path: '/', group },
-    { key: '2', label: 'Console', path: '/console', group },
-    { key: '3', label: 'Players', path: '/players', group },
-    { key: '5', label: 'Mods', path: '/mods', group },
-    { key: '6', label: 'Backups', path: '/backups', group },
-    { key: '7', label: 'Server Config', path: '/server-config', group },
-    { key: '8', label: 'Settings', path: '/settings', group },
-  ]
-}
+const NAV_SHORTCUTS = NAV_ITEMS.filter((item) => item.shortcut)
 
-function buildPageShortcuts(): ShortcutDef[] {
-  const group = 'Page Actions'
-  return [
-    { key: 'Ctrl+S', label: 'Save', group },
-    { key: 'Ctrl+K', label: 'Focus search', group },
-    { key: 'R', label: 'Refresh (Dashboard)', group },
-    { key: '`', label: 'Switch console tab', group },
-    { key: 'A', label: 'Toggle auto-scroll (Console)', group },
-  ]
-}
+export const SHORTCUTS: ShortcutDef[] = [
+  { key: 'Ctrl+K', label: 'Go to a page or run a command', group: 'General' },
+  { key: 'Ctrl+B', label: 'Collapse or expand the sidebar', group: 'General' },
+  { key: '?', label: 'Show keyboard shortcuts', group: 'General' },
+  ...NAV_SHORTCUTS.map((item) => ({ key: item.shortcut!, label: item.label, group: 'Pages' })),
+  { key: 'Ctrl+S', label: 'Save (Configuration, Settings)', group: 'On a page' },
+  { key: 'R', label: 'Refresh (Overview)', group: 'On a page' },
+  { key: '`', label: 'Switch tab (Console)', group: 'On a page' },
+  { key: 'A', label: 'Toggle auto-scroll (Console)', group: 'On a page' },
+  { key: '/', label: 'Search the map (Map)', group: 'On a page' },
+  { key: ', .', label: 'Floor down, floor up (Map)', group: 'On a page' },
+]
 
 function isInputFocused(): boolean {
   const el = document.activeElement
   if (!el) return false
   const tag = el.tagName.toLowerCase()
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
-  if ((el as HTMLElement).isContentEditable) return true
-  return false
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || (el as HTMLElement).isContentEditable
 }
 
+/** Global shortcuts: number keys for pages and ? for the help dialog. */
 export function useKeyboardShortcuts() {
   const navigate = useNavigate()
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const navShortcuts = buildNavShortcuts()
-
-  const allShortcuts: ShortcutDef[] = [
-    ...navShortcuts,
-    ...buildPageShortcuts(),
-    {
-      key: '?',
-      label: 'Show keyboard shortcuts',
-      action: () => setHelpOpen(true),
-      group: 'General',
-    },
-  ]
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (isInputFocused()) return
-      if (e.ctrlKey || e.altKey || e.metaKey) return
-
-      const key = e.key
-
-      if (key === '?') {
-        e.preventDefault()
-        setHelpOpen((prev) => !prev)
-        return
-      }
-
-      if (key === 'Escape') {
-        setHelpOpen(false)
-        return
-      }
-
-      const shortcut = navShortcuts.find((s) => s.key === key)
-      if (shortcut?.path) {
-        e.preventDefault()
-        void navigate({ to: shortcut.path as never })
-      }
-    },
-    [navigate, navShortcuts],
-  )
-
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isInputFocused() || e.ctrlKey || e.altKey || e.metaKey) return
+      if (e.key === '?') {
+        e.preventDefault()
+        setHelpOpen((open) => !open)
+        return
+      }
+      const item = NAV_SHORTCUTS.find((nav) => nav.shortcut === e.key)
+      if (item) {
+        e.preventDefault()
+        void navigate({ to: item.to })
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [navigate])
 
-  return { helpOpen, setHelpOpen, shortcuts: allShortcuts }
+  return { helpOpen, setHelpOpen }
 }
 
 export function usePageShortcut(

@@ -12,16 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BackupsRouteImport } from './routes/backups'
+import { Route as ConfigRouteImport } from './routes/config'
 import { Route as ConsoleRouteImport } from './routes/console'
-import { Route as DebugRouteImport } from './routes/debug'
+import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as ModsRouteImport } from './routes/mods'
 import { Route as PlayersRouteImport } from './routes/players'
-import { Route as SchedulerRouteImport } from './routes/scheduler'
-import { Route as ServerConfigRouteImport } from './routes/server-config'
+import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as ServerSetupRouteImport } from './routes/server-setup'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as WorldMapRouteImport } from './routes/world-map'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -38,14 +38,24 @@ const BackupsRoute = BackupsRouteImport.update({
   path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfigRoute = ConfigRouteImport.update({
+  id: '/config',
+  path: '/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConsoleRoute = ConsoleRouteImport.update({
   id: '/console',
   path: '/console',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DebugRoute = DebugRouteImport.update({
-  id: '/debug',
-  path: '/debug',
+const DiagnosticsRoute = DiagnosticsRouteImport.update({
+  id: '/diagnostics',
+  path: '/diagnostics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModsRoute = ModsRouteImport.update({
@@ -58,14 +68,9 @@ const PlayersRoute = PlayersRouteImport.update({
   path: '/players',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SchedulerRoute = SchedulerRouteImport.update({
-  id: '/scheduler',
-  path: '/scheduler',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ServerConfigRoute = ServerConfigRouteImport.update({
-  id: '/server-config',
-  path: '/server-config',
+const ScheduleRoute = ScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServerSetupRoute = ServerSetupRouteImport.update({
@@ -83,57 +88,52 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorldMapRoute = WorldMapRouteImport.update({
-  id: '/world-map',
-  path: '/world-map',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
+  '/config': typeof ConfigRoute
   '/console': typeof ConsoleRoute
-  '/debug': typeof DebugRoute
+  '/diagnostics': typeof DiagnosticsRoute
+  '/map': typeof MapRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
-  '/scheduler': typeof SchedulerRoute
-  '/server-config': typeof ServerConfigRoute
+  '/schedule': typeof ScheduleRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/world-map': typeof WorldMapRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
+  '/config': typeof ConfigRoute
   '/console': typeof ConsoleRoute
-  '/debug': typeof DebugRoute
+  '/diagnostics': typeof DiagnosticsRoute
+  '/map': typeof MapRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
-  '/scheduler': typeof SchedulerRoute
-  '/server-config': typeof ServerConfigRoute
+  '/schedule': typeof ScheduleRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/world-map': typeof WorldMapRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
+  '/config': typeof ConfigRoute
   '/console': typeof ConsoleRoute
-  '/debug': typeof DebugRoute
+  '/diagnostics': typeof DiagnosticsRoute
+  '/map': typeof MapRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
-  '/scheduler': typeof SchedulerRoute
-  '/server-config': typeof ServerConfigRoute
+  '/schedule': typeof ScheduleRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/world-map': typeof WorldMapRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,62 +141,62 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
+    | '/config'
     | '/console'
-    | '/debug'
+    | '/diagnostics'
+    | '/map'
     | '/mods'
     | '/players'
-    | '/scheduler'
-    | '/server-config'
+    | '/schedule'
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/world-map'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$'
     | '/backups'
+    | '/config'
     | '/console'
-    | '/debug'
+    | '/diagnostics'
+    | '/map'
     | '/mods'
     | '/players'
-    | '/scheduler'
-    | '/server-config'
+    | '/schedule'
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/world-map'
   id:
     | '__root__'
     | '/'
     | '/$'
     | '/backups'
+    | '/config'
     | '/console'
-    | '/debug'
+    | '/diagnostics'
+    | '/map'
     | '/mods'
     | '/players'
-    | '/scheduler'
-    | '/server-config'
+    | '/schedule'
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/world-map'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   BackupsRoute: typeof BackupsRoute
+  ConfigRoute: typeof ConfigRoute
   ConsoleRoute: typeof ConsoleRoute
-  DebugRoute: typeof DebugRoute
+  DiagnosticsRoute: typeof DiagnosticsRoute
+  MapRoute: typeof MapRoute
   ModsRoute: typeof ModsRoute
   PlayersRoute: typeof PlayersRoute
-  SchedulerRoute: typeof SchedulerRoute
-  ServerConfigRoute: typeof ServerConfigRoute
+  ScheduleRoute: typeof ScheduleRoute
   ServerSetupRoute: typeof ServerSetupRoute
   ServersRoute: typeof ServersRoute
   SettingsRoute: typeof SettingsRoute
-  WorldMapRoute: typeof WorldMapRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -222,6 +222,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/config': {
+      id: '/config'
+      path: '/config'
+      fullPath: '/config'
+      preLoaderRoute: typeof ConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/console': {
       id: '/console'
       path: '/console'
@@ -229,11 +236,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsoleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/debug': {
-      id: '/debug'
-      path: '/debug'
-      fullPath: '/debug'
-      preLoaderRoute: typeof DebugRouteImport
+    '/diagnostics': {
+      id: '/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/diagnostics'
+      preLoaderRoute: typeof DiagnosticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mods': {
@@ -250,18 +264,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/scheduler': {
-      id: '/scheduler'
-      path: '/scheduler'
-      fullPath: '/scheduler'
-      preLoaderRoute: typeof SchedulerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/server-config': {
-      id: '/server-config'
-      path: '/server-config'
-      fullPath: '/server-config'
-      preLoaderRoute: typeof ServerConfigRouteImport
+    '/schedule': {
+      id: '/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof ScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/server-setup': {
@@ -285,13 +292,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/world-map': {
-      id: '/world-map'
-      path: '/world-map'
-      fullPath: '/world-map'
-      preLoaderRoute: typeof WorldMapRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -299,16 +299,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   BackupsRoute: BackupsRoute,
+  ConfigRoute: ConfigRoute,
   ConsoleRoute: ConsoleRoute,
-  DebugRoute: DebugRoute,
+  DiagnosticsRoute: DiagnosticsRoute,
+  MapRoute: MapRoute,
   ModsRoute: ModsRoute,
   PlayersRoute: PlayersRoute,
-  SchedulerRoute: SchedulerRoute,
-  ServerConfigRoute: ServerConfigRoute,
+  ScheduleRoute: ScheduleRoute,
   ServerSetupRoute: ServerSetupRoute,
   ServersRoute: ServersRoute,
   SettingsRoute: SettingsRoute,
-  WorldMapRoute: WorldMapRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -4,7 +4,7 @@ import { FeatureRoute } from '../route-components'
 
 const WorldMap = lazy(() => import('../pages/WorldMap'))
 
-export const Route = createFileRoute('/world-map')({
+export const Route = createFileRoute('/map')({
   validateSearch: (search: Record<string, unknown>) => {
     const coordinate = (value: unknown) => {
       const number = typeof value === 'number'

@@ -17,6 +17,7 @@ function createPanelRouter() {
           ? createHashHistory()
           : createBrowserHistory(),
     defaultPendingMs: 100,
+    defaultPreload: 'intent',
     scrollRestoration: true,
   })
 }

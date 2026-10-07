@@ -12,8 +12,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from '@playwright/test';
 
 const ROUTES = [
-  '/', '/console', '/players', '/world-map', '/server-config', '/mods',
-  '/scheduler', '/backups', '/servers', '/server-setup', '/settings', '/debug',
+  '/', '/console', '/players', '/map', '/config', '/mods',
+  '/schedule', '/backups', '/servers', '/server-setup', '/settings', '/diagnostics',
 ];
 // The theme key and its stored values are kept across the redesign, so the
 // same script captures the old and the new UI.

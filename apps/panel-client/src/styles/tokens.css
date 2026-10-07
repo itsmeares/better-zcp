@@ -47,6 +47,21 @@
   --sidebar-border: --alpha(var(--color-black) / 6%);
   --sidebar-ring: var(--color-neutral-400);
 
+  /* Nav item hues, used only by the sidebar and command palette tiles.
+     None of them is a status color. */
+  --hue-overview: var(--color-indigo-500);
+  --hue-console: var(--color-slate-500);
+  --hue-players: var(--color-blue-500);
+  --hue-map: var(--color-teal-500);
+  --hue-mods: var(--color-violet-500);
+  --hue-config: var(--color-orange-500);
+  --hue-server-settings: var(--color-stone-500);
+  --hue-backups: var(--color-sky-500);
+  --hue-schedule: var(--color-fuchsia-500);
+  --hue-servers: var(--color-slate-500);
+  --hue-diagnostics: var(--color-pink-500);
+  --hue-settings: var(--color-zinc-500);
+
   --chart-1: var(--color-neutral-800);
   --chart-2: var(--color-neutral-400);
   --chart-3: var(--color-amber-500);

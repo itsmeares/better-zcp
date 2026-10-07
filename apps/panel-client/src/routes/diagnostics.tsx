@@ -4,6 +4,6 @@ import { FeatureRoute } from '../route-components'
 
 const Debug = lazy(() => import('../pages/Debug'))
 
-export const Route = createFileRoute('/debug')({
+export const Route = createFileRoute('/diagnostics')({
   component: () => <FeatureRoute featureName="nav.items.debugLogs" Component={Debug} />,
 })

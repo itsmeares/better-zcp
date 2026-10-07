@@ -4,7 +4,6 @@ import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { usePageShortcut } from '../hooks/useKeyboardShortcuts'
 import { copyText } from '@/lib/utils'
 import {
   Package,
@@ -292,7 +291,6 @@ export default function Mods() {
   const [deferredSearchQuery, setDeferredSearchQuery] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trackedModsRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const [showUpdatesOnly, setShowUpdatesOnly] = useState(false)
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set())
 
@@ -303,14 +301,6 @@ export default function Mods() {
   const [disabledLoading, setDisabledLoading] = useState(false)
   const [enablingId, setEnablingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  usePageShortcut(
-    'k',
-    () => {
-      searchInputRef.current?.focus()
-    },
-    { ctrl: true },
-  )
 
   const [advancedAddOpen, setAdvancedAddOpen] = useState(false)
   const [advancedModInput, setAdvancedModInput] = useState('')
@@ -4097,7 +4087,6 @@ export default function Mods() {
                         <div className="relative min-w-0 basis-full sm:basis-auto sm:flex-1 sm:max-w-sm">
                           <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <Input
-                            ref={searchInputRef}
                             value={searchQuery}
                             onChange={(e) => handleSearchChange(e.target.value)}
                             placeholder={'Search mods...'}

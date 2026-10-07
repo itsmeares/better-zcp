@@ -3696,13 +3696,13 @@ export default function Settings() {
                         'Install paths, RCON host and password, memory, and SteamCMD.',
                     },
                     {
-                      href: '/scheduler',
+                      href: '/schedule',
                       label: 'Scheduled tasks',
                       detail:
                         'Restarts, announcements, and recurring commands.',
                     },
                     {
-                      href: '/server-config',
+                      href: '/config',
                       label: 'Game server config',
                       detail: 'Server INI options and sandbox rules.',
                     },
