@@ -93,68 +93,6 @@ export function resolveServerCardRunning(
   return processStatus.running
 }
 
-export interface DashboardStatusInput {
-  hasServer: boolean
-  provider: string | null
-  status:
-    | {
-        running?: boolean
-        scanFailed?: boolean
-        rcon?: { connected?: boolean }
-      }
-    | null
-    | undefined
-  composedStatus: ComposedStatusSignals | null | undefined
-}
-
-export interface DashboardStatusOutput {
-  hostRunning: boolean
-  rconConnected: boolean
-  gameIntegrationActive: boolean
-  hostUnknown: boolean
-  online: boolean
-}
-
-export function deriveDashboardStatus({
-  hasServer,
-  provider,
-  status,
-  composedStatus,
-}: DashboardStatusInput): DashboardStatusOutput {
-  const localProcessStatus =
-    provider === 'native' &&
-    typeof status?.running === 'boolean' &&
-    !status?.scanFailed
-      ? status.running
-      : null
-  const hostRunning =
-    hasServer &&
-    (localProcessStatus ??
-      (composedStatus
-        ? composedStatus.host.status === 'running'
-        : !!status?.running))
-  const rconConnected = composedStatus
-    ? composedStatus.server.status === 'connected'
-    : Boolean(status?.rcon?.connected)
-  const gameIntegrationActive =
-    composedStatus?.gameIntegration.status === 'active'
-  const hostUnknown = composedStatus
-    ? ['unknown', 'not-applicable'].includes(composedStatus.host.status)
-    : false
-  const online =
-    hasServer &&
-    (composedStatus
-      ? hostRunning || rconConnected || gameIntegrationActive
-      : (localProcessStatus ?? !!status?.running))
-  return {
-    hostRunning,
-    rconConnected,
-    gameIntegrationActive,
-    hostUnknown,
-    online,
-  }
-}
-
 export async function resolveServerRunning(
   server: { dockerContainerName?: string | null } | null | undefined,
   fetchNativeStatus: () => Promise<{ running?: boolean; scanFailed?: boolean }>,

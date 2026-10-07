@@ -1,6 +1,6 @@
 import { Fragment, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Keyboard, Moon, Server, Sun } from 'lucide-react'
+import { Archive, Keyboard, Moon, Play, RotateCcw, Save, Server, Square, Sun, UserRound } from 'lucide-react'
 import { selectServer } from '@/lib/serverSelection'
 import { useTheme } from '@/contexts/ThemeContext'
 import {
@@ -20,6 +20,7 @@ import {
   CommandShortcut,
 } from '@/components/ui/command'
 import { Kbd } from '@/components/ui/kbd'
+import { useServerActions, type ServerAction } from '@/components/server/useServerActions'
 import { NAV_ITEMS } from './nav'
 import { NavTile } from './NavTile'
 import type { ShellStatus } from './useShellStatus'
@@ -62,7 +63,28 @@ export function CommandPalette({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open, onOpenChange])
 
+  const { run } = useServerActions()
   const blocked = status.serversConfirmedEmpty
+  const online = status.runState === 'running' || status.runState === 'transitioning'
+  const serverAction = (value: string, label: string, icon: React.ReactNode, action: ServerAction): PaletteItem => ({
+    value,
+    label,
+    icon,
+    run: () => void run(action),
+  })
+  const serverActions: PaletteItem[] = !status.selectedServer
+    ? []
+    : online
+      ? [
+          serverAction('restart', 'Restart server in 5 minutes', <RotateCcw />, { kind: 'restart', minutes: 5 }),
+          serverAction('restart-now', 'Restart server now', <RotateCcw />, { kind: 'restart', minutes: 0 }),
+          serverAction('stop', 'Stop server', <Square />, { kind: 'stop' }),
+          serverAction('save', 'Save world', <Save />, { kind: 'save' }),
+          serverAction('backup', 'Create backup', <Archive />, { kind: 'backup' }),
+        ]
+      : status.runState === 'stopped'
+        ? [serverAction('start', 'Start server', <Play />, { kind: 'start' }), serverAction('backup', 'Create backup', <Archive />, { kind: 'backup' })]
+        : []
   const isDark = document.documentElement.classList.contains('dark')
   const groups: PaletteGroup[] = [
     {
@@ -73,6 +95,16 @@ export function CommandPalette({
         icon: <NavTile item={item} className="size-5 [&_svg]:size-3" />,
         shortcut: item.shortcut,
         run: () => void navigate({ to: item.to }),
+      })),
+    },
+    { value: 'Server', items: serverActions },
+    {
+      value: 'Online players',
+      items: (online ? status.players : []).map((player) => ({
+        value: `player:${player.name}`,
+        label: player.name,
+        icon: <UserRound />,
+        run: () => void navigate({ to: '/players', search: { player: player.name } }),
       })),
     },
     {
@@ -104,7 +136,7 @@ export function CommandPalette({
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup>
         <Command items={groups}>
-          <CommandInput placeholder="Go to a page or run a command" />
+          <CommandInput placeholder="Go to a page, find a player or run a command" />
           <CommandPanel>
             <CommandEmpty>Nothing matches.</CommandEmpty>
             <CommandList>

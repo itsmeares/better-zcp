@@ -398,16 +398,22 @@ function demoStorageHealth() {
   }
 }
 
+const DEMO_UPTIME_SECONDS = 3 * 3600 + 12 * 60
+const DEMO_PLAYERS = ['Kate', 'Baldspot', 'nightowl_92', 'Marisol']
+
 function demoServerStatus() {
   return {
-    running: false,
-    startTime: null,
-    uptime: 0,
+    running: true,
+    state: 'ready',
+    startTime: new Date(Date.now() - DEMO_UPTIME_SECONDS * 1000).toISOString(),
+    uptime: DEMO_UPTIME_SECONDS,
     serverPath: '/opt/pz',
+    serverPathConfigured: true,
     configured: true,
-    localIp: '127.0.0.1',
+    localIp: '192.168.1.20',
+    publicIp: '203.0.113.24',
     port: 16261,
-    rcon: { host: '127.0.0.1', port: 27015, connected: false },
+    rcon: { host: '127.0.0.1', port: 27015, connected: true },
   }
 }
 
@@ -415,10 +421,57 @@ function demoComposedStatus() {
   return {
     provider: 'native',
     selected: true,
-    host: { status: 'stopped', label: 'Process', detail: null },
-    server: { status: 'disconnected', label: 'RCON', detail: null },
-    gameIntegration: { status: 'offline', label: 'Game integration', detail: null },
-    summary: 'Demo server is offline',
+    state: 'ready',
+    host: { status: 'running', label: 'Process', detail: null },
+    server: { status: 'connected', label: 'RCON', detail: null },
+    gameIntegration: { status: 'active', label: 'Game integration', detail: null },
+    summary: 'Demo server is running',
+  }
+}
+
+/** One sample a minute, like the real panel, with a smooth daily curve. */
+function demoPerformanceHistory(limit: number) {
+  const now = Date.now()
+  const GB = 1024 ** 3
+  return Array.from({ length: limit }, (_, index) => {
+    const minutesAgo = limit - 1 - index
+    const wave = Math.sin((now / 60_000 - minutesAgo) / 90)
+    const players = Math.max(0, Math.round(3 + wave * 3 + Math.sin(minutesAgo / 7)))
+    return {
+      timestamp: new Date(now - minutesAgo * 60_000).toISOString(),
+      playerCount: players,
+      cpuUsage: 18 + players * 4 + Math.abs(Math.sin(minutesAgo / 3)) * 6,
+      pzMemUsed: (2.2 + players * 0.18 + wave * 0.1) * GB,
+      memoryUsed: 180 * 1024 ** 2,
+      hostMemUsed: (9.4 + players * 0.2) * GB,
+      hostMemTotal: 16 * GB,
+      hostDiskUsed: 182 * GB,
+      hostDiskTotal: 256 * GB,
+      hostSwapUsed: 0.2 * GB,
+      hostSwapTotal: 2 * GB,
+    }
+  })
+}
+
+function demoActivity() {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  return [
+    { id: 8, player_name: 'Marisol', action: 'connect', details: null, logged_at: at(4) },
+    { id: 7, player_name: 'Baldspot', action: 'death', details: null, logged_at: at(19) },
+    { id: 6, player_name: 'nightowl_92', action: 'connect', details: null, logged_at: at(41) },
+    { id: 5, player_name: 'Rook', action: 'disconnect', details: null, logged_at: at(58) },
+    { id: 4, player_name: 'Baldspot', action: 'connect', details: null, logged_at: at(96) },
+    { id: 3, player_name: 'GrieferJoe', action: 'kick', details: 'Spawn camping', logged_at: at(130) },
+    { id: 2, player_name: 'Kate', action: 'connect', details: null, logged_at: at(171) },
+  ]
+}
+
+function queryParam(input: RequestInfo | URL, name: string): string | null {
+  const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  try {
+    return new URL(rawUrl, window.location.origin).searchParams.get(name)
+  } catch {
+    return null
   }
 }
 
@@ -470,20 +523,49 @@ export function installDemoFetchShim(): void {
       return jsonResponse(demoComposedStatus())
     }
     if (path === '/api/players') {
-      return jsonResponse({ players: [] })
+      return jsonResponse({ players: DEMO_PLAYERS.map((name) => ({ name, online: true })) })
+    }
+    if (path === '/api/players/activity') {
+      return jsonResponse({ logs: demoActivity() })
+    }
+    if (path === '/api/debug/performance-history') {
+      const limit = Math.min(1440, Math.max(1, Number(queryParam(input, 'limit')) || 60))
+      return jsonResponse({ history: demoPerformanceHistory(limit) })
+    }
+    if (path === '/api/game-integration/world/stats') {
+      return jsonResponse({ success: true, data: { serverName: 'DoomerZDemo', map: 'Muldraugh, KY', zombiesInCell: 214 } })
+    }
+    if (path === '/api/server/console-log/error-count') {
+      return jsonResponse({ exists: true, count: 3, sinceStart: true })
+    }
+    if (path === '/api/scheduler/status') {
+      return jsonResponse({
+        maintenance: null,
+        activeTasks: 2,
+        autoRestartEnabled: true,
+        nextRun: { label: 'Daily restart', at: new Date(Date.now() + (2 * 60 + 40) * 60_000).toISOString() },
+        timezone: 'Europe/Istanbul',
+      })
     }
     if (path === '/api/game-integration/status') {
       return jsonResponse({
         configured: true,
-        isRunning: false,
-        modConnected: false,
-        path: null,
-        modStatus: null,
+        isRunning: true,
+        modConnected: true,
+        path: '/opt/pz/argus',
+        modStatus: {
+          alive: true,
+          version: '1.4.0',
+          serverName: 'DoomerZDemo',
+          playerCount: DEMO_PLAYERS.length,
+          players: DEMO_PLAYERS,
+          timestamp: Date.now(),
+        },
         connection: {
-          healthy: false,
-          canSendCommands: false,
+          healthy: true,
+          canSendCommands: true,
           issues: [],
-          summary: 'Game integration is offline in demo mode.',
+          summary: 'Connected.',
         },
         localInstall: {
           installed: false,

@@ -33,5 +33,5 @@ export const Route = createFileRoute('/map')({
       ...(z === undefined ? {} : { z }),
     }
   },
-  component: () => <FeatureRoute featureName="nav.items.worldMap" Component={WorldMap} />,
+  component: () => <FeatureRoute featureName="Map" Component={WorldMap} />,
 })

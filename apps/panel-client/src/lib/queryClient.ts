@@ -20,6 +20,8 @@ export const panelQueryKeys = {
   activeServerStatusFor: (serverId: string | number | null | undefined) =>
     [...panelQueryKeys.activeServerStatus, serverId ?? "none"] as const,
   rconStatuses: ["servers", "rcon-status"] as const,
+  onlinePlayersFor: (serverId: string | number | null | undefined) =>
+    ["players", "online", serverId ?? "none"] as const,
   dockerStatus: ["docker", "status"] as const,
   backupStatus: ["backups", "status"] as const,
   backups: ["backups", "list"] as const,

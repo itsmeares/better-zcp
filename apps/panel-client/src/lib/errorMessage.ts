@@ -51,25 +51,18 @@ export function rawErrorMessageIntentional(
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+/** The page whose settings can fix this error, if one can. */
 export function getRecoveryUrl(error: unknown): string | null {
-  const payload =
-    error instanceof ApiError && error.data && typeof error.data === 'object'
-      ? (error.data as { fixUrl?: unknown })
-      : null
-  if (typeof payload?.fixUrl === 'string' && payload.fixUrl.startsWith('/')) {
-    return payload.fixUrl
-  }
-
   const code = error instanceof ApiError ? error.code : undefined
-  if (code === 'RCON_CONNECT_AUTH_FAILED') return '/servers'
+  if (code === 'RCON_CONNECT_AUTH_FAILED') return '/server-settings'
   if (code === 'RCON_CONNECT_UNREACHABLE') return null
 
   const message = error instanceof Error ? error.message : String(error || '')
   if (/rcon|connection refused|authentication failed/i.test(message))
-    return '/servers'
+    return '/server-settings'
   if (/game integration|game-integration|integration not running|integration not configured/i.test(message))
-    return '/settings?tab=game-integration'
+    return '/server-settings'
   if (/no active server|no server configured/i.test(message)) return '/servers'
-  if (/eacces|permission denied/i.test(message)) return '/servers'
+  if (/eacces|permission denied/i.test(message)) return '/server-settings'
   return null
 }

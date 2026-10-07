@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   modsApi,
   panelUpdateApi,
+  playersApi,
   serverApi,
   serversApi,
   updateApi,
@@ -15,6 +16,11 @@ import { panelQueryKeys } from '@/lib/queryClient'
 import { toastManager } from '@/components/ui/toast'
 
 export type ServerRunState = 'unknown' | 'running' | 'stopped' | 'transitioning'
+
+export interface OnlinePlayer {
+  name: string
+}
+const NO_PLAYERS: OnlinePlayer[] = []
 
 const gameUpdateDismissKey = (update: UpdateStatus) =>
   update.installed && update.latest
@@ -58,8 +64,16 @@ export function useShellStatus() {
     refetchIntervalInBackground: false,
   })
 
+  const { data: onlinePlayers } = useQuery({
+    queryKey: panelQueryKeys.onlinePlayersFor(selectedServer?.id),
+    queryFn: async () => ((await playersApi.getPlayers({ retries: 0 })) as { players?: OnlinePlayer[] }).players ?? [],
+    enabled: selectedServer !== null,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const players = onlinePlayers ?? NO_PLAYERS
+
   const [runState, setRunState] = useState<ServerRunState>('unknown')
-  const [playerCount, setPlayerCount] = useState(0)
   const [modUpdates, setModUpdates] = useState(0)
   const [panelUpdate, setPanelUpdate] = useState<{ version: string | null } | null>(null)
   const [gameUpdate, setGameUpdate] = useState<UpdateStatus | null>(null)
@@ -92,7 +106,10 @@ export function useShellStatus() {
 
   useEffect(() => {
     if (!socket) return
-    const onPlayers = (players: unknown) => setPlayerCount(Array.isArray(players) ? players.length : 0)
+    // The server only emits when the list changes, so this keeps the query fresh without polling RCON.
+    const onPlayers = (players: unknown) => {
+      if (Array.isArray(players)) queryClient.setQueryData(panelQueryKeys.onlinePlayersFor(selectedServer?.id), players)
+    }
     const onStatus = (data?: { running?: boolean; isRunning?: boolean; state?: string }) => {
       void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
       void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
@@ -154,7 +171,7 @@ export function useShellStatus() {
       socket.off('server:updateAvailable', onUpdateAvailable)
       socket.off('server:updateCheck', onUpdateCheck)
     }
-  }, [socket, provider, queryClient])
+  }, [socket, provider, queryClient, selectedServer?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -206,7 +223,8 @@ export function useShellStatus() {
     selectedServer,
     serversConfirmedEmpty,
     runState,
-    playerCount,
+    players,
+    playerCount: players.length,
     modUpdates,
     panelUpdate,
     panelVersion: panelHealth?.version ?? '',

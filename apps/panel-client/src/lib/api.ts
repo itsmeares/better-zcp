@@ -681,6 +681,8 @@ export interface SchedulerStatus {
   maintenance: { kind: string; label: string; phase: string; startedAt: string } | null;
   activeTasks: number;
   autoRestartEnabled: boolean;
+  /** The soonest task, auto restart or backup run, if any is scheduled. */
+  nextRun?: { label: string; at: string } | null;
   timezone?: string;
   configuredTimezone?: string | null;
   timezoneFallback?: { configured: string; effective: string } | null;
@@ -1915,6 +1917,10 @@ export const debugApi = {
       cpuUsage?: number;
       hostMemUsed?: number;
       hostMemTotal?: number;
+      hostDiskUsed?: number | null;
+      hostDiskTotal?: number | null;
+      hostSwapUsed?: number | null;
+      hostSwapTotal?: number | null;
     }>;
   }> => apiRoute("GET", "/debug/performance-history", { limit }),
 };

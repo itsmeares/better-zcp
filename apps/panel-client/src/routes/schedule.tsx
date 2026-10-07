@@ -5,5 +5,5 @@ import { FeatureRoute } from '../route-components'
 const Scheduler = lazy(() => import('../pages/schedule/SchedulePage'))
 
 export const Route = createFileRoute('/schedule')({
-  component: () => <FeatureRoute featureName="nav.items.scheduledTasks" Component={Scheduler} />,
+  component: () => <FeatureRoute featureName="Schedule" Component={Scheduler} />,
 })
