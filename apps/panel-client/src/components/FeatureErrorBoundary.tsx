@@ -111,7 +111,7 @@ class FeatureErrorBoundaryBase extends React.Component<
               <Button variant="ghost" asChild>
                 <Link to="/">
                   <Home className="w-4 h-4 me-2" />
-                  {'Dashboard'}
+                  {'Overview'}
                 </Link>
               </Button>
               {recoveryUrl && (
