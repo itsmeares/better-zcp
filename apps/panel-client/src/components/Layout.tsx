@@ -285,6 +285,8 @@ function AuthFooter() {
         onClick={logout}
         className="shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
         title={'Sign out'}
+        aria-label="Sign out"
+        data-action="sign-out"
       >
         <LogOut className="h-3 w-3" />
       </button>
@@ -716,7 +718,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background" data-app-shell>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"

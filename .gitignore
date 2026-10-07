@@ -61,3 +61,6 @@ data/*.secret
 data/reset-token.txt
 data/*.token
 data/server-secrets/
+
+# UI review screenshots (scripts/ui-screenshots.mjs)
+.screenshots/
