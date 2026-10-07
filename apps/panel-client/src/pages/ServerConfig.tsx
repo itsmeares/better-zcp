@@ -2360,9 +2360,6 @@ export default function ServerConfig() {
         description={
           'Edit the live INI, sandbox, spawn, and mod settings for this server.'
         }
-        eyebrow={'config'}
-        tone="config"
-        icon={<Settings className="h-5 w-5 text-primary" />}
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
             {(hasIniChanges || hasSandboxChanges) && (

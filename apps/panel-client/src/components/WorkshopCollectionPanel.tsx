@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
   Bookmark,
@@ -81,7 +80,7 @@ function formatAgo(date: Date | null, locale?: string): string {
   return date.toLocaleTimeString(locale)
 }
 
-export function WorkshopCollectionPanel() {
+export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { toast } = useToast()
   const confirm = useConfirm()
   const [diff, setDiff] = useState<DiffResponse | null>(null)
@@ -418,11 +417,9 @@ export function WorkshopCollectionPanel() {
                 }
               </p>
             </div>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/settings" search={{ tab: 'mods' }}>
-                <SettingsIcon className="w-3.5 h-3.5 me-2" />
-                {'Open Settings'}
-              </Link>
+            <Button size="sm" variant="outline" onClick={onOpenSettings}>
+              <SettingsIcon className="w-3.5 h-3.5 me-2" />
+              {'Set collection ID'}
             </Button>
           </div>
         </CardContent>
@@ -493,15 +490,13 @@ export function WorkshopCollectionPanel() {
               {'Refresh'}
             </Button>
             <Button
-              asChild
               variant="ghost"
               size="sm"
               className="h-8 px-2 text-xs text-muted-foreground"
+              onClick={onOpenSettings}
             >
-              <Link to="/settings" search={{ tab: 'mods' }}>
-                <SettingsIcon className="w-3.5 h-3.5 me-1.5" />
-                {'Configure'}
-              </Link>
+              <SettingsIcon className="w-3.5 h-3.5 me-1.5" />
+              {'Configure'}
             </Button>
           </div>
         </div>

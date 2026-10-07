@@ -844,8 +844,6 @@ export default function Console() {
         <PageHeader
           title={'Console'}
           description={'Server log output and RCON commands'}
-          tone="ops"
-          icon={<TerminalIcon className="w-5 h-5" />}
         />
         <div className="flex min-h-72 items-center justify-center rounded-md border border-border/50 bg-card/50">
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -863,8 +861,6 @@ export default function Console() {
         <PageHeader
           title={'Console'}
           description={'Server log output and RCON commands'}
-          tone="ops"
-          icon={<TerminalIcon className="w-5 h-5" />}
         />
         <div className="rounded-md border border-border/50 bg-card/50 p-4">
           <EmptyState
@@ -884,8 +880,6 @@ export default function Console() {
       <PageHeader
         title={'Console'}
         description={'Server log output and RCON commands'}
-        tone="ops"
-        icon={<TerminalIcon className="w-5 h-5" />}
       />
       <Tabs value={consoleTab} onValueChange={setConsoleTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-muted/30 border border-border/50 rounded-md p-0.5">

@@ -1681,9 +1681,6 @@ export default function Servers() {
       <PageHeader
         title={'Managed Servers'}
         description={'Manage multiple Project Zomboid servers from one panel'}
-        eyebrow={'Fleet'}
-        tone="servers"
-        icon={<Server className="w-5 h-5 text-primary" />}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button

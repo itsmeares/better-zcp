@@ -75,6 +75,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui-legacy/card'
+import { WorkshopSettingsDialog } from '@/components/mods/WorkshopSettingsDialog'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui-legacy/button'
 import { Input } from '@/components/ui-legacy/input'
@@ -303,6 +304,7 @@ export default function Mods() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [advancedAddOpen, setAdvancedAddOpen] = useState(false)
+  const [workshopSettingsOpen, setWorkshopSettingsOpen] = useState(false)
   const [advancedModInput, setAdvancedModInput] = useState('')
   const [discoveringMod, setDiscoveringMod] = useState(false)
   const [showAdvancedIdSelection, setShowAdvancedIdSelection] = useState(false)
@@ -2810,9 +2812,6 @@ export default function Mods() {
           description={
             'Add, update, and configure Steam Workshop mods on your server'
           }
-          eyebrow={'Workshop'}
-          tone="maintain"
-          icon={<Package className="w-5 h-5" />}
           actions={
             <Button
               onClick={() => setAdvancedAddOpen(true)}
@@ -2986,6 +2985,10 @@ export default function Mods() {
                       >
                         <Settings2 className="w-4 h-4 me-2" />
                         {'Auto-Restart Settings'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setWorkshopSettingsOpen(true)}>
+                        <Settings2 className="w-4 h-4 me-2" />
+                        {'Workshop settings'}
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator />
@@ -7619,7 +7622,7 @@ export default function Mods() {
 
                 {activeTab === 'collection' && (
                   <div className="space-y-4">
-                    <WorkshopCollectionPanel />
+                    <WorkshopCollectionPanel onOpenSettings={() => setWorkshopSettingsOpen(true)} />
                   </div>
                 )}
 
@@ -8134,6 +8137,7 @@ export default function Mods() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <WorkshopSettingsDialog open={workshopSettingsOpen} onOpenChange={setWorkshopSettingsOpen} />
     </TooltipProvider>
   )
 }

@@ -22,7 +22,6 @@ import {
   Pause,
   Play,
   FolderOpen,
-  Save,
   Loader2,
   Search,
   X,
@@ -333,11 +332,6 @@ export default function Debug() {
     return apiFetch(endpoint, options)
   }, [])
 
-  const [editingPaths, setEditingPaths] = useState(false)
-  const [newDataDir, setNewDataDir] = useState('')
-  const [newLogsDir, setNewLogsDir] = useState('')
-  const [moveFiles, setMoveFiles] = useState(true)
-  const [savingPaths, setSavingPaths] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1095,61 +1089,7 @@ export default function Debug() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   }
 
-  const handleEditPaths = () => {
-    setNewDataDir(systemInfo?.dataDir || '')
-    setNewLogsDir(systemInfo?.logsPath || '')
-    setEditingPaths(true)
-  }
 
-  const handleSavePaths = async () => {
-    if (!newDataDir && !newLogsDir) {
-      toast({
-        title: 'Error',
-        description: 'Please enter at least one path',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setSavingPaths(true)
-    try {
-      const res = await authFetch('/api/debug/paths', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dataDir: newDataDir || undefined,
-          logsDir: newLogsDir || undefined,
-          moveFiles,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (data.success) {
-        toast({
-          title: 'Paths Updated',
-          description: data.message,
-          variant: 'success' as const,
-        })
-        setEditingPaths(false)
-        fetchSystemInfo()
-      } else {
-        toast({
-          title: 'Error',
-          description: data.error || 'Failed to update paths',
-          variant: 'destructive',
-        })
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(error, 'Failed to update paths'),
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingPaths(false)
-    }
-  }
 
   const toggleLogExpanded = (logId: string) => {
     setExpandedLogs((prev) => {
@@ -1336,7 +1276,6 @@ export default function Debug() {
         description={
           'Live diagnostics, recent history, and environment details for this panel'
         }
-        icon={<Bug className="w-5 h-5 text-primary" />}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -4381,103 +4320,14 @@ export default function Debug() {
                       {'Data and log file locations.'}
                     </CardDescription>
                   </div>
-                  {!editingPaths && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleEditPaths}
-                    >
-                      {'Change Paths'}
-                    </Button>
-                  )}
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/settings" search={{ tab: 'paths' }}>
+                      {'Change in Settings'}
+                    </Link>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {editingPaths ? (
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-warning/25 bg-warning/8 p-3 text-sm">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 w-4 h-4 shrink-0 text-warning" />
-                        <div>
-                          <p className="font-medium text-warning">
-                            {'Restart Required'}
-                          </p>
-                          <p className="text-muted-foreground">
-                            {
-                              'Changing paths requires restarting the application to take effect.'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="dataDir">
-                        {'Data Directory (contains db.json)'}
-                      </Label>
-                      <Input
-                        id="dataDir"
-                        value={newDataDir}
-                        onChange={(e) => setNewDataDir(e.target.value)}
-                        placeholder="/opt/panel/data"
-                        className="font-mono"
-                        maxLength={260}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="logsDir">{'Logs Directory'}</Label>
-                      <Input
-                        id="logsDir"
-                        value={newLogsDir}
-                        onChange={(e) => setNewLogsDir(e.target.value)}
-                        placeholder="/opt/panel/logs"
-                        className="font-mono"
-                        maxLength={260}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                      <Checkbox
-                        id="moveFiles"
-                        checked={moveFiles}
-                        onCheckedChange={(checked) =>
-                          setMoveFiles(checked === true)
-                        }
-                      />
-                      <div>
-                        <Label htmlFor="moveFiles" className="cursor-pointer">
-                          {'Move existing files to new location'}
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          {'Copy current data and logs to the new paths'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleSavePaths}
-                        disabled={savingPaths}
-                        className="gap-2"
-                      >
-                        {savingPaths ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Save className="w-4 h-4" />
-                        )}
-                        {'Save Paths'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setEditingPaths(false)}
-                        disabled={savingPaths}
-                      >
-                        {'Cancel'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
                   <div className="space-y-3 font-mono text-sm">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 p-3 rounded-lg bg-muted/50">
                       <span className="text-muted-foreground sm:w-32 sm:shrink-0">
@@ -4556,7 +4406,6 @@ export default function Debug() {
                       </div>
                     </div>
                   </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>

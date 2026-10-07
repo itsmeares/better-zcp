@@ -1,18 +1,16 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, useEffect, ReactNode } from 'react'
 import {
   AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
+  AlertDialogClose,
   AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui-legacy/alert-dialog'
-import { buttonVariants } from '@/components/ui-legacy/button'
-import { Input } from '@/components/ui-legacy/input'
-import { Label } from '@/components/ui-legacy/label'
-import { cn } from '@/lib/utils'
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export interface ConfirmOptions {
   title?: string
@@ -63,24 +61,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={value}>
       {children}
       <AlertDialog open={open} onOpenChange={(next) => { if (!next) settle(false) }}>
-        <AlertDialogContent>
+        <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>{options?.title ?? 'Are you sure?'}</AlertDialogTitle>
-            <AlertDialogDescription className="whitespace-pre-line">
-              {options?.description}
-            </AlertDialogDescription>
+            <AlertDialogDescription className="whitespace-pre-line">{options?.description}</AlertDialogDescription>
             {options?.items && options.items.length > 0 && (
-              <ul className="mt-1 max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md border border-border/50 bg-muted/30 p-3 ps-7 text-sm text-muted-foreground">
+              <ul className="mt-2 max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-lg border bg-muted p-3 ps-7 text-sm text-muted-foreground">
                 {options.items.map((item) => (
                   <li key={item} className="truncate">{item}</li>
                 ))}
               </ul>
             )}
             {options?.requireTypedConfirmation && (
-              <div className="space-y-1.5 pt-1 text-start">
-                <Label htmlFor="confirm-dialog-typed-input" className="text-xs font-medium text-muted-foreground">
-                  {options.requireTypedConfirmation.label}
-                </Label>
+              <div className="mt-3 grid gap-1.5 text-start">
+                <Label htmlFor="confirm-dialog-typed-input">{options.requireTypedConfirmation.label}</Label>
                 <Input
                   id="confirm-dialog-typed-input"
                   autoComplete="off"
@@ -93,26 +87,18 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => settle(false)}>
+            <AlertDialogClose render={<Button variant="ghost" />} onClick={() => settle(false)}>
               {options?.cancelLabel ?? 'Cancel'}
-            </AlertDialogCancel>
-            <AlertDialogAction
+            </AlertDialogClose>
+            <Button
+              variant={options?.variant === 'warning' || options?.destructive === false ? 'default' : 'destructive'}
               onClick={() => settle(true)}
-              disabled={
-                options?.requireTypedConfirmation !== undefined &&
-                typedValue !== options.requireTypedConfirmation.value
-              }
-              className={cn(
-                options?.variant === 'warning'
-                  ? buttonVariants({ variant: 'warning' })
-                  : options?.destructive !== false && buttonVariants({ variant: 'destructive' }),
-                options?.requireTypedConfirmation && 'disabled:grayscale disabled:opacity-60',
-              )}
+              disabled={options?.requireTypedConfirmation !== undefined && typedValue !== options.requireTypedConfirmation.value}
             >
               {options?.confirmLabel ?? 'Confirm'}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
-        </AlertDialogContent>
+        </AlertDialogPopup>
       </AlertDialog>
     </ConfirmContext.Provider>
   )

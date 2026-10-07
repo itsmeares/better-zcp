@@ -699,7 +699,6 @@ export default function Backups() {
       <PageHeader
         title={'Full Backups'}
         description={'Portable archives of the world, player accounts, server config, and panel profile'}
-        icon={<Archive className="w-5 h-5 text-primary" />}
         actions={
           <>
             <DisabledReason reason={null}>

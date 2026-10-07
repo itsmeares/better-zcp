@@ -1018,9 +1018,6 @@ export default function Scheduler() {
         <PageHeader
           title={'Scheduler'}
           description={'Automate server tasks and restarts'}
-          eyebrow={'Maintenance'}
-          tone="maintain"
-          icon={<Clock className="w-5 h-5" />}
           actions={
             <DialogTrigger asChild>
               <Button variant="command" onClick={resetTaskForm}>

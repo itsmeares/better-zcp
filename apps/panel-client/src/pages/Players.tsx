@@ -1131,7 +1131,6 @@ export default function Players() {
       <PageHeader
         title={'Players'}
         description={'Manage connected players and their permissions'}
-        icon={<Users className="w-5 h-5 text-primary" />}
         actions={
           <div className="flex items-center gap-2">
             {lastRefresh && (

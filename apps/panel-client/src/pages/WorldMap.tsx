@@ -13,7 +13,6 @@ import {
   Heart,
   Loader2,
   Locate,
-  Map as MapIcon,
   Minus,
   Plus,
   RefreshCw,
@@ -615,8 +614,6 @@ export default function WorldMap() {
       <PageHeader
         title="World Map"
         description="Right-click the map to move or heal players."
-        icon={<MapIcon className="h-5 w-5" />}
-        tone="world"
       />
 
       <div className="relative overflow-hidden rounded-md border border-border/60 bg-[#14130f]" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
