@@ -23,19 +23,19 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@/components/ui-legacy/card'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+} from '@/components/ui-legacy/collapsible'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Label } from '@/components/ui-legacy/label'
+import { Textarea } from '@/components/ui-legacy/textarea'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import {
@@ -57,16 +57,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui-legacy/alert-dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/select'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import {
   schedulerApi,
   rconApi,
@@ -77,7 +77,7 @@ import {
 } from '@/lib/api'
 import { EmptyState } from '@/components/EmptyState'
 import { NumberInput } from '@/components/NumberInput'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
 import { HelpTip } from '@/components/HelpTip'
 import { cn } from '@/lib/utils'
 

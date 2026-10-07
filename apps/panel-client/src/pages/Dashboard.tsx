@@ -35,9 +35,9 @@ import {
   ScrollText,
   CloudOff,
 } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { useToast } from '@/components/ui/use-toast'
-import { ToastAction, type ToastActionElement } from '@/components/ui/toast'
+import { Button, buttonVariants } from '@/components/ui-legacy/button'
+import { useToast } from '@/components/ui-legacy/use-toast'
+import { ToastAction, type ToastActionElement } from '@/components/ui-legacy/toast'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,14 +47,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui-legacy/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@/components/ui-legacy/dropdown-menu'
 import {
   serverApi,
   rconApi,
@@ -77,10 +77,10 @@ import {
 } from '@/lib/serverStatus'
 import type { LifecycleState } from '@/lib/serverStatus'
 import { useSocket } from '@/contexts/SocketContext'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Switch } from '@/components/ui/switch'
-import { Progress } from '@/components/ui/progress'
-import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Progress } from '@/components/ui-legacy/progress'
+import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
 import { DisabledReason } from '@/components/DisabledReason'
 import { cn, copyText } from '@/lib/utils'

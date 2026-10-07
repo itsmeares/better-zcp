@@ -38,9 +38,9 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+} from '@/components/ui-legacy/card'
+import { Button } from '@/components/ui-legacy/button'
+import { Badge } from '@/components/ui-legacy/badge'
 import { FileDiffViewer } from '@/components/FileDiffViewer'
 import {
   Dialog,
@@ -49,19 +49,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 import { DisabledReason } from '@/components/DisabledReason'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
+} from '@/components/ui-legacy/accordion'
 import {
   CONFLICT_FILE_LIMIT,
   useLocalStorageState,

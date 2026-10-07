@@ -4,7 +4,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 import { cn } from '@/lib/utils'
 
 interface HelpTipProps {

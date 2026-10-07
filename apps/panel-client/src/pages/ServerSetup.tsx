@@ -39,18 +39,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/card'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Label } from '@/components/ui-legacy/label'
+import { Switch } from '@/components/ui-legacy/switch'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { SocketContext } from '@/contexts/SocketContext'
-import { Slider } from '@/components/ui/slider'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Slider } from '@/components/ui-legacy/slider'
+import { Progress } from '@/components/ui-legacy/progress'
+import { Badge } from '@/components/ui-legacy/badge'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui-legacy/alert'
 import { reportClientError } from '@/lib/client-errors'
 import {
   getUserErrorMessage,
@@ -63,19 +63,19 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui-legacy/select'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
+} from '@/components/ui-legacy/accordion'
 import { FolderBrowser } from '@/components/FolderBrowser'
 
 interface InstallLog {

@@ -53,32 +53,32 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+} from '@/components/ui-legacy/card'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
 import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { translateDiagnosticCheck } from '@/lib/diagnosticsTranslation'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Label } from '@/components/ui-legacy/label'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { Badge } from '@/components/ui-legacy/badge'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui-legacy/select'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/tooltip'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { SocketContext } from '@/contexts/SocketContext'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'

@@ -75,16 +75,16 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@/components/ui-legacy/card'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
 import { NumberInput } from '@/components/NumberInput'
-import { Label } from '@/components/ui/label'
+import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
-import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Badge } from '@/components/ui-legacy/badge'
 import { reportClientError, reportClientWarning } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import {
@@ -94,23 +94,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
+} from '@/components/ui-legacy/tooltip'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { Separator } from '@/components/ui-legacy/separator'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/dropdown-menu'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { apiFetch, modsApi, serversApi } from '@/lib/api'
 import { FolderBrowser } from '@/components/FolderBrowser'
 import {
@@ -120,7 +120,7 @@ import {
   type AutoSortResult,
 } from '@/lib/modLoadOrder'
 import { EmptyState } from '@/components/EmptyState'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -130,7 +130,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui-legacy/alert-dialog'
 
 interface CollectionMod {
   workshopId: string

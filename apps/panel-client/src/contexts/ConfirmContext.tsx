@@ -8,10 +8,10 @@ import {
   AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
-} from '@/components/ui/alert-dialog'
-import { buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui-legacy/alert-dialog'
+import { buttonVariants } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Label } from '@/components/ui-legacy/label'
 import { cn } from '@/lib/utils'
 
 export interface ConfirmOptions {

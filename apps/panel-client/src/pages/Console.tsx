@@ -13,24 +13,24 @@ import {
   Filter,
   ChevronDown,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { Textarea } from '@/components/ui-legacy/textarea'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 import {
   rconApi,
   configApi,

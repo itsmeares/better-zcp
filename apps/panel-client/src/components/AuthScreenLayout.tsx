@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 
-import { Card, CardContent } from '../components/ui/card'
+import { Card, CardContent } from '../components/ui-legacy/card'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
 
 interface AuthScreenLayoutProps {

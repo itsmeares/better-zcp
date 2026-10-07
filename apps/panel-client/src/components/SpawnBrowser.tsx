@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Package, Trash2 } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui-legacy/dialog'
+import { Button } from '@/components/ui-legacy/button'
 import { NumberInput } from '@/components/NumberInput'
 import { ItemPicker } from './ItemPicker'
 

@@ -1,12 +1,12 @@
 import { Wifi, WifiOff, Loader2 } from 'lucide-react'
 import { useConnectionStatus, useSocket } from '@/contexts/SocketContext'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 
 interface ConnectionStatusProps {
   className?: string

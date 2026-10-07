@@ -15,10 +15,10 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+} from '@/components/ui-legacy/dialog'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
 import { cn } from '@/lib/utils'
 import { serverApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'

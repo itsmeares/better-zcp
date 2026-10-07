@@ -19,7 +19,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,16 +29,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui-legacy/alert-dialog'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+} from '@/components/ui-legacy/card'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Input } from '@/components/ui-legacy/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,8 +46,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/dropdown-menu'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { modsApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'

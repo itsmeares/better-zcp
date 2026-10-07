@@ -6,10 +6,10 @@ import {
   getUserErrorMessage,
 } from '../lib/errorMessage'
 import { ApiError } from '../lib/ApiError'
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { Checkbox } from '../components/ui/checkbox'
+import { Button } from '../components/ui-legacy/button'
+import { Input } from '../components/ui-legacy/input'
+import { Label } from '../components/ui-legacy/label'
+import { Checkbox } from '../components/ui-legacy/checkbox'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
 import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 

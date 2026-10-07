@@ -45,22 +45,22 @@ import { resolveClientProvider, toClientRunState } from '@/lib/serverStatus'
 import { SocketContext } from '@/contexts/SocketContext'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { useToast } from '@/components/ui/use-toast'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+} from '@/components/ui-legacy/dropdown-menu'
+import { Button } from '@/components/ui-legacy/button'
+import { Badge } from '@/components/ui-legacy/badge'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 import { panelHealthQueryOptions } from '@/lib/panelHealth'

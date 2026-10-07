@@ -23,10 +23,10 @@ import {
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { useToast } from '@/components/ui/use-toast'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import {
   gameIntegrationApi,
   mapApi,

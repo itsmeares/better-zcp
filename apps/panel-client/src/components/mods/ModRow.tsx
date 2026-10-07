@@ -6,7 +6,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 
 const workshopUrl = (wsId: string) =>
   `https://steamcommunity.com/sharedfiles/filedetails/?id=${wsId}`

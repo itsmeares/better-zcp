@@ -23,22 +23,22 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+} from '@/components/ui-legacy/card'
+import { Button } from '@/components/ui-legacy/button'
 import { NumberInput } from '@/components/NumberInput'
-import { Label } from '@/components/ui/label'
+import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
-import { Switch } from '@/components/ui/switch'
+import { Switch } from '@/components/ui-legacy/switch'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Checkbox } from '@/components/ui/checkbox'
+} from '@/components/ui-legacy/select'
+import { Progress } from '@/components/ui-legacy/progress'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,8 +48,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/alert-dialog'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { useSocket } from '@/contexts/SocketContext'
 import {
   backupApi,
@@ -62,7 +62,7 @@ import { getUserErrorMessage } from '@/lib/errorMessage'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
 import { EmptyState } from '@/components/EmptyState'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
 import { panelQueryKeys } from '@/lib/queryClient'
 
 interface BackupProgress {

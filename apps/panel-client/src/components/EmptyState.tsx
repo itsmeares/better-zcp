@@ -13,7 +13,7 @@ import {
   FolderOpen,
   ShieldAlert,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 
 const emptyStateIcons = {
   noData: InboxIcon,

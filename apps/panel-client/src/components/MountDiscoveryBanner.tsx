@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Server, X, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 import type { DiscoveredMount } from '@/lib/api'
 
 const DISMISS_KEY_PREFIX = 'pz-mount-discovery-dismissed-'

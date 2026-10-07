@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { schedulerApi } from '@/lib/api'
 import { getSelectedServerId } from '@/lib/serverSelection'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { useToast } from '@/components/ui/use-toast'
+import { Button } from '@/components/ui-legacy/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui-legacy/alert'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 
 export function MaintenanceNotice() {

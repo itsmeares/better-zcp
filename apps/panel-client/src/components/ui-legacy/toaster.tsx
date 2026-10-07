@@ -1,4 +1,4 @@
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui-legacy/use-toast"
 import { BellRing, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react'
 import {
   Toast,
@@ -7,7 +7,7 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-} from "@/components/ui/toast"
+} from "@/components/ui-legacy/toast"
 
 export function Toaster() {
   const { toasts } = useToast()

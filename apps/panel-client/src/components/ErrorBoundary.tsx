@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { Button } from './ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Button } from './ui-legacy/button'
+import { Card, CardContent, CardHeader, CardTitle } from './ui-legacy/card'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'
 

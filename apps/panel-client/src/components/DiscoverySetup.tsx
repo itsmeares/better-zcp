@@ -9,18 +9,18 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
+} from '@/components/ui-legacy/dialog'
+import { Button } from '@/components/ui-legacy/button'
+import { Label } from '@/components/ui-legacy/label'
+import { Input } from '@/components/ui-legacy/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/select'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { HelpTip } from '@/components/HelpTip'
 import {
   serversApi,

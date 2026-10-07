@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FocusEvent, WheelEvent } from 'react'
-import { Input } from '@/components/ui/input'
+import { Input } from '@/components/ui-legacy/input'
 
 interface NumberInputProps {
   value: number

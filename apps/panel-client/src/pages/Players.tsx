@@ -31,12 +31,12 @@ import {
   Moon,
   Thermometer,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader } from '@/components/ui-legacy/card'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Label } from '@/components/ui-legacy/label'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Badge } from '@/components/ui-legacy/badge'
 import {
   Select,
   SelectContent,
@@ -45,7 +45,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui-legacy/select'
 import {
   Dialog,
   DialogContent,
@@ -54,7 +54,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,18 +64,18 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@/components/ui-legacy/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/components/ui/use-toast'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+} from '@/components/ui-legacy/dropdown-menu'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { useToast } from '@/components/ui-legacy/use-toast'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
 import { EmptyState } from '@/components/EmptyState'
 import { HelpTip } from '@/components/HelpTip'
 import { SpawnBrowser } from '@/components/SpawnBrowser'

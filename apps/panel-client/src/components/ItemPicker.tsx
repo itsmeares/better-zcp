@@ -27,12 +27,12 @@ import {
   HelpCircle,
   LayoutGrid,
 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Button } from '@/components/ui-legacy/button'
 import { cn } from '@/lib/utils'
 import { gameIntegrationApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import { useToast } from '@/components/ui/use-toast'
+import { useToast } from '@/components/ui-legacy/use-toast'
 
 export interface CatalogItem {
   id: string

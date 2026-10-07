@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui-legacy/button'
 import { rconApi, type RconTestResult } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { getRecoveryUrl, getUserErrorMessage } from '@/lib/errorMessage'

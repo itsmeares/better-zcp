@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthScreenLoader } from './components/AuthScreenLoader'
-import { TooltipProvider } from './components/ui/tooltip'
-import { Toaster } from './components/ui/toaster'
+import { TooltipProvider } from './components/ui-legacy/tooltip'
+import { Toaster } from './components/ui-legacy/toaster'
 
 const App = lazy(() => import('./App'))
 const Login = lazy(() => import('./pages/Login'))

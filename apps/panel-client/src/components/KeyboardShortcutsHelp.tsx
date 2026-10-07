@@ -4,7 +4,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import type { ShortcutDef } from '@/hooks/useKeyboardShortcuts'
 
 interface KeyboardShortcutsHelpProps {

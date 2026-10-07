@@ -3,7 +3,7 @@ import { reportClientWarning } from "./client-errors";
 import { ApiError } from "./ApiError";
 export { ApiError } from "./ApiError";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui-legacy/use-toast";
 import type { LifecycleState } from "./serverStatus";
 
 

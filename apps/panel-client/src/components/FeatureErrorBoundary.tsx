@@ -1,13 +1,13 @@
 import React from 'react'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
-import { Button } from './ui/button'
+import { Button } from './ui-legacy/button'
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from './ui/card'
+} from './ui-legacy/card'
 import { Link } from '@tanstack/react-router'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'

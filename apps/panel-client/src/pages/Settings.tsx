@@ -43,19 +43,19 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@/components/ui-legacy/card'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageSkeleton'
 import { NumberInput } from '@/components/NumberInput'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
+import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
-import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Textarea } from '@/components/ui/textarea'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Checkbox } from '@/components/ui-legacy/checkbox'
+import { Textarea } from '@/components/ui-legacy/textarea'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,8 +66,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { useToast } from '@/components/ui/use-toast'
+} from '@/components/ui-legacy/alert-dialog'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { EmptyState } from '@/components/EmptyState'
 import {
   configApi,
@@ -94,19 +94,19 @@ import { useConfirm } from '@/contexts/ConfirmContext'
 import { useTheme, type ThemeName } from '@/contexts/ThemeContext'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
 import { GameIntegrationStatusBadge } from '@/components/GameIntegrationStatusBadge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui-legacy/select'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@/components/ui-legacy/tooltip'
 
 interface AppSettings {
   autoStartServer: boolean

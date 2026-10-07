@@ -68,25 +68,25 @@ import {
   Layers,
   type LucideIcon,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui-legacy/input'
 import { reportClientError } from '@/lib/client-errors'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui-legacy/textarea'
+import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
-import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/components/ui/use-toast'
+import { Switch } from '@/components/ui-legacy/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui-legacy/tabs'
+import { ScrollArea } from '@/components/ui-legacy/scroll-area'
+import { useToast } from '@/components/ui-legacy/use-toast'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui-legacy/badge'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui-legacy/select'
 import {
   Dialog,
   DialogContent,
@@ -94,14 +94,14 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog'
+} from '@/components/ui-legacy/dialog'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+} from '@/components/ui-legacy/tooltip'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui-legacy/alert'
 import { PageHeader } from '@/components/PageHeader'
 import {
   serverApi,
