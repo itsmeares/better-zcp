@@ -55,13 +55,20 @@ async function waitForServer() {
 await waitForServer();
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch();
+const pageErrors = [];
 try {
   for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
     for (const [themeName, stored] of Object.entries(THEMES)) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, ...viewport, reducedMotion: 'reduce' });
       await context.addInitScript((value) => localStorage.setItem('pz-panel-theme', value), stored);
       const page = await context.newPage();
+      let current = '';
+      page.on('pageerror', (error) => pageErrors.push(`${current}: ${error.message}`));
+      page.on('console', (message) => {
+        if (message.type() === 'error') pageErrors.push(`${current}: ${message.text()}`);
+      });
       for (const route of routes) {
+        current = `${route} (${themeName}, ${viewportName})`;
         await page.goto(`http://127.0.0.1:${PORT}/#${route}`, { waitUntil: 'networkidle' });
         await delay(600);
         const name = `${route === '/' ? 'overview' : route.slice(1).replace(/\//g, '_')}-${themeName}-${viewportName}.png`;
@@ -75,3 +82,7 @@ try {
   stopServer();
 }
 console.log(`Saved ${routes.length * 4} screenshots to ${path.relative(process.cwd(), outDir)}`);
+if (pageErrors.length > 0) {
+  console.log(`\n${pageErrors.length} page errors:`);
+  for (const line of [...new Set(pageErrors)]) console.log(`  ${line}`);
+}

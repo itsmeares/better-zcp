@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useState, useCallback, useRef } from 'react'
-import type { ReactElement } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { usePageShortcut } from '../hooks/useKeyboardShortcuts'
@@ -38,7 +37,7 @@ import {
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
-import { ToastAction } from '@/components/ui/toast'
+import { ToastAction, type ToastActionElement } from '@/components/ui/toast'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1036,7 +1035,7 @@ export default function Dashboard() {
   const handleAction = async (
     action: string,
     fn: () => Promise<unknown>,
-    options?: { errorAction?: (error: unknown) => ReactElement | undefined },
+    options?: { errorAction?: (error: unknown) => ToastActionElement | undefined },
   ) => {
     setLoading(action)
     try {
