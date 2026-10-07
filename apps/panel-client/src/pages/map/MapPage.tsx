@@ -17,15 +17,16 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Shield,
   Users,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui-legacy/button'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { toastManager } from '@/components/ui/toast'
+import { PlayerActions, usePlayerAction, type PlayerPowers } from '@/components/players/PlayerActions'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { useToast } from '@/components/ui-legacy/use-toast'
 import {
   gameIntegrationApi,
   mapApi,
@@ -39,7 +40,7 @@ import { getAccessToken } from '@/lib/authToken'
 import { createInFlightGate } from '@/lib/inFlightGate'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { cn, copyText } from '@/lib/utils'
-import { fromLngLat, toLngLat } from './worldMap/coords'
+import { fromLngLat, toLngLat } from './coords'
 import {
   EMPTY,
   applyFloorStyle,
@@ -47,7 +48,7 @@ import {
   densityToLngLat,
   featuresToLngLat,
   roomsToLngLat,
-} from './worldMap/mapStyle'
+} from './mapStyle'
 
 setWorkerUrl(workerUrl)
 
@@ -66,6 +67,7 @@ interface MapPlayer extends WorldMapPoint {
   hunger?: number
   thirst?: number
   fatigue?: number
+  powers: PlayerPowers
   previousX: number
   previousY: number
   movedAt: number
@@ -99,7 +101,6 @@ const floorName = (floor: number) => (floor === 0 ? 'Ground floor' : floor < 0 ?
 
 export default function WorldMap() {
   const socket = useSocket()
-  const { toast } = useToast()
   const confirm = useConfirm()
   const routeSearch = useSearch({ strict: false }) as Record<string, unknown>
 
@@ -131,7 +132,6 @@ export default function WorldMap() {
   const [rosterOpen, setRosterOpen] = useState(false)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<WorldMapSearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -206,6 +206,7 @@ export default function WorldMap() {
             hunger: player.stats?.hunger,
             thirst: player.stats?.thirst,
             fatigue: player.stats?.fatigue,
+            powers: { godMode: player.godMod, invisible: player.invisible, noclip: player.noclip },
             previousX: moved ? from.x : player.x,
             previousY: moved ? from.y : player.y,
             movedAt: moved ? now : now - MOVE_MS,
@@ -304,9 +305,9 @@ export default function WorldMap() {
       const data = await rooms
       if (mapRef.current === map && floorRef.current === next) source('rooms')?.setData(data)
     } catch (error) {
-      toast({ title: 'Rooms could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), variant: 'destructive' })
+      toastManager.add({ title: 'Rooms could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), type: 'error' })
     }
-  }, [drawPlayers, source, toast])
+  }, [drawPlayers, source])
 
   const setFloor = useCallback((value: number) => {
     const range = manifestRef.current?.floors ?? { min: 0, max: 0 }
@@ -362,7 +363,7 @@ export default function WorldMap() {
       mapReadyRef.current = true
       setMapReady(true)
       void mapApi.features(manifest.key).then((data) => source('features')?.setData(featuresToLngLat(data))).catch((error) => {
-        toast({ title: 'Map labels could not be loaded', description: getUserErrorMessage(error, 'Try reloading the map.'), variant: 'destructive' })
+        toastManager.add({ title: 'Map labels could not be loaded', description: getUserErrorMessage(error, 'Try reloading the map.'), type: 'error' })
       })
       void showFloor(floorRef.current)
       const shared = routeSearch
@@ -411,7 +412,7 @@ export default function WorldMap() {
     }
     // routeSearch is read once for the initial view; later changes come from the map itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest, setFloor, showFloor, source, toast])
+  }, [manifest, setFloor, showFloor, source])
 
   useEffect(() => {
     const map = mapRef.current
@@ -422,9 +423,9 @@ export default function WorldMap() {
     densityLoadedRef.current = current.key
     mapApi.density(current.key).then((data) => source('density')?.setData(densityToLngLat(data))).catch((error) => {
       densityLoadedRef.current = null
-      toast({ title: 'Zombie density could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), variant: 'destructive' })
+      toastManager.add({ title: 'Zombie density could not be loaded', description: getUserErrorMessage(error, 'Try again in a moment.'), type: 'error' })
     })
-  }, [density, manifest, mapReady, source, toast])
+  }, [density, manifest, mapReady, source])
 
   useEffect(() => {
     localStorage.setItem(DENSITY_KEY, density ? '1' : '0')
@@ -522,15 +523,15 @@ export default function WorldMap() {
     url.searchParams.set('z', String(floorRef.current))
     url.searchParams.set('zoom', map.getZoom().toFixed(1))
     const ok = await copyText(url.toString())
-    toast(ok ? { title: 'Map link copied' } : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
-  }, [toast])
+    toastManager.add(ok ? { title: 'Map link copied', type: 'success' } : { title: 'Copy failed', description: 'Clipboard unavailable', type: 'error' })
+  }, [])
 
   const copyCoordinates = useCallback(async (point: WorldMapPoint) => {
     const text = `${Math.round(point.x)}, ${Math.round(point.y)}, ${point.z}`
     const ok = await copyText(text)
-    toast(ok ? { title: 'Coordinates copied', description: text } : { title: 'Copy failed', description: 'Clipboard unavailable', variant: 'destructive' })
+    toastManager.add(ok ? { title: 'Coordinates copied', description: text, type: 'success' } : { title: 'Copy failed', description: 'Clipboard unavailable', type: 'error' })
     setContextMenu(null)
-  }, [toast])
+  }, [])
 
   const fitToPlayers = useCallback(() => {
     const map = mapRef.current
@@ -549,34 +550,14 @@ export default function WorldMap() {
     flyTo(player)
   }, [flyTo, setFloor])
 
-  const healPlayer = useCallback(async (username: string) => {
-    setActionLoading(`heal:${username}`)
+  const { busy: actionBusy, run: runAction } = usePlayerAction(() => void fetchPlayers())
+
+  const healPlayer = (username: string) => {
     setContextMenu(null)
-    try {
-      const result = await gameIntegrationApi.healPlayer(username)
-      if (!result.success) throw new Error(result.error || 'Heal failed.')
-      toast({ title: 'Player healed', description: username })
-      void fetchPlayers()
-    } catch (error) {
-      toast({ title: 'Heal failed', description: getUserErrorMessage(error, 'Could not heal player.'), variant: 'destructive' })
-    } finally {
-      setActionLoading(null)
-    }
-  }, [fetchPlayers, toast])
+    void runAction(`heal:${username}`, `Healed ${username}`, () => gameIntegrationApi.healPlayer(username))
+  }
 
-  const enableGodMode = useCallback(async (username: string) => {
-    setActionLoading(`god:${username}`)
-    try {
-      await playersApi.setGodMode(username, true)
-      toast({ title: 'God mode enabled', description: username })
-    } catch (error) {
-      toast({ title: 'God mode failed', description: getUserErrorMessage(error, 'Could not enable god mode.'), variant: 'destructive' })
-    } finally {
-      setActionLoading(null)
-    }
-  }, [toast])
-
-  const teleportPlayer = useCallback(async (username: string, point: WorldMapPoint) => {
+  const teleportPlayer = async (username: string, point: WorldMapPoint) => {
     setContextMenu(null)
     const target = { x: Math.round(point.x), y: Math.round(point.y), z: point.z }
     const accepted = await confirm({
@@ -585,18 +566,8 @@ export default function WorldMap() {
       confirmLabel: 'Teleport player',
       variant: 'warning',
     })
-    if (!accepted) return
-    setActionLoading(`teleport:${username}`)
-    try {
-      await playersApi.teleport(username, target)
-      toast({ title: 'Player teleported', description: `${username} → ${target.x}, ${target.y}, ${target.z}` })
-      void fetchPlayers()
-    } catch (error) {
-      toast({ title: 'Teleport failed', description: getUserErrorMessage(error, 'Could not teleport player.'), variant: 'destructive' })
-    } finally {
-      setActionLoading(null)
-    }
-  }, [confirm, fetchPlayers, toast])
+    if (accepted) await runAction(`teleport:${username}`, `Teleported ${username} to ${target.x}, ${target.y}, ${target.z}`, () => playersApi.teleport(username, target))
+  }
 
   // ---------- render ----------
 
@@ -612,24 +583,25 @@ export default function WorldMap() {
   return (
     <div className="space-y-4 page-transition">
       <PageHeader
-        title="World Map"
-        description="Right-click the map to move or heal players."
+        title="Map"
+        description="Live player positions. Right-click the map to teleport or heal someone."
       />
 
-      <div className="relative overflow-hidden rounded-md border border-border/60 bg-[#14130f]" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
+      <div className="relative overflow-hidden rounded-xl border bg-[#14130f]" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
         <div ref={containerRef} className="h-full w-full" role="application" aria-label="World map. Drag to pan, scroll to zoom, comma and period change floor." />
 
         {(loading || mapError) && (
           <div className="absolute inset-0 z-20 flex items-center justify-center p-6" role={mapError ? 'alert' : 'status'}>
             {mapError ? (
-              <div className="max-w-md rounded-lg border border-border/60 bg-card/95 p-5 text-center shadow-xl">
-                <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-warning" />
-                <p className="text-sm font-medium text-foreground">The map could not be shown</p>
-                <p className="mt-1 text-sm text-muted-foreground">{mapError}</p>
-                <Button size="sm" variant="outline" className="mt-4 gap-2" onClick={() => void loadManifest()}>
-                  <RefreshCw className="h-4 w-4" />Try again
+              <Card className="max-w-md items-center gap-2 p-5 text-center">
+                <AlertTriangle className="size-5 text-warning-foreground" />
+                <p className="font-medium">The map can't be shown</p>
+                <p className="text-sm text-muted-foreground">{mapError}</p>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => void loadManifest()}>
+                  <RefreshCw />
+                  Try again
                 </Button>
-              </div>
+              </Card>
             ) : (
               <span className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white/80"><Loader2 className="h-4 w-4 animate-spin" />Loading map</span>
             )}
@@ -763,13 +735,14 @@ export default function WorldMap() {
                 {selectedPlayer.thirst !== undefined && <Bar label="Thirst" value={selectedPlayer.thirst * 100} good="low" />}
                 {selectedPlayer.fatigue !== undefined && <Bar label="Fatigue" value={selectedPlayer.fatigue * 100} good="low" />}
               </dl>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button size="sm" variant="secondary" className="gap-1.5" disabled={actionLoading !== null || !integrationConnected} onClick={() => void healPlayer(selectedPlayer.username)}>
-                  {actionLoading === `heal:${selectedPlayer.username}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className="h-3.5 w-3.5" />}Heal
-                </Button>
-                <Button size="sm" variant="secondary" className="gap-1.5" disabled={actionLoading !== null} onClick={() => void enableGodMode(selectedPlayer.username)}>
-                  {actionLoading === `god:${selectedPlayer.username}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}God mode
-                </Button>
+              <div className="mt-4">
+                <PlayerActions
+                  player={selectedPlayer.username}
+                  powers={selectedPlayer.powers}
+                  integrationConnected={integrationConnected}
+                  onChanged={() => void fetchPlayers()}
+                  inline={false}
+                />
               </div>
               <Link to="/players" search={{ player: selectedPlayer.username }} className="mt-2 flex items-center justify-center gap-1 rounded-md py-1.5 text-xs text-white/60 hover:bg-white/10 hover:text-white">
                 Open in Players<ArrowUpRight className="h-3.5 w-3.5" />
@@ -800,7 +773,7 @@ export default function WorldMap() {
                 Copy {Math.round(contextMenu.point.x)}, {Math.round(contextMenu.point.y)}, {contextMenu.point.z}
               </MenuItem>
               {contextMenu.player && (
-                <MenuItem disabled={actionLoading !== null || !integrationConnected} onClick={() => void healPlayer(contextMenu.player!.username)} icon={<Heart className="h-4 w-4" />}>
+                <MenuItem disabled={actionBusy !== null || !integrationConnected} onClick={() => healPlayer(contextMenu.player!.username)} icon={<Heart className="h-4 w-4" />}>
                   Heal {contextMenu.player.displayName}
                 </MenuItem>
               )}
@@ -808,7 +781,7 @@ export default function WorldMap() {
                 <div className="mx-3 my-1 border-t border-white/10" />
                 <p className="px-4 pb-1 pt-1.5 text-xs text-white/50">Teleport here</p>
                 {players.slice(0, 8).map((player) => (
-                  <MenuItem key={player.username} disabled={actionLoading !== null || !integrationConnected} onClick={() => void teleportPlayer(player.username, contextMenu.point)} icon={<Users className="h-4 w-4" />}>
+                  <MenuItem key={player.username} disabled={actionBusy !== null || !integrationConnected} onClick={() => void teleportPlayer(player.username, contextMenu.point)} icon={<Users className="h-4 w-4" />}>
                     {player.displayName}
                   </MenuItem>
                 ))}

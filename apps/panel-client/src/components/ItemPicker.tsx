@@ -27,12 +27,12 @@ import {
   HelpCircle,
   LayoutGrid,
 } from 'lucide-react'
-import { Input } from '@/components/ui-legacy/input'
-import { Button } from '@/components/ui-legacy/button'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { gameIntegrationApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import { useToast } from '@/components/ui-legacy/use-toast'
+import { toastManager } from '@/components/ui/toast'
 
 export interface CatalogItem {
   id: string
@@ -204,7 +204,6 @@ export function ItemPicker({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [dropUp, setDropUp] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -254,24 +253,19 @@ export function ItemPicker({
       const data = await gameIntegrationApi.refreshCatalogItems()
       setItems(data.items || [])
       setScannedAt(data.scannedAt)
-      toast({
-        title: 'Item catalog updated',
-        description: 'Found ' + String(data.count || 0) + ' items',
-      })
+      toastManager.add({ title: 'Item catalog updated', description: `Found ${data.count || 0} items`, type: 'success' })
     } catch (err: unknown) {
       const msg = getUserErrorMessage(err, 'Scan failed')
       setScanError(msg)
-      toast({
+      toastManager.add({
         title: 'Item scan failed',
-        description: msg.includes('not connected')
-          ? 'The game server must be online with game integration active.'
-          : msg,
-        variant: 'destructive',
+        description: msg.includes('not connected') ? 'The game server must be online with game integration active.' : msg,
+        type: 'error',
       })
     } finally {
       setScanning(false)
     }
-  }, [scanning, toast])
+  }, [scanning])
 
   const nonVehicleItems = useMemo(
     () => items.filter((item) => !VEHICLE_CATEGORIES.has(item.category)),
@@ -604,13 +598,13 @@ export function ItemPicker({
             )}
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation()
                 handleScan()
               }}
               disabled={scanning}
-              className="h-8 w-8 p-0 shrink-0"
+              className="shrink-0"
               // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; disables only while a scan is already in flight (the spinner is the self-evident why). Triaged 2026-08-27.
               title={'Re-scan server items'}
               aria-label={'Re-scan server items'}

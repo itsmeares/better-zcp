@@ -485,6 +485,52 @@ function demoConsoleLog() {
   ]
 }
 
+function demoPlayerDetails(username: string, index: number) {
+  return {
+    username,
+    displayName: username,
+    x: 10580 + index * 37,
+    y: 9720 - index * 21,
+    z: index === 2 ? 1 : 0,
+    accessLevel: index === 0 ? 'admin' : 'none',
+    isAlive: true,
+    isAsleep: false,
+    isSneaking: index === 3,
+    isRunning: index === 1,
+    godMod: index === 0,
+    invisible: false,
+    noclip: false,
+    stats: { hunger: 0.18 + index * 0.1, thirst: 0.3, fatigue: 0.12 * index, stress: 0.05, boredom: 0.2, unhappiness: 0.1, pain: 0, endurance: 0.92 },
+    health: { overallBodyHealth: [100, 74, 41, 88][index] ?? 90, isInfected: index === 2, isBleeding: false, temperature: 36.8 },
+  }
+}
+
+function demoPlayerStats() {
+  const day = 86_400_000
+  const stat = (name: string, hours: number, sessions: number, lastSeenDaysAgo: number, deaths: number) => ({
+    player_name: name,
+    total_playtime_seconds: hours * 3600,
+    session_count: sessions,
+    first_seen: new Date(Date.now() - 40 * day).toISOString(),
+    last_seen: new Date(Date.now() - lastSeenDaysAgo * day).toISOString(),
+    deaths,
+    sessions: Array.from({ length: Math.min(4, sessions) }, (_, index) => {
+      const start = Date.now() - (lastSeenDaysAgo + index * 2) * day - 3 * 3600_000
+      return { start: new Date(start).toISOString(), end: new Date(start + 2.5 * 3600_000).toISOString(), duration_seconds: 9000 }
+    }),
+  })
+  return [
+    stat('Kate', 212, 64, 0, 3),
+    stat('Baldspot', 96, 41, 0, 9),
+    stat('nightowl_92', 51, 22, 0, 2),
+    stat('Marisol', 18, 7, 0, 1),
+    stat('Rook', 140, 55, 0.04, 6),
+    stat('GrieferJoe', 4, 3, 0.1, 0),
+    stat('Tamsin', 77, 30, 3, 4),
+    stat('old_hank', 230, 90, 12, 11),
+  ]
+}
+
 function queryParam(input: RequestInfo | URL, name: string): string | null {
   const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
   try {
@@ -561,6 +607,54 @@ export function installDemoFetchShim(): void {
           { id: 1, command: 'kickuser GrieferJoe', response: 'User GrieferJoe kicked.', success: 1, executed_at: new Date(Date.now() - 7_800_000).toISOString() },
         ],
       })
+    }
+    if (path === '/api/map/manifest') {
+      return jsonResponse({ key: 'demo', folders: [], bounds: null, floors: { min: 0, max: 0 }, warnings: ['The demo has no map files. On a real server the map renders here.'] })
+    }
+    if (path === '/api/game-integration/players') {
+      return jsonResponse({ success: true, data: { players: DEMO_PLAYERS.map(demoPlayerDetails) } })
+    }
+    if (path.startsWith('/api/game-integration/players/')) {
+      const name = decodeURIComponent(path.split('/').pop() || '')
+      const index = DEMO_PLAYERS.indexOf(name)
+      return jsonResponse(index >= 0 ? { success: true, data: demoPlayerDetails(name, index) } : { success: false, error: 'Player is not online.' })
+    }
+    if (path === '/api/players/stats') {
+      return jsonResponse({ stats: demoPlayerStats() })
+    }
+    if (path === '/api/players/steamid-bans') {
+      return jsonResponse({ bans: [{ steamId: '76561198000000042', banned_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), reason: 'Duping' }] })
+    }
+    if (path === '/api/players/whitelist') {
+      return jsonResponse({
+        success: true,
+        available: true,
+        accounts: ['Kate', 'Baldspot', 'nightowl_92', 'Marisol', 'Rook', 'Tamsin'].map((username, id) => ({
+          id: id + 1,
+          username,
+          lastConnection: new Date(Date.now() - id * 86_400_000).toISOString(),
+          role: id === 0 ? 'admin' : 'user',
+          authType: 1,
+          steamId: `7656119800000${String(1000 + id)}`,
+          ownerId: null,
+          displayName: username,
+        })),
+        allowedSteamIds: ['76561198000009001'],
+      })
+    }
+    if (path === '/api/players/perks') {
+      return jsonResponse({
+        catalog: [
+          { id: 'Aiming', label: 'Aiming', category: 'Firearm' },
+          { id: 'Reloading', label: 'Reloading', category: 'Firearm' },
+          { id: 'Woodwork', label: 'Carpentry', category: 'Crafting' },
+          { id: 'Cooking', label: 'Cooking', category: 'Crafting' },
+          { id: 'Sprinting', label: 'Sprinting', category: 'Agility' },
+        ],
+      })
+    }
+    if (path === '/api/players/access-levels') {
+      return jsonResponse({ levels: ['admin', 'moderator', 'gm', 'observer', 'user', 'none'] })
     }
     if (path === '/api/players/activity') {
       return jsonResponse({ logs: demoActivity() })

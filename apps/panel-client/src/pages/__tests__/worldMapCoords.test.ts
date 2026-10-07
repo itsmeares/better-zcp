@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { fromLngLat, toLngLat } from '../worldMap/coords'
+import { fromLngLat, toLngLat } from '../map/coords'
 
 describe('world map coordinates', () => {
   it('round-trips game squares through map coordinates', () => {

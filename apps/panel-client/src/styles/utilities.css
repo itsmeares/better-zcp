@@ -23,3 +23,12 @@
     background-color: color-mix(in srgb, var(--hue) 26%, transparent);
   }
 }
+
+/* Floating controls over the map. The map tiles stay dark in both themes,
+   so its controls do too. */
+@utility map-glass {
+  background: rgb(22 20 17 / 0.84);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(10px);
+}

@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { lazy } from 'react'
 import { FeatureRoute } from '../route-components'
 
-const WorldMap = lazy(() => import('../pages/WorldMap'))
+const WorldMap = lazy(() => import('../pages/map/MapPage'))
 
 export const Route = createFileRoute('/map')({
   validateSearch: (search: Record<string, unknown>) => {
