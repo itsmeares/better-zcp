@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   modsApi,
@@ -216,3 +216,12 @@ export function useShellStatus() {
 }
 
 export type ShellStatus = ReturnType<typeof useShellStatus>
+
+export const ShellStatusContext = createContext<ShellStatus | null>(null)
+
+/** The shell's live status for pages inside the app layout. */
+export function useShell(): ShellStatus {
+  const status = useContext(ShellStatusContext)
+  if (!status) throw new Error('useShell must be used inside the app layout')
+  return status
+}

@@ -1219,7 +1219,7 @@ export default function Backups() {
               description={
                 "The panel couldn't find a Saves/Multiplayer folder for the active server. Set up a server if you haven't yet, or start it at least once — the folder is created on first launch."
               }
-              action={{ label: 'Open Server Setup', to: '/server-setup' }}
+              action={{ label: 'Open Server Setup', to: '/servers/new' }}
             />
           ) : loading ? (
             <div className="flex items-center justify-center py-12">

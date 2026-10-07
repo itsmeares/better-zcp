@@ -19,9 +19,10 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as ModsRouteImport } from './routes/mods'
 import { Route as PlayersRouteImport } from './routes/players'
 import { Route as ScheduleRouteImport } from './routes/schedule'
-import { Route as ServerSetupRouteImport } from './routes/server-setup'
+import { Route as ServerSettingsRouteImport } from './routes/server-settings'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ServersNewRouteImport } from './routes/servers_.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -73,9 +74,9 @@ const ScheduleRoute = ScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ServerSetupRoute = ServerSetupRouteImport.update({
-  id: '/server-setup',
-  path: '/server-setup',
+const ServerSettingsRoute = ServerSettingsRouteImport.update({
+  id: '/server-settings',
+  path: '/server-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServersRoute = ServersRouteImport.update({
@@ -86,6 +87,11 @@ const ServersRoute = ServersRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServersNewRoute = ServersNewRouteImport.update({
+  id: '/servers_/new',
+  path: '/servers/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -100,9 +106,10 @@ export interface FileRoutesByFullPath {
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/schedule': typeof ScheduleRoute
-  '/server-setup': typeof ServerSetupRoute
+  '/server-settings': typeof ServerSettingsRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
+  '/servers/new': typeof ServersNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,9 +122,10 @@ export interface FileRoutesByTo {
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/schedule': typeof ScheduleRoute
-  '/server-setup': typeof ServerSetupRoute
+  '/server-settings': typeof ServerSettingsRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
+  '/servers/new': typeof ServersNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,9 +139,10 @@ export interface FileRoutesById {
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/schedule': typeof ScheduleRoute
-  '/server-setup': typeof ServerSetupRoute
+  '/server-settings': typeof ServerSettingsRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
+  '/servers_/new': typeof ServersNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,9 +157,10 @@ export interface FileRouteTypes {
     | '/mods'
     | '/players'
     | '/schedule'
-    | '/server-setup'
+    | '/server-settings'
     | '/servers'
     | '/settings'
+    | '/servers/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -163,9 +173,10 @@ export interface FileRouteTypes {
     | '/mods'
     | '/players'
     | '/schedule'
-    | '/server-setup'
+    | '/server-settings'
     | '/servers'
     | '/settings'
+    | '/servers/new'
   id:
     | '__root__'
     | '/'
@@ -178,9 +189,10 @@ export interface FileRouteTypes {
     | '/mods'
     | '/players'
     | '/schedule'
-    | '/server-setup'
+    | '/server-settings'
     | '/servers'
     | '/settings'
+    | '/servers_/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -194,9 +206,10 @@ export interface RootRouteChildren {
   ModsRoute: typeof ModsRoute
   PlayersRoute: typeof PlayersRoute
   ScheduleRoute: typeof ScheduleRoute
-  ServerSetupRoute: typeof ServerSetupRoute
+  ServerSettingsRoute: typeof ServerSettingsRoute
   ServersRoute: typeof ServersRoute
   SettingsRoute: typeof SettingsRoute
+  ServersNewRoute: typeof ServersNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -271,11 +284,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/server-setup': {
-      id: '/server-setup'
-      path: '/server-setup'
-      fullPath: '/server-setup'
-      preLoaderRoute: typeof ServerSetupRouteImport
+    '/server-settings': {
+      id: '/server-settings'
+      path: '/server-settings'
+      fullPath: '/server-settings'
+      preLoaderRoute: typeof ServerSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/servers': {
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/servers_/new': {
+      id: '/servers_/new'
+      path: '/servers/new'
+      fullPath: '/servers/new'
+      preLoaderRoute: typeof ServersNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -306,9 +326,10 @@ const rootRouteChildren: RootRouteChildren = {
   ModsRoute: ModsRoute,
   PlayersRoute: PlayersRoute,
   ScheduleRoute: ScheduleRoute,
-  ServerSetupRoute: ServerSetupRoute,
+  ServerSettingsRoute: ServerSettingsRoute,
   ServersRoute: ServersRoute,
   SettingsRoute: SettingsRoute,
+  ServersNewRoute: ServersNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -9,6 +9,7 @@ const MOVED = {
   '/serverconfig': '/config',
   '/scheduler': '/schedule',
   '/debug': '/diagnostics',
+  '/server-setup': '/servers/new',
 } as const
 
 function LegacyRoute() {

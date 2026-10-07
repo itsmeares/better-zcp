@@ -3,6 +3,7 @@ import {
   Archive,
   Clock,
   FileCog,
+  ServerCog,
   LayoutGrid,
   Map,
   Package,
@@ -16,7 +17,7 @@ import {
 // One source for the sidebar, the command palette and the number-key
 // shortcuts. Server pages act on the selected server; panel pages don't.
 export interface NavItem {
-  to: '/' | '/console' | '/players' | '/map' | '/mods' | '/config' | '/backups' | '/schedule' | '/servers' | '/diagnostics' | '/settings'
+  to: '/' | '/console' | '/players' | '/map' | '/mods' | '/config' | '/server-settings' | '/backups' | '/schedule' | '/servers' | '/diagnostics' | '/settings'
   label: string
   icon: LucideIcon
   /** Token name in styles/tokens.css (--hue-*). */
@@ -48,13 +49,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/mods', label: 'Mods', icon: Package, hue: 'mods', requiresServer: true, shortcut: '5' },
       { to: '/config', label: 'Configuration', icon: FileCog, hue: 'config', requiresServer: true, shortcut: '6' },
+      { to: '/server-settings', label: 'Server settings', icon: ServerCog, hue: 'server-settings', requiresServer: true, shortcut: '7' },
     ],
   },
   {
     label: 'Maintain',
     items: [
-      { to: '/backups', label: 'Backups', icon: Archive, hue: 'backups', requiresServer: true, shortcut: '7' },
-      { to: '/schedule', label: 'Schedule', icon: Clock, hue: 'schedule', requiresServer: true, shortcut: '8' },
+      { to: '/backups', label: 'Backups', icon: Archive, hue: 'backups', requiresServer: true, shortcut: '8' },
+      { to: '/schedule', label: 'Schedule', icon: Clock, hue: 'schedule', requiresServer: true, shortcut: '9' },
     ],
   },
   {
@@ -69,6 +71,11 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items)
 
+/** True for the item's page and pages under it, such as /servers/new. */
+export function isNavItemActive(item: NavItem, pathname: string): boolean {
+  return pathname === item.to || (item.to !== '/' && pathname.startsWith(`${item.to}/`))
+}
+
 export function findNavItem(pathname: string): NavItem | undefined {
-  return NAV_ITEMS.find((item) => item.to === pathname)
+  return NAV_ITEMS.find((item) => isNavItemActive(item, pathname))
 }

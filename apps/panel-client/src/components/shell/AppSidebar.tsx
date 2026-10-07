@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/sidebar'
 import { toastManager } from '@/components/ui/toast'
 import { ConnectionStatus } from '@/components/ConnectionStatus'
-import { NAV_GROUPS, type NavItem } from './nav'
+import { isNavItemActive, NAV_GROUPS, type NavItem } from './nav'
 import { NavTile } from './NavTile'
 import type { ServerRunState, ShellStatus } from './useShellStatus'
 
@@ -47,7 +47,7 @@ function ServerSwitcher({ status }: { status: ShellStatus }) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" tooltip="Add a server" render={<Link to="/server-setup" />}>
+          <SidebarMenuButton size="lg" tooltip="Add a server" render={<Link to="/servers/new" />}>
             <span className="grid size-8 place-items-center rounded-lg border border-dashed border-sidebar-border">
               <Plus className="size-4" />
             </span>
@@ -109,7 +109,7 @@ function ServerSwitcher({ status }: { status: ShellStatus }) {
             </MenuGroup>
             <MenuSeparator />
             <MenuItem onClick={() => void navigate({ to: '/servers' })}>Manage servers</MenuItem>
-            <MenuItem onClick={() => void navigate({ to: '/server-setup' })}>
+            <MenuItem onClick={() => void navigate({ to: '/servers/new' })}>
               <Plus />
               Add a server
             </MenuItem>
@@ -228,7 +228,7 @@ export function AppSidebar({ status, onShowShortcuts }: { status: ShellStatus; o
                     return (
                       <SidebarMenuItem key={item.to}>
                         <SidebarMenuButton
-                          isActive={pathname === item.to}
+                          isActive={isNavItemActive(item, pathname)}
                           tooltip={blocked ? NO_SERVER_REASON : item.label}
                           aria-disabled={blocked || undefined}
                           title={blocked ? NO_SERVER_REASON : undefined}

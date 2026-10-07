@@ -11,7 +11,7 @@ import { AppSidebar } from './shell/AppSidebar'
 import { CommandPalette } from './shell/CommandPalette'
 import { ThemeMenu } from './shell/ThemeMenu'
 import { findNavItem } from './shell/nav'
-import { useShellStatus, type ShellStatus } from './shell/useShellStatus'
+import { ShellStatusContext, useShellStatus, type ShellStatus } from './shell/useShellStatus'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 import { MaintenanceNotice } from './MaintenanceNotice'
 import { SystemHealthBanner } from './SystemHealthBanner'
@@ -92,6 +92,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
+    <ShellStatusContext.Provider value={status}>
     <SidebarProvider open={sidebarOpen} onOpenChange={onSidebarOpenChange} data-app-shell>
       <a
         href="#main-content"
@@ -114,5 +115,6 @@ export default function Layout({ children }: { children: ReactNode }) {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} status={status} onShowShortcuts={() => setHelpOpen(true)} />
       <KeyboardShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
     </SidebarProvider>
+    </ShellStatusContext.Provider>
   )
 }

@@ -1208,7 +1208,7 @@ export default function Dashboard() {
       return {
         level: 'warning',
         headline: 'No server configured',
-        action: { label: 'Open setup', to: '/server-setup' },
+        action: { label: 'Open setup', to: '/servers/new' },
       }
     }
     if (fetchError) {
@@ -1962,7 +1962,7 @@ export default function Dashboard() {
 
       {status && !status.serverPathConfigured && (
         <Link
-          to="/server-setup"
+          to="/servers/new"
           className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/40 bg-warning/4 py-2 ps-3 pe-2 shadow-[inset_2px_0_0_var(--warning)] transition-colors hover:bg-warning/8 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
         >
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
@@ -2034,7 +2034,7 @@ export default function Dashboard() {
           </ol>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
-              to="/server-setup"
+              to="/servers/new"
               className={cn(
                 buttonVariants({ variant: 'default', size: 'sm' }),
                 'h-8 gap-1.5 text-xs',

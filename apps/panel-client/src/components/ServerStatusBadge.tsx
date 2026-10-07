@@ -34,7 +34,7 @@ function toIndicatorState(status: string): IndicatorState {
 }
 
 const DOT_CLASS: Record<IndicatorState, string> = {
-  online: 'bg-muted-foreground/50',
+  online: 'bg-success',
   offline: 'bg-destructive',
   connecting: 'bg-warning animate-pulse',
   unknown: 'bg-muted-foreground/50',
@@ -42,8 +42,8 @@ const DOT_CLASS: Record<IndicatorState, string> = {
 
 const TEXT_CLASS: Record<IndicatorState, string> = {
   online: 'text-foreground',
-  offline: 'text-destructive',
-  connecting: 'text-warning',
+  offline: 'text-destructive-foreground',
+  connecting: 'text-warning-foreground',
   unknown: 'text-muted-foreground',
 }
 
