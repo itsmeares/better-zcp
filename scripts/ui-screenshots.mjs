@@ -13,7 +13,7 @@ import { chromium } from '@playwright/test';
 
 const ROUTES = [
   '/', '/console', '/players', '/map', '/config', '/mods',
-  '/schedule', '/backups', '/servers', '/server-setup', '/settings', '/diagnostics',
+  '/schedule', '/backups', '/servers', '/servers/new', '/server-settings', '/settings', '/diagnostics',
 ];
 // The theme key and its stored values are kept across the redesign, so the
 // same script captures the old and the new UI.

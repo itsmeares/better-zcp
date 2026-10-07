@@ -1,6 +1,6 @@
 import { apiUrl, getSelectedServerId } from "@/lib/serverSelection"
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { useLocation } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -79,10 +79,8 @@ import { WorkshopSettingsDialog } from '@/components/mods/WorkshopSettingsDialog
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui-legacy/button'
 import { Input } from '@/components/ui-legacy/input'
-import { NumberInput } from '@/components/NumberInput'
 import { Label } from '@/components/ui-legacy/label'
 import { HelpTip } from '@/components/HelpTip'
-import { Switch } from '@/components/ui-legacy/switch'
 import { Checkbox } from '@/components/ui-legacy/checkbox'
 import { Badge } from '@/components/ui-legacy/badge'
 import { reportClientError, reportClientWarning } from '@/lib/client-errors'
@@ -385,10 +383,6 @@ export default function Mods() {
   const busyRef = useRef(false)
   const discoverAbortRef = useRef<AbortController | null>(null)
 
-  const [restartSettingsOpen, setRestartSettingsOpen] = useState(false)
-  const [restartWarningMinutes, setRestartWarningMinutes] = useState(15)
-  const [forceAfterDeadline, setForceAfterDeadline] = useState(false)
-  const [maxDelayMinutes, setMaxDelayMinutes] = useState(60)
 
   const [conflicts, setConflicts] = useState<ConflictScanResult | null>(null)
   const [conflictsLoading, setConflictsLoading] = useState(false)
@@ -603,11 +597,6 @@ export default function Mods() {
       if (results[1].status === 'fulfilled') {
         const statusData = results[1].value
         setStatus(statusData)
-        if (statusData) {
-          setRestartWarningMinutes(statusData.restartWarningMinutes ?? 15)
-          setForceAfterDeadline(statusData.forceAfterDeadline === true)
-          setMaxDelayMinutes(statusData.maxDelayMinutes ?? 60)
-        }
       }
       if (results[2].status === 'fulfilled') {
         setIniConfig(results[2].value)
@@ -1598,29 +1587,7 @@ export default function Mods() {
     }
   }
 
-  const handleToggleAutoRestart = async () => {
-    if (busyRef.current) return
-    busyRef.current = true
-    setLoading(true)
-    try {
-      await modsApi.setAutoRestart(!status?.autoRestartEnabled)
-      toast({
-        title: status?.autoRestartEnabled
-          ? 'Auto-restart disabled'
-          : 'Auto-restart enabled',
-      })
-      fetchData()
-    } catch (error) {
-      toast({
-        title: 'Setting Update Failed',
-        description: getUserErrorMessage(error, 'Failed to update setting'),
-        variant: 'destructive',
-      })
-    } finally {
-      setLoading(false)
-      busyRef.current = false
-    }
-  }
+
 
   const handleSyncFromServer = async () => {
     if (busyRef.current) return
@@ -2189,33 +2156,7 @@ export default function Mods() {
     setSelectedMods(new Set())
   }
 
-  const handleSaveRestartSettings = async () => {
-    if (busyRef.current) return
-    busyRef.current = true
-    setLoading(true)
-    try {
-      await modsApi.setRestartOptions({
-        warningMinutes: restartWarningMinutes,
-        forceAfterDeadline,
-        maxDelayMinutes: maxDelayMinutes,
-      })
-      toast({
-        title: 'Settings Saved',
-        description: 'Restart options have been updated',
-      })
-      setRestartSettingsOpen(false)
-      fetchData()
-    } catch (error) {
-      toast({
-        title: 'Settings Save Failed',
-        description: getUserErrorMessage(error, 'Failed to save settings'),
-        variant: 'destructive',
-      })
-    } finally {
-      setLoading(false)
-      busyRef.current = false
-    }
-  }
+
 
   const handleCancelPendingRestart = async () => {
     if (busyRef.current) return
@@ -2978,32 +2919,18 @@ export default function Mods() {
                         {'Import Collection'}
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setRestartSettingsOpen(true)
-                        }}
-                      >
-                        <Settings2 className="w-4 h-4 me-2" />
-                        {'Auto-Restart Settings'}
+                      <DropdownMenuItem asChild>
+                        <Link to="/schedule">
+                          <Settings2 className="w-4 h-4 me-2" />
+                          {'Restart settings'}
+                        </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setWorkshopSettingsOpen(true)}>
                         <Settings2 className="w-4 h-4 me-2" />
                         {'Workshop settings'}
                       </DropdownMenuItem>
 
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-sm">{'Auto-restart'}</span>
 
-                          <Switch
-                            checked={status?.autoRestartEnabled || false}
-                            onCheckedChange={handleToggleAutoRestart}
-                            disabled={loading}
-                            aria-label={'Toggle auto-restart on mod update'}
-                          />
-                        </div>
-                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -3998,89 +3925,7 @@ export default function Mods() {
                     </DialogContent>
                   </Dialog>
 
-                  <Dialog
-                    open={restartSettingsOpen}
-                    onOpenChange={setRestartSettingsOpen}
-                  >
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{'Auto-Restart Settings'}</DialogTitle>
-                        <DialogDescription>
-                          {
-                            'Configure how the server restarts when mod updates are detected'
-                          }
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="restart-warning-minutes">
-                            {'Warning countdown (minutes)'}
-                          </Label>
-                          <NumberInput
-                            id="restart-warning-minutes"
-                            min={1}
-                            max={30}
-                            value={restartWarningMinutes}
-                            onChange={setRestartWarningMinutes}
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {
-                              'Warning countdown for a forced restart. An empty server restarts without a countdown.'
-                            }
-                          </p>
-                        </div>
 
-                        <div className="flex items-center justify-between rounded-lg border border-border/70 bg-card/65 p-3">
-                          <div className="space-y-1">
-                            <Label htmlFor="force-mod-restart">{'Force restart at deadline'}</Label>
-                            <p className="text-xs text-muted-foreground">
-                              {'Off by default. With this on, players are warned before the deadline.'}
-                            </p>
-                          </div>
-                          <Switch
-                            id="force-mod-restart"
-                            checked={forceAfterDeadline}
-                            onCheckedChange={setForceAfterDeadline}
-                          />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="restart-max-delay">
-                              {'Player waiting window (minutes)'}
-                            </Label>
-                            <NumberInput
-                              id="restart-max-delay"
-                              min={15}
-                              max={120}
-                              value={maxDelayMinutes}
-                              onChange={setMaxDelayMinutes}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {
-                                forceAfterDeadline ? 'The warning countdown begins before this deadline.' : 'When this window expires, the restart is deferred. The game downloads Workshop updates at its next start.'
-                              }
-                            </p>
-                        </div>
-
-                      </div>
-                      <DialogFooter className="flex-col sm:flex-row gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => setRestartSettingsOpen(false)}
-                          className="w-full sm:w-auto"
-                        >
-                          {'Cancel'}
-                        </Button>
-                        <Button
-                          onClick={handleSaveRestartSettings}
-                          disabled={loading}
-                          className="w-full sm:w-auto"
-                        >
-                          {loading ? 'Saving...' : 'Save Settings'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 </div>
 
                 {activeTab === 'installed' && (
