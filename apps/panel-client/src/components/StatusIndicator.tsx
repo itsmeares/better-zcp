@@ -10,7 +10,7 @@ interface StatusIndicatorProps {
 
 const stateStyles: Record<StatusState, { dot: string; text: string }> = {
   online: {
-    dot: 'bg-[hsl(var(--success))] shadow-[0_0_6px_hsl(var(--success)/0.5)]',
+    dot: 'bg-[var(--success)] shadow-[0_0_6px_color-mix(in_srgb,var(--success)_50%,transparent)]',
     text: 'text-foreground',
   },
   offline: {

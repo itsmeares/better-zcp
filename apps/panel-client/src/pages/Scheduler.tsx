@@ -289,7 +289,7 @@ function TimezonePicker({
     <div ref={containerRef} className="relative">
       <div className="relative">
         <Search
-          className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50"
+          className="pointer-events-none absolute inset-s-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50"
           aria-hidden="true"
         />
         <Input
@@ -356,7 +356,7 @@ function TimezonePicker({
               grouped.map(([group, zones]) => (
                 <div key={group}>
                   {!(zones.length === 1 && zones[0] === group) && (
-                    <div className="sticky top-0 z-10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 bg-muted/70 backdrop-blur-sm">
+                    <div className="sticky top-0 z-10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 bg-muted/70 backdrop-blur-xs">
                       {group}
                     </div>
                   )}
@@ -994,7 +994,7 @@ export default function Scheduler() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{'Scheduler data could not be loaded'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 break-words" dir="auto">
+            <span className="min-w-0 wrap-break-word" dir="auto">
               {fetchError}
             </span>
             <Button
@@ -1503,7 +1503,7 @@ export default function Scheduler() {
           ] as const
           const toneClasses = {
             primary: {
-              tile: 'border-primary/30 bg-primary/[0.06] text-primary',
+              tile: 'border-primary/30 bg-primary/6 text-primary',
               value: 'text-foreground',
             },
             muted: {
@@ -2032,7 +2032,7 @@ export default function Scheduler() {
                   <div
                     key={entry.id}
                     className={`p-3 rounded-lg border border-border/40 ${
-                      entry.success ? 'bg-card' : 'bg-destructive/[0.06]'
+                      entry.success ? 'bg-card' : 'bg-destructive/6'
                     }`}
                   >
                     <div className="flex items-start justify-between">

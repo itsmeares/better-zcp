@@ -1721,7 +1721,7 @@ export default function Servers() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{'Servers could not be loaded'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 break-words" dir="auto">
+            <span className="min-w-0 wrap-break-word" dir="auto">
               {fetchError}
             </span>
             <Button
@@ -1849,19 +1849,19 @@ export default function Servers() {
                 key={server.id}
                 className={`relative overflow-hidden transition-colors ${
                   server.isActive
-                    ? 'border-primary/60 ring-1 ring-primary/25 bg-gradient-to-br from-primary/[0.04] via-card to-card'
+                    ? 'border-primary/60 ring-1 ring-primary/25 bg-linear-to-br from-primary/4 via-card to-card'
                     : 'hover:border-primary/30'
                 } ${hasUpdate ? 'border-warning/60' : ''}`}
               >
                 {server.isActive && (
                   <div
-                    className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-primary via-primary/80 to-primary/40"
+                    className="absolute top-0 inset-x-0 h-[3px] bg-linear-to-r from-primary via-primary/80 to-primary/40"
                     aria-hidden="true"
                   />
                 )}
                 {hasUpdate && !server.isActive && (
                   <div
-                    className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-warning via-warning/80 to-warning/40"
+                    className="absolute top-0 inset-x-0 h-[3px] bg-linear-to-r from-warning via-warning/80 to-warning/40"
                     aria-hidden="true"
                   />
                 )}
@@ -2212,7 +2212,7 @@ export default function Servers() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
                       <div
-                        className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/[0.06] text-primary shrink-0"
+                        className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/6 text-primary shrink-0"
                         aria-hidden="true"
                       >
                         <Network className="w-3.5 h-3.5" />
@@ -2228,7 +2228,7 @@ export default function Servers() {
                     </div>
                     <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
                       <div
-                        className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/[0.06] text-primary shrink-0"
+                        className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/6 text-primary shrink-0"
                         aria-hidden="true"
                       >
                         <Globe className="w-3.5 h-3.5" />
@@ -2561,7 +2561,7 @@ export default function Servers() {
                                 <button
                                   type="button"
                                   key={config.serverName || idx}
-                                  className="w-full text-start p-3 rounded border bg-background hover:bg-accent cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                                  className="w-full text-start p-3 rounded border bg-background hover:bg-accent cursor-pointer transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary"
                                   onClick={() =>
                                     handleSelectScannedConfig(
                                       config,

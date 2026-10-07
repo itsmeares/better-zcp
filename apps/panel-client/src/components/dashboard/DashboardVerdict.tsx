@@ -169,7 +169,7 @@ export function VerdictBand({
             <li key={player.name} className="min-w-0">
               <Link
                 to="/players"
-                className="group flex items-baseline gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                className="group flex items-baseline gap-2 rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
               >
                 <span
                   className="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-success"
@@ -231,7 +231,7 @@ export function WorkList({ items }: { items: WorkItem[] }) {
         <Link
           key={id}
           to={to}
-          className="group flex items-center gap-3 py-2.5 ps-1 pe-1.5 transition-colors hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group flex items-center gap-3 py-2.5 ps-1 pe-1.5 transition-colors hover:bg-muted/25 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         >
           <Icon
             className="h-3.5 w-3.5 shrink-0 text-foreground/35 transition-colors group-hover:text-foreground/70"

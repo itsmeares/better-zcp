@@ -656,7 +656,7 @@ export default function WorldMap() {
                 }}
                 placeholder="Search towns, streets, buildings and rooms"
                 aria-label="Search the map"
-                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/45 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/45 focus:outline-hidden"
               />
               {query && <button type="button" onClick={clearSearch} aria-label="Clear search" className="rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button>}
             </label>
@@ -851,7 +851,7 @@ function MapButton({ label, onClick, disabled, pressed, children }: {
 
 function MenuItem({ icon, onClick, disabled, children }: { icon: React.ReactNode; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <button type="button" role="menuitem" onClick={onClick} disabled={disabled} className="flex w-full items-center gap-3 px-4 py-2 text-start hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none disabled:opacity-40">
+    <button type="button" role="menuitem" onClick={onClick} disabled={disabled} className="flex w-full items-center gap-3 px-4 py-2 text-start hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-hidden disabled:opacity-40">
       <span className="text-white/60">{icon}</span><span className="truncate">{children}</span>
     </button>
   )

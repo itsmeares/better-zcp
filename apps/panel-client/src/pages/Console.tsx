@@ -242,7 +242,7 @@ const ServerLogLine = memo(function ServerLogLine({ line }: { line: string }) {
             [{parsed.category}]
           </span>
         )}
-        <span className={`${typeColors[parsed.type]} break-words min-w-0`}>
+        <span className={`${typeColors[parsed.type]} wrap-break-word min-w-0`}>
           {parsed.message || parsed.raw}
         </span>
       </div>
@@ -847,7 +847,7 @@ export default function Console() {
           tone="ops"
           icon={<TerminalIcon className="w-5 h-5" />}
         />
-        <div className="flex min-h-[18rem] items-center justify-center rounded-md border border-border/50 bg-card/50">
+        <div className="flex min-h-72 items-center justify-center rounded-md border border-border/50 bg-card/50">
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             {'checking server target'}
@@ -917,7 +917,7 @@ export default function Console() {
             </div>
           ) : (
             <>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60 shrink-0">
                     {'path'}
@@ -1209,7 +1209,7 @@ export default function Console() {
         </TabsContent>
 
         <TabsContent value="rcon" className="space-y-3 mt-4">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-xs">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60 shrink-0">
                 {'link'}
@@ -1354,7 +1354,7 @@ export default function Console() {
               role="log"
               aria-live="polite"
               aria-label={'RCON command output'}
-              className="h-[18rem] min-h-[220px] sm:h-[22rem] lg:h-[26rem] overflow-auto bg-background/60 p-3 terminal-output"
+              className="h-72 min-h-[220px] sm:h-88 lg:h-104 overflow-auto bg-background/60 p-3 terminal-output"
             >
               {liveLog.length === 0 ? (
                 <EmptyState
@@ -1383,14 +1383,14 @@ export default function Console() {
                     </div>
                     <div
                       className={cn(
-                        'ms-4 mt-0.5 text-xs border-s-2 ps-2 break-words',
+                        'ms-4 mt-0.5 text-xs border-s-2 ps-2 wrap-break-word',
                         entry.success
                           ? 'border-primary/30 text-foreground/85'
                           : 'border-destructive/50 text-destructive',
                       )}
                     >
                       {entry.response.split('\n').map((line, i) => (
-                        <div key={`line-${i}`} className="break-words">
+                        <div key={`line-${i}`} className="wrap-break-word">
                           {line || '\u00A0'}
                         </div>
                       ))}
@@ -1446,7 +1446,7 @@ export default function Console() {
                 onChange={(e) => setCommand(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={'type a command…'}
-                className="ps-[5.5rem] font-mono bg-card/70 border-border/55 focus-visible:border-primary/60"
+                className="ps-22 font-mono bg-card/70 border-border/55 focus-visible:border-primary/60"
                 disabled={loading || !hasRconConfig || rconConnected === false}
                 maxLength={2000}
                 aria-label={'RCON command input'}
@@ -1485,7 +1485,7 @@ export default function Console() {
             {'// enter · run · ↑↓ history'}
           </p>
 
-          <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-sm overflow-hidden">
+          <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-xs overflow-hidden">
             <button
               type="button"
               onClick={() => setShowBroadcast((v) => !v)}
@@ -1600,7 +1600,7 @@ export default function Console() {
             )}
           </div>
 
-          <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-sm overflow-hidden">
+          <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-xs overflow-hidden">
             <button
               type="button"
               onClick={() => setShowHistory((v) => !v)}
@@ -1647,7 +1647,7 @@ export default function Console() {
                     aria-label={'Search command history'}
                   />
                 </div>
-                <ScrollArea className="h-[16rem] min-h-[200px] sm:h-[20rem] rounded-lg border border-border/30 bg-background/40">
+                <ScrollArea className="h-64 min-h-[200px] sm:h-80 rounded-lg border border-border/30 bg-background/40">
                   {history.length === 0 ? (
                     <EmptyState
                       compact

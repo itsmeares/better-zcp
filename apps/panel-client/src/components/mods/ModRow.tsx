@@ -33,7 +33,7 @@ export function WorkshopIdChip({
                 /* clipboard blocked — ignore */
               })
           }}
-          className={`inline-flex items-center gap-1 rounded border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] leading-none tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 ${className}`}
+          className={`inline-flex items-center gap-1 rounded border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] leading-none tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 ${className}`}
           aria-label={'Copy workshop ID ' + String(wsId)}
         >
           <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70">
@@ -64,7 +64,7 @@ export function WorkshopLinkAction({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+          className="inline-flex shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50"
           aria-label={'Open workshop page for ' + String(label)}
         >
           <ExternalLink className="h-4 w-4" />
@@ -93,7 +93,7 @@ export function WorkshopThumb({
       href={workshopUrl(wsId)}
       target="_blank"
       rel="noreferrer"
-      className={`relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${tone}`}
+      className={`relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-md border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/70 ${tone}`}
       aria-label={'Open ' + String(label) + ' on Steam Workshop'}
       title={'Open Steam Workshop page'}
     >
@@ -146,7 +146,7 @@ export function ModRow({
       onClick={onClick}
       className={`group/modrow perf-list-row motion-safe:transition-colors ${onClick ? 'cursor-pointer' : ''} ${
         selected
-          ? 'bg-primary/[0.055] shadow-[inset_2px_0_0_hsl(var(--primary)/0.55)]'
+          ? 'bg-primary/5.5 shadow-[inset_2px_0_0_color-mix(in_srgb,var(--primary)_55%,transparent)]'
           : 'hover:bg-accent/40'
       } ${dimmed ? 'opacity-60' : ''} ${className}`}
     >

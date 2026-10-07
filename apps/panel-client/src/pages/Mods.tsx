@@ -2289,7 +2289,7 @@ export default function Mods() {
                     ? 'border-warning/40 bg-warning/10 text-warning'
                     : !mod.last_checked
                       ? 'border-border/50 bg-muted/30 text-muted-foreground'
-                      : 'border-primary/25 bg-primary/[0.06] text-primary/85'
+                      : 'border-primary/25 bg-primary/6 text-primary/85'
                 }
                 fallbackIcon={
                   <Package className="h-8 w-8" aria-hidden="true" />
@@ -2801,7 +2801,7 @@ export default function Mods() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>{'Mod data could not be loaded'}</AlertTitle>
             <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="min-w-0 break-words" dir="auto">
+              <span className="min-w-0 wrap-break-word" dir="auto">
                 {fetchError}
               </span>
               <Button
@@ -3018,7 +3018,7 @@ export default function Mods() {
             )}
 
             {status?.pendingRestart && (
-              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3 sm:items-center">
                   <Clock className="w-5 h-5 animate-pulse text-warning" />
                   <div>
@@ -3056,7 +3056,7 @@ export default function Mods() {
               (status?.updatesAvailable ?? 0) > 0 &&
               groupedMods.updateAvailable.length === 0 &&
               !checking && (
-                <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3 sm:items-center">
                     <AlertTriangle className="w-5 h-5 text-warning" />
                     <div>
@@ -3089,7 +3089,7 @@ export default function Mods() {
               )}
 
             {removedWorkshopMods.length > 0 && (
-              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm">
+              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-xs">
                 <div className="flex items-start gap-3">
                   <Trash2 className="w-5 h-5 shrink-0 text-warning" />
                   <div className="min-w-0 flex-1">
@@ -3127,7 +3127,7 @@ export default function Mods() {
                               String(m.name || m.workshopId) +
                               ' from the server'
                             }
-                            className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50"
+                            className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-destructive focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -3167,7 +3167,7 @@ export default function Mods() {
                     }}
                     aria-label={'Dismiss Steam API warning'}
                     title={'Dismiss until the next failed check'}
-                    className="ms-auto shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    className="ms-auto shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -3197,7 +3197,7 @@ export default function Mods() {
             )}
 
             {iniConfig?.duplicateKeys && iniConfig.duplicateKeys.length > 0 && (
-              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3 sm:items-center">
                   <AlertTriangle className="w-5 h-5 text-warning" />
                   <div>
@@ -3617,7 +3617,7 @@ export default function Mods() {
                           {'Paste a Steam Workshop URL or ID — or'}{' '}
                           <button
                             type="button"
-                            className="text-primary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 rounded-sm"
+                            className="text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 rounded-sm"
                             onClick={() => {
                               setAdvancedAddOpen(false)
                               setCollectionDialogOpen(true)
@@ -3716,7 +3716,7 @@ export default function Mods() {
                                         'noopener,noreferrer',
                                       )
                                     }
-                                    className="text-xs text-primary hover:underline flex items-center gap-0.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 rounded-sm"
+                                    className="text-xs text-primary hover:underline flex items-center gap-0.5 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 rounded-sm"
                                   >
                                     <ExternalLink className="w-3 h-3" />
                                     {'View'}
@@ -3879,7 +3879,7 @@ export default function Mods() {
                                             aria-pressed={selectedModIds.has(
                                               modId,
                                             )}
-                                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 ${
+                                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded cursor-pointer transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 ${
                                               selectedModIds.has(modId)
                                                 ? 'bg-primary/10 border-s-2 border-s-primary'
                                                 : isConfigured
@@ -4095,7 +4095,7 @@ export default function Mods() {
                     {mods.length > 0 && (
                       <div className="flex items-center gap-4 flex-wrap">
                         <div className="relative min-w-0 basis-full sm:basis-auto sm:flex-1 sm:max-w-sm">
-                          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <Input
                             ref={searchInputRef}
                             value={searchQuery}
@@ -4270,7 +4270,7 @@ export default function Mods() {
                                     aria-hidden="true"
                                   >
                                     <div className="absolute inset-0 rounded-2xl bg-primary/15 blur-xl" />
-                                    <div className="relative w-16 h-16 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center">
+                                    <div className="relative w-16 h-16 rounded-2xl border border-primary/25 bg-linear-to-br from-primary/15 to-primary/5 flex items-center justify-center">
                                       <Package className="w-8 h-8 text-primary" />
                                     </div>
                                   </div>
@@ -4292,7 +4292,7 @@ export default function Mods() {
                                     type="button"
                                     onClick={handleSyncFromServer}
                                     disabled={loading}
-                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/[0.04] bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/4 bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   >
                                     <div className="flex items-center gap-2 mb-1.5">
                                       <RefreshCw
@@ -4323,7 +4323,7 @@ export default function Mods() {
                                       setCollectionDialogOpen(true)
                                     }
                                     disabled={loading}
-                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/[0.04] bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/4 bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   >
                                     <div className="flex items-center gap-2 mb-1.5">
                                       <Library
@@ -4349,7 +4349,7 @@ export default function Mods() {
                                     type="button"
                                     onClick={() => setAdvancedAddOpen(true)}
                                     disabled={loading}
-                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/[0.04] bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/4 bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   >
                                     <div className="flex items-center gap-2 mb-1.5">
                                       <PlusCircle
@@ -5274,7 +5274,7 @@ export default function Mods() {
                                         <AlertTriangle
                                           className={`w-3.5 h-3.5 shrink-0 ${conflict.severity === 'warning' ? 'text-warning' : 'text-primary'}`}
                                         />
-                                        <span className="flex-1 min-w-0 break-words">
+                                        <span className="flex-1 min-w-0 wrap-break-word">
                                           <span
                                             className={`font-medium ${conflict.severity === 'warning' ? 'text-warning' : 'text-primary'}`}
                                           >
@@ -5400,7 +5400,7 @@ export default function Mods() {
                                             title={
                                               'Show only workshop items with a confirmed variant clash, a missing required mod ID, or a duplicate internal ID.'
                                             }
-                                            className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/50 ${filterAttention ? 'border-destructive/60 bg-destructive/20 text-destructive' : 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15'}`}
+                                            className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/50 ${filterAttention ? 'border-destructive/60 bg-destructive/20 text-destructive' : 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15'}`}
                                           >
                                             <AlertTriangle
                                               className="h-3 w-3 shrink-0"
@@ -5423,7 +5423,7 @@ export default function Mods() {
                                                 ? 'Showing only workshop items with more than one mod ID. These are usually variants where only some should be enabled together.'
                                                 : 'Show only workshop items with multiple mod IDs (usually variants — only enable the ones you want).'
                                             }
-                                            className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 ${filterMultiId ? 'bg-primary/20 border-primary/50 text-primary' : 'border-border/40 text-muted-foreground hover:bg-muted/35 hover:text-foreground'}`}
+                                            className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 ${filterMultiId ? 'bg-primary/20 border-primary/50 text-primary' : 'border-border/40 text-muted-foreground hover:bg-muted/35 hover:text-foreground'}`}
                                           >
                                             <Filter
                                               className="h-3 w-3"
@@ -5494,7 +5494,7 @@ export default function Mods() {
                                     </div>
                                     <div className="flex w-full shrink-0 flex-col gap-2 lg:w-auto lg:items-end">
                                       <div className="relative w-full lg:w-72">
-                                        <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                        <Search className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                                         <Input
                                           value={modManagerSearch}
                                           onChange={(e) =>
@@ -5512,7 +5512,7 @@ export default function Mods() {
                                               handleModManagerSearchChange('')
                                             }}
                                             aria-label={'Clear search'}
-                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 rounded"
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 rounded"
                                           >
                                             ✕
                                           </button>
@@ -5537,7 +5537,7 @@ export default function Mods() {
                                                   ? 'One line per Workshop item. Toggle individual mod IDs in the panel on the right.'
                                                   : 'Show every mod ID as a clickable chip inside each row.'
                                               }
-                                              className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 ${activeDensity === d ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                                              className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 ${activeDensity === d ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                                             >
                                               {d === 'compact'
                                                 ? 'compact'
@@ -6064,7 +6064,7 @@ export default function Mods() {
                                                                   title={
                                                                     tooltipBits
                                                                   }
-                                                                  className={`mod-toggle-pill inline-flex max-w-[200px] items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${'cursor-pointer'} ${styleClass}`}
+                                                                  className={`mod-toggle-pill inline-flex max-w-[200px] items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${'cursor-pointer'} ${styleClass}`}
                                                                 >
                                                                   {isScanClashing && (
                                                                     <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-destructive" />
@@ -6168,7 +6168,7 @@ export default function Mods() {
                                                               aria-hidden="true"
                                                               className="mt-px h-3.5 w-3.5 shrink-0 text-destructive sm:mt-0"
                                                             />
-                                                            <span className="min-w-0 break-words font-medium text-destructive/90">
+                                                            <span className="min-w-0 wrap-break-word font-medium text-destructive/90">
                                                               {
                                                                 'Two variants of this mod are enabled and share files. One will overwrite the other — disable one.'
                                                               }
@@ -6206,7 +6206,7 @@ export default function Mods() {
                                                                     ) +
                                                                     ' flagged pairs in this workshop item as false positives.'
                                                               }
-                                                              className="ms-auto inline-flex items-center gap-1 rounded border border-border/50 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                                                              className="ms-auto inline-flex items-center gap-1 rounded border border-border/50 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                               {'Not a conflict'}
                                                             </button>
@@ -6250,7 +6250,7 @@ export default function Mods() {
                                                               aria-hidden="true"
                                                               className="mt-px h-3 w-3 shrink-0 text-success/70 sm:mt-0"
                                                             />
-                                                            <span className="min-w-0 break-words">
+                                                            <span className="min-w-0 wrap-break-word">
                                                               {
                                                                 'Variants share files — only one is enabled, which is the right setup.'
                                                               }
@@ -6265,7 +6265,7 @@ export default function Mods() {
                                                               aria-hidden="true"
                                                               className="mt-px h-3 w-3 shrink-0 sm:mt-0"
                                                             />
-                                                            <span className="min-w-0 break-words">
+                                                            <span className="min-w-0 wrap-break-word">
                                                               {String(
                                                                 enabledIds.length,
                                                               ) +
@@ -6413,7 +6413,7 @@ export default function Mods() {
                                                       }
                                                     }}
 
-                                                    className="text-destructive/80 hover:text-destructive hover:bg-destructive/15 rounded p-1.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    className="text-destructive/80 hover:text-destructive hover:bg-destructive/15 rounded p-1.5 transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/50 disabled:opacity-40 disabled:cursor-not-allowed"
 
                                                     title={
                                                       'Remove orphaned mod ID ' +
@@ -6513,7 +6513,7 @@ export default function Mods() {
                                             href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${inspectedGroup.wsId}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2 text-xs font-medium text-foreground hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2 text-xs font-medium text-foreground hover:bg-muted/55 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
                                           >
                                             <ExternalLink className="h-3.5 w-3.5" />
                                             {'Workshop'}
@@ -6534,7 +6534,7 @@ export default function Mods() {
                                                 )
                                                 .catch(() => {})
                                             }
-                                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2 text-xs font-medium text-foreground hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border/55 bg-background/55 px-2 text-xs font-medium text-foreground hover:bg-muted/55 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60"
                                           >
                                             <FileText className="h-3.5 w-3.5" />
                                             {'Copy WS'}
@@ -6553,7 +6553,7 @@ export default function Mods() {
                                                 toggleAllInGroup(inspectedGroup)
                                               }
 
-                                              className="rounded border border-border/45 bg-muted/25 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50"
+                                              className="rounded border border-border/45 bg-muted/25 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
                                               {inspectedGroup.allEnabled
                                                 ? 'Disable all'
@@ -6576,7 +6576,7 @@ export default function Mods() {
                                                     )
                                                   }
 
-                                                  className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-start text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50 ${mod.enabled ? 'border-success/25 bg-success/10 text-success' : 'border-border/45 bg-muted/20 text-muted-foreground hover:text-foreground'}`}
+                                                  className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-start text-[11px] transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50 ${mod.enabled ? 'border-success/25 bg-success/10 text-success' : 'border-border/45 bg-muted/20 text-muted-foreground hover:text-foreground'}`}
 
                                                   title={`${mod.enabled ? 'Click to disable' : 'Click to enable'} ${mod.id}`}
                                                 >
@@ -6646,7 +6646,7 @@ export default function Mods() {
                                                             dep,
                                                           )
                                                         }
-                                                        className="inline-flex items-center gap-1 rounded border border-destructive/30 bg-destructive/15 px-1.5 py-0.5 font-mono text-[10px] text-destructive transition-colors hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/60"
+                                                        className="inline-flex items-center gap-1 rounded border border-destructive/30 bg-destructive/15 px-1.5 py-0.5 font-mono text-[10px] text-destructive transition-colors hover:bg-destructive/20 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/60"
                                                         aria-expanded={
                                                           searchOpen
                                                         }
@@ -6718,7 +6718,7 @@ export default function Mods() {
                                                           </div>
                                                         ) : searchState?.error ? (
                                                           <div className="flex items-center justify-between gap-2 text-[11px]">
-                                                            <span className="break-words text-destructive">
+                                                            <span className="wrap-break-word text-destructive">
                                                               {'Search failed: ' +
                                                                 String(
                                                                   searchState.error,
@@ -6788,7 +6788,7 @@ export default function Mods() {
                                                                   return (
                                                                     <div
                                                                       key={`${dep}-${hit.workshopId}-${hit.modId || ''}`}
-                                                                      className={`rounded border px-2 py-1.5 ${isBest ? 'border-success/35 bg-success/[0.055]' : 'border-border/40 bg-card/45'}`}
+                                                                      className={`rounded border px-2 py-1.5 ${isBest ? 'border-success/35 bg-success/5.5' : 'border-border/40 bg-card/45'}`}
                                                                     >
                                                                       <div className="flex items-start justify-between gap-2">
                                                                         <div className="min-w-0">
@@ -7271,7 +7271,7 @@ export default function Mods() {
                                                         moveModUp(idx)
                                                       }
                                                       disabled={idx === 0}
-                                                      className="p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted/30 disabled:opacity-30 rounded transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                                                      className="p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted/30 disabled:opacity-30 rounded transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50"
                                                       aria-label={'Move up'}
                                                     >
                                                       <ChevronRight className="w-3.5 h-3.5 -rotate-90" />
@@ -7284,7 +7284,7 @@ export default function Mods() {
                                                         idx ===
                                                         orderedModIds.length - 1
                                                       }
-                                                      className="p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted/30 disabled:opacity-30 rounded transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                                                      className="p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted/30 disabled:opacity-30 rounded transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/50"
                                                       aria-label={'Move down'}
                                                     >
                                                       <ChevronRight className="w-3.5 h-3.5 rotate-90" />
@@ -7342,7 +7342,7 @@ export default function Mods() {
 
                         {configSubTab === 'add' && (
                           <div className="space-y-4 sub-tab-enter">
-                            <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-secondary p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-secondary p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
                               <div className="min-w-0">
                                 <p className="text-sm font-medium">
                                   {'Sync Mod IDs from Downloads'}
@@ -7906,7 +7906,7 @@ export default function Mods() {
                                       href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${mod.workshop_id}`}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="shrink-0 relative grid place-items-center w-16 h-16 rounded-md border border-border/50 bg-muted/30 text-muted-foreground overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                                      className="shrink-0 relative grid place-items-center w-16 h-16 rounded-md border border-border/50 bg-muted/30 text-muted-foreground overflow-hidden focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/70"
                                       aria-label={
                                         'Open ' +
                                         String(

@@ -33,18 +33,18 @@ function useChartColors() {
   useTheme()
   const root = document.documentElement
   const style = getComputedStyle(root)
-  const hsl = (v: string) => `hsl(${style.getPropertyValue(v).trim()})`
+  const token = (v: string) => style.getPropertyValue(v).trim()
   return {
-    grid: hsl('--border'),
-    axis: hsl('--muted-foreground'),
-    memory: hsl('--chart-1'),
-    cpu: hsl('--chart-2'),
-    pz: hsl('--chart-3'),
-    players: hsl('--chart-4'),
-    bg: hsl('--popover'),
-    fg: hsl('--popover-foreground'),
-    warn: hsl('--warning'),
-    danger: hsl('--destructive'),
+    grid: token('--border'),
+    axis: token('--muted-foreground'),
+    memory: token('--chart-1'),
+    cpu: token('--chart-2'),
+    pz: token('--chart-3'),
+    players: token('--chart-4'),
+    bg: token('--popover'),
+    fg: token('--popover-foreground'),
+    warn: token('--warning'),
+    danger: token('--destructive'),
   }
 }
 

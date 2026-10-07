@@ -843,7 +843,7 @@ export default function Backups() {
           <Card>
             <CardContent className="flex items-center gap-3 p-4">
               <div
-                className="grid place-items-center w-10 h-10 rounded-md border border-primary/30 bg-primary/[0.06] text-primary shrink-0"
+                className="grid place-items-center w-10 h-10 rounded-md border border-primary/30 bg-primary/6 text-primary shrink-0"
                 aria-hidden="true"
               >
                 <Archive className="w-4 h-4" />
@@ -881,7 +881,7 @@ export default function Backups() {
           <Card>
             <CardContent className="flex items-center gap-3 p-4">
               <div
-                className="grid place-items-center w-10 h-10 rounded-md border border-primary/30 bg-primary/[0.06] text-primary shrink-0"
+                className="grid place-items-center w-10 h-10 rounded-md border border-primary/30 bg-primary/6 text-primary shrink-0"
                 aria-hidden="true"
               >
                 <Clock className="w-4 h-4" />
@@ -907,7 +907,7 @@ export default function Backups() {
                   lastScheduledAttemptFailed
                     ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                     : backupStatus?.enabled
-                      ? 'border-primary/30 bg-primary/[0.06] text-primary'
+                      ? 'border-primary/30 bg-primary/6 text-primary'
                       : 'border-border/55 bg-muted/30 text-muted-foreground',
                 )}
                 aria-hidden="true"
@@ -1288,7 +1288,7 @@ export default function Backups() {
                         className={cn(
                           'group/backup flex flex-col gap-3 p-3 rounded-lg border transition-colors sm:flex-row sm:items-center',
                           isSelected
-                            ? 'border-primary/40 bg-primary/[0.08]'
+                            ? 'border-primary/40 bg-primary/8'
                             : 'bg-muted/20 border-border/40 hover:border-primary/30 hover:bg-muted/40',
                         )}
                       >
@@ -1306,7 +1306,7 @@ export default function Backups() {
                             className={cn(
                               'grid place-items-center w-9 h-9 rounded-md border shrink-0',
                               isLatest
-                                ? 'border-primary/40 bg-primary/[0.08] text-primary'
+                                ? 'border-primary/40 bg-primary/8 text-primary'
                                 : 'border-border/55 bg-muted/30 text-muted-foreground',
                             )}
                             aria-hidden="true"

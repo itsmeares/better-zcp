@@ -359,7 +359,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
           )}
           {error && (
             <div className="p-3 text-xs text-destructive flex items-center gap-2">
-              <span className="flex-1 min-w-0 break-words" dir="auto">
+              <span className="flex-1 min-w-0 wrap-break-word" dir="auto">
                 {error}
               </span>
               <button
@@ -367,7 +367,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
                   e.stopPropagation()
                   fetchDiff()
                 }}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring rounded-sm outline-none"
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring rounded-sm outline-hidden"
                 title={'Retry'}
                 aria-label={'Retry file comparison'}
               >
@@ -504,7 +504,7 @@ function TextDiffView({
           <button
             onClick={() => setShowFull(true)}
             aria-expanded={showFull}
-            className="w-full text-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/20 focus-visible:ring-1 focus-visible:ring-ring outline-none"
+            className="w-full text-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/20 focus-visible:ring-1 focus-visible:ring-ring outline-hidden"
           >
             {Number(diff.hunks.length - MAX_VISIBLE_HUNKS) === 1
               ? 'Show ' +
@@ -547,7 +547,7 @@ function ImageDiffView({
               src={`data:image/${diff.ext.replace('.', '')};base64,${diff.modA.base64}`}
               alt={`${modAName} version of ${file}`}
               loading="lazy"
-              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-[length:12px_12px]"
+              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-size-[12px_12px]"
               onError={(e) => {
                 ;(e.target as HTMLImageElement).style.display = 'none'
               }}
@@ -567,7 +567,7 @@ function ImageDiffView({
               src={`data:image/${diff.ext.replace('.', '')};base64,${diff.modB.base64}`}
               alt={`${modBName} version of ${file}`}
               loading="lazy"
-              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-[length:12px_12px]"
+              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-size-[12px_12px]"
               onError={(e) => {
                 ;(e.target as HTMLImageElement).style.display = 'none'
               }}

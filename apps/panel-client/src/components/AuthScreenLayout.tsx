@@ -40,36 +40,36 @@ export function AuthScreenLayout({
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <a
         href="#auth-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:start-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:inset-s-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
       >
         {'Skip to content'}
       </a>
 
       <div
         aria-hidden="true"
-        className="auth-bg-gradient absolute inset-0 opacity-90 [contain:layout_style_paint]"
+        className="auth-bg-gradient absolute inset-0 opacity-90 contain-[layout_style_paint]"
       />
 
       <div
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none [contain:layout_style_paint] opacity-[0.18] mix-blend-overlay [background-image:repeating-linear-gradient(0deg,hsl(var(--foreground)/0.6)_0px,hsl(var(--foreground)/0.6)_1px,transparent_1px,transparent_3px)]"
+        className="absolute inset-0 pointer-events-none contain-[layout_style_paint] opacity-[0.18] mix-blend-overlay bg-[repeating-linear-gradient(0deg,color-mix(in_srgb,var(--foreground)_60%,transparent)_0px,color-mix(in_srgb,var(--foreground)_60%,transparent)_1px,transparent_1px,transparent_3px)]"
       />
 
       <div
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none [contain:layout_style_paint] opacity-[0.07] [background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/><feColorMatrix values=%220 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0 0.55 0 0 0 0.8 0%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')]"
+        className="absolute inset-0 pointer-events-none contain-[layout_style_paint] opacity-[0.07] [background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/><feColorMatrix values=%220 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0 0.55 0 0 0 0.8 0%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')]"
       />
 
       <div
         aria-hidden="true"
-        className="absolute top-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70 [contain:layout_style_paint]"
+        className="absolute top-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70 contain-[layout_style_paint]"
       >
         <span>// ZCP_CTRL</span>
         <span>node: {status === 'online' ? '01' : '--'}</span>
       </div>
       <div
         aria-hidden="true"
-        className="absolute bottom-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/55 [contain:layout_style_paint]"
+        className="absolute bottom-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/55 contain-[layout_style_paint]"
       >
         <span>{version ? `build ${version}` : 'build ----'}</span>
         <span>
@@ -102,10 +102,10 @@ export function AuthScreenLayout({
           </p>
         </div>
 
-        <Card className="relative overflow-hidden border-border/55 bg-card/85 backdrop-blur-[2px] shadow-[0_28px_90px_-40px_hsl(var(--background)/0.9)]">
+        <Card className="relative overflow-hidden border-border/55 bg-card/85 backdrop-blur-[2px] shadow-[0_28px_90px_-40px_color-mix(in_srgb,var(--background)_90%,transparent)]">
           <div
             aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent_0%,hsl(var(--primary)/0.55)_20%,hsl(var(--warning)/0.7)_50%,hsl(var(--primary)/0.55)_80%,transparent_100%)]"
+            className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent_0%,color-mix(in_srgb,var(--primary)_55%,transparent)_20%,color-mix(in_srgb,var(--warning)_70%,transparent)_50%,color-mix(in_srgb,var(--primary)_55%,transparent)_80%,transparent_100%)]"
           />
           {cardTitle || cardDescription ? (
             <div className="border-b border-border/40 px-6 pt-5 pb-4">
@@ -155,7 +155,7 @@ function BrandMark({ className = '' }: { className?: string }) {
         <path d="M2 70 L2 56 M2 70 L16 70" />
         <path d="M70 70 L70 56 M70 70 L56 70" />
       </svg>
-      <div className="flex h-[54px] w-[54px] items-center justify-center rounded-sm border border-primary/45 bg-primary/12 font-mono text-base font-bold uppercase tracking-[0.14em] text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.18),inset_0_-12px_24px_-12px_hsl(var(--warning)/0.18)]">
+      <div className="flex h-[54px] w-[54px] items-center justify-center rounded-sm border border-primary/45 bg-primary/12 font-mono text-base font-bold uppercase tracking-[0.14em] text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_18%,transparent),inset_0_-12px_24px_-12px_color-mix(in_srgb,var(--warning)_18%,transparent)]">
         ZCP
       </div>
     </div>
@@ -181,13 +181,13 @@ function PanelStatusPill({
     },
     online: {
       label: 'Panel online',
-      dot: 'bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.55)]',
+      dot: 'bg-primary shadow-[0_0_8px_color-mix(in_srgb,var(--primary)_55%,transparent)]',
       text: 'text-foreground/85',
       ring: 'border-primary/30 bg-primary/8',
     },
     unreachable: {
       label: 'Panel unreachable',
-      dot: 'bg-destructive shadow-[0_0_8px_hsl(var(--destructive)/0.6)] animate-pulse',
+      dot: 'bg-destructive shadow-[0_0_8px_color-mix(in_srgb,var(--destructive)_60%,transparent)] animate-pulse',
       text: 'text-destructive',
       ring: 'border-destructive/40 bg-destructive/8',
     },

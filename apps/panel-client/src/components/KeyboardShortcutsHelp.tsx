@@ -55,7 +55,7 @@ export function KeyboardShortcutsHelp({
                   className="flex items-center justify-between py-0.5"
                 >
                   <span className="text-sm text-foreground/80">{s.label}</span>
-                  <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                  <kbd className="inline-flex min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                     {s.key}
                   </kbd>
                 </div>

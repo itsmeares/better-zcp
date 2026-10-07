@@ -23,7 +23,7 @@ function SkeletonHeader({
           <p className="page-eyebrow text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">{eyebrow}</p>
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="h-2 w-2 rounded-full bg-primary/70 shadow-[0_0_7px_hsl(var(--primary)/0.45)]" />
+              <span className="h-2 w-2 rounded-full bg-primary/70 shadow-[0_0_7px_color-mix(in_srgb,var(--primary)_45%,transparent)]" />
               <h1 className="page-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{title}</h1>
             </div>
             <p className="page-description max-w-3xl text-xs leading-5 text-muted-foreground sm:text-sm">{description}</p>
@@ -154,13 +154,13 @@ export function PageSkeleton({ variant = 'default', title, description, eyebrow,
               </div>
             ))}
           </div>
-          <div className="relative min-h-[26rem] overflow-hidden rounded-xl border bg-card">
-            <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'linear-gradient(hsl(var(--border)/0.55) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)/0.55) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-            <div className="absolute start-4 top-4 flex gap-2">
+          <div className="relative min-h-104 overflow-hidden rounded-xl border bg-card">
+            <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'linear-gradient(color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+            <div className="absolute inset-s-4 top-4 flex gap-2">
               <Skeleton className="h-9 w-24" />
               <Skeleton className="h-9 w-24" />
             </div>
-            <Skeleton className="absolute bottom-4 start-4 h-4 w-48" />
+            <Skeleton className="absolute bottom-4 inset-s-4 h-4 w-48" />
           </div>
         </div>
       </div>

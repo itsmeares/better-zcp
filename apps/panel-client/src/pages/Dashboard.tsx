@@ -1446,7 +1446,7 @@ export default function Dashboard() {
     <div className="page-transition pb-12">
       <header
         aria-label={'Server status'}
-        className="overflow-hidden rounded-lg border border-border/55 bg-card/45 shadow-sm"
+        className="overflow-hidden rounded-lg border border-border/55 bg-card/45 shadow-xs"
       >
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -1510,7 +1510,7 @@ export default function Dashboard() {
                     'LAN address',
                   )
                 }
-                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
                 aria-label={
                   'Copy LAN address: ' +
                   String(
@@ -1538,7 +1538,7 @@ export default function Dashboard() {
                     'WAN address',
                   )
                 }
-                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
                 aria-label={
                   'Copy WAN address: ' +
                   String(
@@ -1561,7 +1561,7 @@ export default function Dashboard() {
             {panelInfo && (
               <button
                 onClick={() => copyToClipboard(panelInfo.url, 'Panel address')}
-                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                className="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
                 aria-label={'Copy panel address: ' + String(panelInfo.url)}
                 title={'Open or copy the control panel address'}
               >
@@ -1586,7 +1586,7 @@ export default function Dashboard() {
                 title={'Connect with Steam'}
               >
                 <Gamepad2 className="h-3 w-3 text-blue-400/70" />
-                <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest">
                   {'Join'}
                 </span>
               </a>
@@ -1833,8 +1833,8 @@ export default function Dashboard() {
             className={cn(
               'mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border py-2 ps-3 pe-2',
               lastFailed
-                ? 'border-destructive/35 bg-destructive/[0.05] shadow-[inset_2px_0_0_hsl(var(--destructive))]'
-                : 'border-primary/35 bg-primary/[0.04] shadow-[inset_2px_0_0_hsl(var(--primary))]',
+                ? 'border-destructive/35 bg-destructive/5 shadow-[inset_2px_0_0_var(--destructive)]'
+                : 'border-primary/35 bg-primary/4 shadow-[inset_2px_0_0_var(--primary)]',
             )}
           >
             <Sparkles
@@ -1923,7 +1923,7 @@ export default function Dashboard() {
               onClick={dismiss}
               aria-label={'Dismiss update check notice'}
               title={'Dismiss until this changes'}
-              className="ms-auto shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              className="ms-auto shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
             >
               <X className="h-3 w-3" />
             </button>
@@ -1934,7 +1934,7 @@ export default function Dashboard() {
       {fetchError && (
         <div
           role="alert"
-          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-destructive/40 bg-destructive/[0.05] py-2 ps-3 pe-2 shadow-[inset_2px_0_0_hsl(var(--destructive))]"
+          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-destructive/40 bg-destructive/5 py-2 ps-3 pe-2 shadow-[inset_2px_0_0_var(--destructive)]"
         >
           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -1963,7 +1963,7 @@ export default function Dashboard() {
       {status && !status.serverPathConfigured && (
         <Link
           to="/server-setup"
-          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/40 bg-warning/[0.04] py-2 ps-3 pe-2 shadow-[inset_2px_0_0_hsl(var(--warning))] transition-colors hover:bg-warning/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/40 bg-warning/4 py-2 ps-3 pe-2 shadow-[inset_2px_0_0_var(--warning)] transition-colors hover:bg-warning/8 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
         >
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -1985,7 +1985,7 @@ export default function Dashboard() {
           <button
             onClick={dismissQuickStart}
             aria-label={'Dismiss quick start guide'}
-            className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+            className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -2068,7 +2068,7 @@ export default function Dashboard() {
           <section
             className={cn(
               'order-2 flex flex-col overflow-hidden rounded-lg border border-border/45 bg-card/25',
-              playerActivity.length > 0 && 'max-h-[15rem]',
+              playerActivity.length > 0 && 'max-h-60',
             )}
           >
             <header className="flex items-center justify-between border-b border-border/30 px-3 py-1.5">
@@ -2133,7 +2133,7 @@ export default function Dashboard() {
             )}
           </section>
 
-          <section className="order-1 overflow-hidden rounded-lg border border-border/65 bg-card/50 shadow-sm">
+          <section className="order-1 overflow-hidden rounded-lg border border-border/65 bg-card/50 shadow-xs">
             <header className="flex items-center justify-between gap-3 border-b border-border/35 px-4 py-2">
               <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">
                 {'Server telemetry'}
@@ -2333,7 +2333,7 @@ export default function Dashboard() {
             </div>
           </section>
           {gameIntegrationStatus && !gameIntegrationStatus.configured && (
-            <section className="rounded-md border border-warning/25 bg-warning/[0.04] p-3">
+            <section className="rounded-md border border-warning/25 bg-warning/4 p-3">
               <p className="text-xs font-medium text-warning/85">
                 {'Game integration offline'}
               </p>

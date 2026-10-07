@@ -519,8 +519,8 @@ export function WorkshopCollectionPanel() {
           className={cn(
             'rounded-lg border px-3 py-3',
             inSync
-              ? 'border-success/30 bg-success/[0.04]'
-              : 'border-warning/35 bg-warning/[0.045]',
+              ? 'border-success/30 bg-success/4'
+              : 'border-warning/35 bg-warning/4.5',
           )}
         >
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -557,7 +557,7 @@ export function WorkshopCollectionPanel() {
                 </p>
               </div>
             </div>
-            <div className="min-w-[12rem] space-y-1.5">
+            <div className="min-w-48 space-y-1.5">
               <div className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
                 <span>{String(Math.round(syncedRatio)) + '%'}</span>
                 {!inSync && (
@@ -651,7 +651,7 @@ export function WorkshopCollectionPanel() {
                 className={cn(
                   'shrink-0 px-2 py-1 rounded-sm transition-colors',
                   filter === key
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
                 )}
               >
@@ -661,7 +661,7 @@ export function WorkshopCollectionPanel() {
           </div>
 
           <div className="relative w-full lg:w-64">
-            <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="absolute inset-s-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -772,7 +772,7 @@ export function WorkshopCollectionPanel() {
               </div>
             ) : (
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
+                <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                   <tr className="text-start text-muted-foreground border-b border-border/50">
                     <th className="font-medium px-3 py-2 w-[36px]">
                       <Checkbox

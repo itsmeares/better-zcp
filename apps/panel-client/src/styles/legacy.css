@@ -1,0 +1,1586 @@
+/* Legacy rules from the pre-3.0 stylesheet. Loaded in a cascade layer below
+   components and utilities. Each page phase deletes what it no longer uses;
+   the file goes away before 3.0.0 ships. */
+@layer utilities {
+
+  @keyframes infection-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 4px color-mix(in srgb, var(--primary) 28%, transparent),
+        0 0 10px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+    50% {
+      box-shadow:
+        0 0 7px color-mix(in srgb, var(--primary) 36%, transparent),
+        0 0 14px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+}
+
+  @property --sweep-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+
+  @keyframes radar-sweep {
+    from {
+      --sweep-angle: 0deg;
+}
+    to {
+      --sweep-angle: 360deg;
+}
+}
+
+  .server-status-dot {
+    position: relative;
+}
+
+  .server-status-dot--online {
+    background: var(--success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+  .server-status-dot--offline {
+    background: var(--destructive);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--destructive) 30%, transparent);
+}
+
+  @media (prefers-reduced-motion: no-preference) {
+    .server-status-dot--online::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: conic-gradient(
+        from var(--sweep-angle),
+        transparent 0deg,
+        color-mix(in srgb, var(--success) 40%, transparent) 40deg,
+        transparent 80deg
+      );
+      mask: radial-gradient(circle, transparent 55%, black 56%);
+      -webkit-mask: radial-gradient(circle, transparent 55%, black 56%);
+      animation: radar-sweep 3s linear infinite;
+}
+
+    .server-status-dot--offline::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      border: 1px solid color-mix(in srgb, var(--destructive) 25%, transparent);
+      animation: none;
+}
+}
+
+  @keyframes conn-breathe {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent),
+        inset 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent);
+      border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+}
+    50% {
+      box-shadow:
+        0 0 8px 0 color-mix(in srgb, var(--primary) 12%, transparent),
+        inset 0 0 6px 0 color-mix(in srgb, var(--primary) 6%, transparent);
+      border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+}
+
+  @media (prefers-reduced-motion: no-preference) {
+    .conn-status-breathing {
+      animation: conn-breathe 4s ease-in-out infinite;
+}
+}
+
+  @keyframes warning-flicker {
+    0%,
+    90%,
+    100% {
+      opacity: 1;
+}
+    92%,
+    98% {
+      opacity: 0.7;
+}
+    95% {
+      opacity: 0.5;
+}
+}
+}
+
+@layer base {
+  * {
+    @apply border-border;
+}
+
+  html {
+    scroll-behavior: smooth;
+}
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+  a, button, input, textarea, select, label,
+  [role="button"], [role="tab"], [role="menuitem"],
+  .card, .badge, [data-slot="card"],
+  nav, aside {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+      scroll-behavior: auto;
+}
+
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+}
+
+    .card-interactive:hover,
+    .card-interactive:active,
+    button:not(:disabled):active,
+    .number-tick.updated {
+      transform: none !important;
+}
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 5px;
+  border: 2px solid var(--background);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.terminal-output {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.shell-brand-title {
+  color: var(--primary);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.shell-brand-subtitle {
+  line-height: 1.2;
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+    .sidebar-header {
+      animation: compressHeader linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0px 120px;
+}
+
+    @keyframes compressHeader {
+      from {
+        padding-block: 1rem;
+}
+      to {
+        padding-block: 0.5rem;
+}
+}
+
+    .sidebar-header .shell-brand-title {
+      animation: compressBrandText linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0px 120px;
+}
+
+    @keyframes compressBrandText {
+      from {
+        font-size: 1rem;
+        letter-spacing: 0.14em;
+}
+      to {
+        font-size: 0.85rem;
+        letter-spacing: 0.10em;
+}
+}
+}
+}
+
+.brand-strip {
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--warning) 10%, transparent), transparent 55%),
+    radial-gradient(140% 90% at 0% 100%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, transparent) 0%, var(--card) 70%, var(--card) 100%);
+  isolation: isolate;
+}
+
+.brand-strip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 3px,
+      color-mix(in srgb, var(--foreground) 2.5%, transparent) 3px,
+      color-mix(in srgb, var(--foreground) 2.5%, transparent) 4px
+    );
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+}
+
+.brand-strip__rule {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--warning) 0%, transparent) 6%,
+    color-mix(in srgb, var(--warning) 55%, transparent) 26%,
+    color-mix(in srgb, var(--primary) 55%, transparent) 62%,
+    color-mix(in srgb, var(--warning) 0%, transparent) 94%,
+    transparent 100%
+  );
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+
+.brand-strip__corner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 1;
+  border-top: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  opacity: 0.55;
+}
+
+.brand-icon-frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--accent) 35%, transparent), color-mix(in srgb, var(--background) 50%, transparent) 75%);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent),
+    inset 0 -6px 12px color-mix(in srgb, var(--background) 55%, transparent),
+    0 1px 2px color-mix(in srgb, var(--background) 60%, transparent);
+}
+
+.brand-icon-frame::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 4px;
+  background: radial-gradient(80% 60% at 50% 30%, color-mix(in srgb, var(--warning) 10%, transparent), transparent 70%);
+  pointer-events: none;
+}
+
+.brand-icon-frame--sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+}
+
+.brand-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--primary);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent),
+    0 0 8px color-mix(in srgb, var(--primary) 55%, transparent);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .brand-led {
+    animation: brand-led-pulse 2.8s ease-in-out infinite;
+}
+}
+
+@keyframes brand-led-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent), 0 0 8px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent), 0 0 14px color-mix(in srgb, var(--primary) 85%, transparent);
+}
+}
+
+.brand-strip__version {
+  letter-spacing: 0.04em;
+  font-size: 9px;
+  border-inline-start: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  padding-inline-start: 6px;
+  margin-inline-start: 2px;
+}
+
+.active-server-strip {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--muted) 18%, transparent), var(--card) 100%);
+}
+
+.active-server-strip:hover {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 18%, transparent), var(--card) 100%);
+}
+
+.active-server-strip__edge {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--muted-foreground) 25%, transparent);
+  transition: background 200ms var(--ease-out-expo, ease), box-shadow 200ms ease;
+}
+
+.active-server-strip--running .active-server-strip__edge {
+  background: linear-gradient(180deg, var(--success) 0%, var(--primary) 100%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+.active-server-strip--stopped .active-server-strip__edge {
+  background: color-mix(in srgb, var(--destructive) 75%, transparent);
+}
+
+.active-server-strip--transitioning .active-server-strip__edge {
+  background: var(--warning);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
+.active-server-strip__dot {
+  background: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+}
+
+.active-server-strip__dot > span {
+  background: transparent;
+  box-shadow: none;
+}
+
+.active-server-strip--running .active-server-strip__dot {
+  background: var(--success);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent),
+    0 0 10px color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .active-server-strip--running .active-server-strip__dot > span {
+    position: absolute;
+    inset: -2px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--success) 35%, transparent);
+    animation: active-dot-ring 2.4s ease-out infinite;
+}
+}
+
+@keyframes active-dot-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.7;
+}
+  80%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+}
+}
+
+.active-server-strip--stopped .active-server-strip__dot {
+  background: color-mix(in srgb, var(--destructive) 75%, transparent);
+}
+
+.active-server-strip--transitioning .active-server-strip__dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .active-server-strip--transitioning .active-server-strip__dot {
+    animation: active-dot-blink 1.4s ease-in-out infinite;
+}
+}
+
+@keyframes active-dot-blink {
+  0%, 100% { opacity: 1;
+}
+  50% { opacity: 0.45;
+}
+}
+
+.page-header-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 45%);
+}
+
+.page-header-shell[data-tone='ops']::before {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 6%, transparent), transparent 45%);
+}
+
+.page-header-shell[data-tone='world']::before {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--warning) 7%, transparent), transparent 48%);
+}
+
+.page-header-shell[data-tone='maintain']::before {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--info) 6%, transparent), transparent 48%);
+}
+
+.page-header-shell[data-tone='config']::before {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 52%);
+}
+
+.page-header-shell[data-tone='servers']::before {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--success) 6%, transparent), transparent 50%);
+}
+
+.status-online {
+  background-color: var(--success);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--success) 18%, transparent), inset 0 1px 1px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.status-offline {
+  background-color: var(--destructive);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--destructive) 18%, transparent), inset 0 1px 1px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.status-connecting {
+  background-color: var(--warning);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+
+@keyframes status-pulse-online {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--success) 40%, transparent));
+    opacity: 1;
+}
+  50% {
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--success) 55%, transparent));
+    opacity: 0.92;
+}
+}
+
+@keyframes status-pulse-connecting {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--warning) 40%, transparent));
+}
+  50% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--warning) 22%, transparent));
+}
+}
+
+.card-interactive {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.card-interactive:hover {
+  @apply border-primary/30;
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--background) 40%, transparent), 0 0 0 1px color-mix(in srgb, var(--primary) 6%, transparent);
+  transform: translateY(-1px);
+}
+
+.card-interactive:active {
+  transform: translateY(0);
+  transition-duration: 75ms;
+}
+
+.glass {
+  backdrop-filter: blur(8px) saturate(125%);
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+@media (max-width: 768px) {
+  .glass {
+    backdrop-filter: none;
+    background: color-mix(in srgb, var(--background) 92%, transparent);
+}
+
+  .drift-embers,
+  .control-room-sweep,
+  .mission-brief,
+  .mission-step-grid > *,
+  .page-transition,
+  .fade-in {
+    animation: none !important;
+}
+
+  .drift-embers {
+    display: none;
+    filter: none;
+}
+
+  .card-interactive:hover {
+    transform: none;
+    box-shadow: 0 4px 12px -8px color-mix(in srgb, var(--background) 35%, transparent);
+}
+}
+
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [role="tab"],
+  [role="button"],
+  input,
+  select {
+    min-height: 44px;
+}
+
+  button,
+  a[aria-label] {
+    min-height: 44px;
+    min-width: 44px;
+}
+}
+
+.auth-bg-gradient {
+  background-image: radial-gradient(circle at 84% -12%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 38%),
+    radial-gradient(circle at 12% 108%, color-mix(in srgb, var(--destructive) 16%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--background), var(--background));
+}
+
+.focus-ring {
+  @apply focus:outline-hidden focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):active {
+    transform: scale(0.985);
+    transition-duration: 75ms;
+}
+}
+
+.row-hover {
+  @apply transition-colors duration-150;
+}
+
+.row-hover:hover {
+  @apply bg-accent/50;
+}
+
+.stagger-in > * {
+  animation: none;
+}
+
+@media (min-width: 769px) and (prefers-reduced-motion: no-preference) {
+  .stagger-in > * {
+    animation: springFadeIn 0.5s var(--ease-out-expo) both;
+}
+}
+
+.stagger-in > *:nth-child(1) { animation-delay: 0ms;
+}
+.stagger-in > *:nth-child(2) { animation-delay: 60ms;
+}
+.stagger-in > *:nth-child(3) { animation-delay: 120ms;
+}
+.stagger-in > *:nth-child(4) { animation-delay: 175ms;
+}
+.stagger-in > *:nth-child(5) { animation-delay: 225ms;
+}
+.stagger-in > *:nth-child(6) { animation-delay: 270ms;
+}
+.stagger-in > *:nth-child(7) { animation-delay: 310ms;
+}
+.stagger-in > *:nth-child(8) { animation-delay: 345ms;
+}
+
+@keyframes springFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+}
+
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+}
+
+.empty-state-icon {
+  animation: none;
+}
+
+.empty-state-aura {
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent), 0 18px 45px -34px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.empty-state-aura::after {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, transparent);
+  opacity: 0.8;
+  animation: none;
+}
+
+@keyframes emptyStateFloat {
+  0%, 100% { transform: translateY(0);
+}
+  50% { transform: translateY(-6px);
+}
+}
+
+@keyframes emptyStatePing {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+}
+  50% {
+    opacity: 0.75;
+    transform: scale(1);
+}
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    color-mix(in srgb, var(--muted-foreground) 8%, transparent) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0;
+}
+  100% { background-position: -200% 0;
+}
+}
+
+.flash-success {
+  animation: flashSuccess 0.5s ease-out;
+}
+
+@keyframes flashSuccess {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 40%, transparent);
+}
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 10%, transparent);
+}
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent);
+}
+}
+
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+  50% { box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+}
+
+[data-state="open"][data-side] {
+  animation: popoverEnter 0.15s ease-out;
+}
+
+@keyframes popoverEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+}
+  to {
+    opacity: 1;
+    transform: scale(1);
+}
+}
+
+[role="dialog"][data-state="open"] {
+  animation: dialogEnter 0.2s ease-out;
+}
+
+@keyframes dialogEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+}
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+}
+
+.badge-bounce {
+  animation: badgeBounce 0.3s ease-out;
+}
+
+@keyframes badgeBounce {
+  0% { transform: scale(0.5);
+}
+  60% { transform: scale(1.15);
+}
+  100% { transform: scale(1);
+}
+}
+
+@keyframes scanSweep {
+  0%   { transform: translateX(-100%);
+}
+  100% { transform: translateX(200%);
+}
+}
+
+.scan-progress-bar {
+  overflow: hidden;
+  position: relative;
+}
+
+.scan-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 60%, transparent), transparent);
+  animation: scanSweep 1.5s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+.scan-pulse-icon {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes conflictStreamIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+@keyframes indeterminateShimmer {
+  0% { transform: translateX(-100%);
+}
+  100% { transform: translateX(250%);
+}
+}
+.scan-indeterminate {
+  position: relative;
+  overflow: hidden;
+}
+.scan-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--primary) 35%, transparent) 40%,
+    color-mix(in srgb, var(--primary) 55%, transparent) 50%,
+    color-mix(in srgb, var(--primary) 35%, transparent) 60%,
+    transparent 100%
+  );
+  animation: indeterminateShimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.conflict-stream-enter {
+  animation: conflictStreamIn 0.3s var(--ease-out-expo);
+}
+
+@keyframes diffPanelEnter {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+}
+  to {
+    opacity: 1;
+    max-height: 600px;
+    transform: translateY(0);
+}
+}
+
+.diff-panel-enter {
+  animation: diffPanelEnter 0.25s var(--ease-out-expo);
+  overflow: hidden;
+}
+
+.diff-code {
+  font-variant-ligatures: none;
+  tab-size: 4;
+}
+
+.diff-line {
+  min-height: 1.6em;
+}
+
+.diff-line-add {
+  border-inline-start: 2px solid color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+.diff-line-remove {
+  border-inline-start: 2px solid color-mix(in srgb, var(--destructive) 30%, transparent);
+}
+
+.diff-gutter {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-progress-bar::after {
+    animation: none;
+    width: 100%;
+    background: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+  .scan-indeterminate::after {
+    animation: none;
+    width: 100%;
+    background: color-mix(in srgb, var(--primary) 20%, transparent);
+}
+  .scan-pulse-icon {
+    animation: none;
+    opacity: 0.7;
+}
+  .conflict-stream-enter {
+    animation: none;
+}
+  .diff-panel-enter {
+    animation: none;
+    max-height: none;
+}
+  .severity-pulse {
+    animation: none;
+}
+  .scan-complete-flash {
+    animation: none;
+}
+  .conflict-graph-enter {
+    animation: none;
+    opacity: 1;
+}
+  .stat-badge-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+}
+  .conflict-pair-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+}
+  .tooltip-fade {
+    animation: none;
+    opacity: 1;
+}
+  .tab-content-enter,
+  .sub-tab-enter,
+  .bulk-bar-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+}
+  .update-badge-pulse {
+    animation: none;
+}
+  .scan-progress-glow::after {
+    animation: none;
+    display: none;
+}
+}
+
+@keyframes severityPulse {
+  0%, 100% { opacity: 1;
+}
+  50% { opacity: 0.55;
+}
+}
+.severity-pulse {
+  animation: severityPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes scanCompleteFlash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 50%, transparent);
+}
+  40% { box-shadow: 0 0 12px 2px color-mix(in srgb, var(--success) 35%, transparent);
+}
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 0%, transparent);
+}
+}
+.scan-complete-flash {
+  animation: scanCompleteFlash 0.8s var(--ease-out-expo) forwards;
+}
+
+@keyframes graphFadeIn {
+  from { opacity: 0; transform: scale(0.97);
+}
+  to { opacity: 1; transform: scale(1);
+}
+}
+.conflict-graph-enter {
+  animation: graphFadeIn 0.5s var(--ease-out-expo);
+}
+
+@keyframes statBadgeIn {
+  from { opacity: 0; transform: translateY(6px);
+}
+  to { opacity: 1; transform: translateY(0);
+}
+}
+.stat-badge-enter {
+  animation: statBadgeIn 0.35s var(--ease-out-expo) backwards;
+}
+.stat-badge-enter:nth-child(1) { animation-delay: 0ms;
+}
+.stat-badge-enter:nth-child(2) { animation-delay: 60ms;
+}
+.stat-badge-enter:nth-child(3) { animation-delay: 120ms;
+}
+.stat-badge-enter:nth-child(4) { animation-delay: 175ms;
+}
+
+@keyframes conflictPairIn {
+  from { opacity: 0; transform: translateY(8px);
+}
+  to { opacity: 1; transform: translateY(0);
+}
+}
+.conflict-pair-enter {
+  animation: conflictPairIn 0.3s var(--ease-out-expo) backwards;
+}
+
+@keyframes tooltipFade {
+  from { opacity: 0; transform: translateY(2px);
+}
+  to { opacity: 1; transform: translateY(0);
+}
+}
+.tooltip-fade {
+  animation: tooltipFade 0.15s var(--ease-out-expo);
+}
+
+@keyframes progressEdgeGlow {
+  0%, 100% { box-shadow: 4px 0 8px 0 color-mix(in srgb, var(--primary) 40%, transparent);
+}
+  50% { box-shadow: 4px 0 14px 2px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+}
+.scan-progress-glow {
+  position: relative;
+}
+.scan-progress-glow::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 0 9999px 9999px 0;
+  animation: progressEdgeGlow 1.5s ease-in-out infinite;
+  background: color-mix(in srgb, var(--primary) 70%, transparent);
+}
+
+@keyframes tabContentIn {
+  from { opacity: 0;
+}
+  to { opacity: 1;
+}
+}
+.tab-content-enter {
+  animation: tabContentIn 0.2s var(--ease-out-expo);
+}
+
+.settings-tab-trigger {
+  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.settings-tab-trigger[data-state="active"] svg {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--primary) 50%, transparent));
+  transform: scale(1.1);
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.settings-tab-trigger svg {
+  transition: transform 0.2s ease, filter 0.2s ease, color 0.2s ease;
+}
+
+@keyframes subTabIn {
+  from { opacity: 0; transform: translateY(4px);
+}
+  to { opacity: 1; transform: translateY(0);
+}
+}
+.sub-tab-enter {
+  animation: subTabIn 0.2s var(--ease-out-expo);
+}
+
+@keyframes bulkBarIn {
+  from { opacity: 0; transform: translateY(-6px);
+}
+  to { opacity: 1; transform: translateY(0);
+}
+}
+.bulk-bar-enter {
+  animation: bulkBarIn 0.2s var(--ease-out-expo);
+}
+
+@keyframes updateBadgePulse {
+  0%, 100% { opacity: 1;
+}
+  50% { opacity: 0.65;
+}
+}
+.update-badge-pulse {
+  animation: updateBadgePulse 3s ease-in-out infinite;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mod-toggle-pill:active {
+    transform: scale(0.92);
+    transition-duration: 75ms;
+}
+}
+
+.slide-in-right {
+  animation: slideInRight 0.25s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+}
+  to {
+    opacity: 1;
+    transform: translateX(0);
+}
+}
+
+.number-tick {
+  display: inline-block;
+  transition: transform 0.2s ease-out;
+}
+
+.number-tick.updated {
+  animation: numberTick 0.3s ease-out;
+}
+
+@keyframes numberTick {
+  0% { transform: translateY(0);
+}
+  40% { transform: translateY(-4px);
+}
+  100% { transform: translateY(0);
+}
+}
+
+[data-sonner-toaster] [data-sonner-toast] {
+  animation: toastSlideIn 0.3s var(--ease-out-expo);
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+}
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+}
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ring) 72%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+.scroll-smooth {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+tr:hover td {
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  transition: background 0.15s ease;
+}
+
+[role="switch"] {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+[role="switch"][data-state="checked"] {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+[role="tab"][data-state="active"] {
+  position: relative;
+}
+
+[role="tab"][data-state="active"]::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary);
+  animation: tabIndicator 0.2s ease-out;
+}
+
+@keyframes tabIndicator {
+  from { transform: scaleX(0);
+}
+  to { transform: scaleX(1);
+}
+}
+
+[data-slot="skeleton"] {
+  animation: skeletonPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4;
+}
+  50% { opacity: 0.8;
+}
+}
+
+[role="tooltip"] {
+  animation: tooltipEnter 0.15s ease-out;
+}
+
+@keyframes tooltipEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(2px);
+}
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+}
+
+.nav-section-content {
+  animation: nav-section-enter 0.2s ease-out;
+}
+
+@keyframes nav-section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+.nav-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-scroll::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  border: none;
+}
+
+.page-transition {
+  animation: pageEnter 0.3s ease-out;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+.fade-in {
+  animation: fadeInOnly 0.2s ease-out;
+}
+
+.perf-content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 120px;
+}
+
+.perf-list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
+}
+
+.perf-section-auto {
+  content-visibility: auto;
+  contain: layout style paint;
+  contain-intrinsic-size: 720px;
+}
+
+@keyframes fadeInOnly {
+  from { opacity: 0;
+}
+  to { opacity: 1;
+}
+}
+
+.control-room-sweep {
+  pointer-events: none;
+  background-image: linear-gradient(120deg, transparent 0%, color-mix(in srgb, var(--primary) 5%, transparent) 42%, color-mix(in srgb, var(--warning) 6%, transparent) 50%, transparent 58%);
+  background-size: 200% 100%;
+  animation: none;
+}
+
+.drift-embers {
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 15% 70%, color-mix(in srgb, var(--warning) 14%, transparent), transparent 22%),
+    radial-gradient(circle at 78% 60%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 26%),
+    radial-gradient(circle at 45% 100%, color-mix(in srgb, var(--destructive) 12%, transparent), transparent 28%);
+  filter: blur(12px);
+  will-change: transform, opacity;
+  contain: strict;
+  animation: emberDrift 20s ease-in-out infinite alternate;
+}
+
+@keyframes controlRoomSweep {
+  from { background-position: 200% 0;
+}
+  to { background-position: -40% 0;
+}
+}
+
+@keyframes emberDrift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.34;
+}
+  to {
+    transform: translate3d(0, -12px, 0) scale(1.04);
+    opacity: 0.54;
+}
+}
+
+.mission-brief {
+  animation: missionBriefEnter 560ms var(--ease-out-expo) both;
+  transform-origin: top center;
+}
+
+.mission-step-grid > * {
+  animation: missionStepEnter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mission-step-grid > *:nth-child(1) { animation-delay: 70ms;
+}
+.mission-step-grid > *:nth-child(2) { animation-delay: 150ms;
+}
+.mission-step-grid > *:nth-child(3) { animation-delay: 230ms;
+}
+
+.mission-step-card {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    border-color 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    background-color 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.mission-step-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 0%, color-mix(in srgb, var(--primary) 9%, transparent) 48%, transparent 58%);
+  transform: translateX(-140%);
+  transition: transform 360ms var(--ease-out-expo);
+  pointer-events: none;
+}
+
+.mission-step-card:hover,
+.mission-step-card:focus-within {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  box-shadow: 0 18px 36px -28px color-mix(in srgb, var(--foreground) 60%, transparent), 0 0 0 1px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.mission-step-card:hover::after,
+.mission-step-card:focus-within::after {
+  transform: translateX(120%);
+}
+
+.mission-step-icon {
+  transition:
+    transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    background-color 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.mission-step-card:hover .mission-step-icon,
+.mission-step-card:focus-within .mission-step-icon {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.onboarding-cta {
+  transition:
+    transform 140ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    background-color 180ms cubic-bezier(0.25, 1, 0.5, 1),
+    border-color 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.onboarding-cta:hover,
+.onboarding-cta:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -22px color-mix(in srgb, var(--foreground) 62%, transparent), 0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.onboarding-cta:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.onboarding-cta svg {
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.onboarding-cta:hover svg,
+.onboarding-cta:focus-visible svg {
+  transform: translateX(2px);
+}
+
+[data-variant="success"] {
+  overflow: hidden;
+}
+
+[data-variant="success"]::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--warning) 75%, transparent));
+  opacity: 0.9;
+}
+
+[data-variant="success"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 0%, color-mix(in srgb, var(--primary) 8%, transparent) 46%, transparent 56%);
+  transform: translateX(-135%);
+  animation: toastSweep 650ms var(--ease-out-expo) 1;
+  pointer-events: none;
+}
+
+@keyframes toastSweep {
+  from { transform: translateX(-135%);
+}
+  to { transform: translateX(135%);
+}
+}
+
+@keyframes missionBriefEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+}
+
+@keyframes missionStepEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+}
+  to {
+    opacity: 1;
+    transform: translateY(0);
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-state-icon,
+  .empty-state-aura::after,
+  .control-room-sweep,
+  .drift-embers,
+  .fade-in,
+  .page-transition,
+  .mission-brief,
+  .mission-step-grid > *,
+  .mission-step-card::after,
+  [data-variant="success"]::after {
+    animation: none !important;
+}
+
+  .mission-step-card,
+  .mission-step-icon,
+  .onboarding-cta,
+  .onboarding-cta svg {
+    transition: none !important;
+}
+
+  .mission-step-card:hover,
+  .mission-step-card:focus-within,
+  .onboarding-cta:hover,
+  .onboarding-cta:focus-visible,
+  .onboarding-cta:active,
+  .mission-step-card:hover .mission-step-icon,
+  .mission-step-card:focus-within .mission-step-icon,
+  .onboarding-cta:hover svg,
+  .onboarding-cta:focus-visible svg {
+    transform: none !important;
+}
+}
+
+.stat-number {
+  @apply text-3xl font-bold tracking-tight;
+  color: var(--foreground);
+}
+
+.stat-number-success {
+  color: var(--success);
+}
+
+.button-group {
+  @apply flex flex-wrap gap-2;
+}
+
+.button-group > button {
+  @apply flex-shrink-0;
+}
+
+@media (forced-colors: active) {
+  button,
+  [role="button"],
+  [data-slot="button"] {
+    border: 1px solid ButtonText;
+}
+
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+}
+
+  .status-online,
+  .status-offline,
+  .status-connecting,
+  .server-status-dot--online,
+  .server-status-dot--offline {
+    border: 2px solid ButtonText;
+    forced-color-adjust: none;
+}
+
+  [data-slot="badge"],
+  .badge {
+    border: 1px solid ButtonText;
+}
+
+  .card,
+  [data-slot="card"] {
+    border: 1px solid ButtonText;
+}
+
+  .nav-item-active {
+    border-inline-start: 3px solid Highlight;
+}
+
+  [data-variant="destructive"] {
+    border: 1px solid LinkText;
+}
+
+  [role="switch"],
+  [role="checkbox"] {
+    border: 1px solid ButtonText;
+}
+
+  [data-state="open"] > [data-radix-overlay] {
+    forced-color-adjust: none;
+}
+
+  ::-webkit-scrollbar-thumb {
+    forced-color-adjust: auto;
+}
+}
+
+/* Floating World Map controls. The map stays dark in both themes, so these do too. */
+.map-glass {
+  background: rgb(22 20 17 / 0.84);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(10px);
+}

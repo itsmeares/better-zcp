@@ -113,8 +113,8 @@ export function SystemHealthBanner() {
       className={cn(
         'mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2',
         isCritical
-          ? 'border-destructive/35 bg-destructive/[0.05]'
-          : 'border-warning/35 bg-warning/[0.04]',
+          ? 'border-destructive/35 bg-destructive/5'
+          : 'border-warning/35 bg-warning/4',
       )}
     >
       <Icon

@@ -331,7 +331,7 @@ function PanelBrand({ compact = false }: { compact?: boolean }) {
         height={compact ? 28 : 34}
         className={cn(
           compact ? 'h-7 w-7' : 'h-[34px] w-[34px]',
-          'object-contain drop-shadow-sm saturate-90',
+          'object-contain drop-shadow-xs saturate-90',
         )}
       />
       <div className="min-w-0">
@@ -721,11 +721,11 @@ export default function Layout({ children }: LayoutProps) {
     <div className="flex h-screen bg-background" data-app-shell>
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-60 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
       >
         {'Skip to content'}
       </a>
-      <div className="fixed top-0 inset-x-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden">
+      <div className="fixed top-0 inset-x-0 z-50 border-b bg-card/95 backdrop-blur-sm supports-backdrop-filter:bg-card/85 lg:hidden">
         <div className="flex items-center justify-between p-3">
           <PanelBrand compact />
           <Button
@@ -798,7 +798,7 @@ export default function Layout({ children }: LayoutProps) {
                   height={sidebarCollapsed ? 24 : 30}
                   className={cn(
                     sidebarCollapsed ? 'h-6 w-6' : 'h-[30px] w-[30px]',
-                    'object-contain drop-shadow-sm',
+                    'object-contain drop-shadow-xs',
                   )}
                 />
               </div>
@@ -832,7 +832,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
 
           {serversConfirmedEmpty && !sidebarCollapsed && (
-            <div className="border-b border-border/40 bg-warning/[0.04] px-3 py-2.5 shadow-[inset_2px_0_0_hsl(var(--warning))]">
+            <div className="border-b border-border/40 bg-warning/4 px-3 py-2.5 shadow-[inset_2px_0_0_var(--warning)]">
               <div className="flex items-start gap-2">
                 <AlertCircle
                   className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5"
@@ -864,7 +864,7 @@ export default function Layout({ children }: LayoutProps) {
                   type="button"
                   className={cn(
                     'active-server-strip group relative w-full border-b border-border/40 px-3 py-2.5 text-start transition-colors',
-                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60',
+                    'focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60',
                     `active-server-strip--${serverRunState}`,
                   )}
                 >
@@ -873,7 +873,7 @@ export default function Layout({ children }: LayoutProps) {
                   <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.26em] text-muted-foreground/70">
                     <span>{'Active Server'}</span>
                     <span
-                      className="ms-1 inline-block h-px flex-1 bg-gradient-to-r rtl:bg-gradient-to-l from-border/40 to-transparent"
+                      className="ms-1 inline-block h-px flex-1 bg-linear-to-r rtl:bg-linear-to-l from-border/40 to-transparent"
                       aria-hidden
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -976,7 +976,7 @@ export default function Layout({ children }: LayoutProps) {
                   onFocus={() => preloadRouteModule(dashboardItem.to)}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'group relative flex min-h-9 items-center rounded-md text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                    'group relative flex min-h-9 items-center rounded-md text-[13px] font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/60',
                     sidebarCollapsed
                       ? 'justify-center px-2 py-2'
                       : 'gap-3 px-2 py-1.5',
@@ -987,7 +987,7 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   {location.pathname === dashboardItem.to && (
                     <span
-                      className="absolute start-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-s-full bg-primary"
+                      className="absolute inset-s-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-s-full bg-primary"
                       aria-hidden
                     />
                   )}
@@ -1069,7 +1069,7 @@ export default function Layout({ children }: LayoutProps) {
                               onFocus={() => preloadRouteModule(item.to)}
                               onClick={() => setMobileMenuOpen(false)}
                               className={cn(
-                                'group relative flex min-h-9 items-center justify-center rounded-md px-2 py-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                                'group relative flex min-h-9 items-center justify-center rounded-md px-2 py-2 transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/60',
                                 isActive
                                   ? cn('font-medium', tone.childActive)
                                   : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
@@ -1078,7 +1078,7 @@ export default function Layout({ children }: LayoutProps) {
                               {isActive && (
                                 <span
                                   className={cn(
-                                    'absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
+                                    'absolute inset-s-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
                                     tone.childDot,
                                   )}
                                   aria-hidden
@@ -1185,7 +1185,7 @@ export default function Layout({ children }: LayoutProps) {
                           onFocus={() => preloadRouteModule(item.to)}
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
-                            'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                            'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary/60',
                             isActive
                               ? cn(
                                   'font-medium text-foreground',
@@ -1198,7 +1198,7 @@ export default function Layout({ children }: LayoutProps) {
                             {isActive && (
                               <span
                                 className={cn(
-                                  'absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
+                                  'absolute inset-s-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
                                   tone.childDot,
                                 )}
                                 aria-hidden
@@ -1369,7 +1369,7 @@ export default function Layout({ children }: LayoutProps) {
           {updateInfo && updateInfo.updateAvailable && !updateDismissed && (
             <div
               role="status"
-              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/35 bg-warning/[0.04] py-2 ps-3 pe-2 shadow-[inset_2px_0_0_hsl(var(--warning))]"
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/35 bg-warning/4 py-2 ps-3 pe-2 shadow-[inset_2px_0_0_var(--warning)]"
             >
               <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning" />
               <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">

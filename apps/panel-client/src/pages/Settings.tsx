@@ -174,8 +174,9 @@ function ThemeSelect() {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="survival">{'Survival (Dark)'}</SelectItem>
+        <SelectItem value="system">{'System'}</SelectItem>
         <SelectItem value="light">{'Light'}</SelectItem>
+        <SelectItem value="dark">{'Dark'}</SelectItem>
       </SelectContent>
     </Select>
   )
@@ -1541,10 +1542,10 @@ export default function Settings() {
         <div
           role="status"
           aria-live="polite"
-          className="relative mb-5 overflow-hidden rounded-lg border border-warning/45 bg-warning/[0.08] shadow-sm"
+          className="relative mb-5 overflow-hidden rounded-lg border border-warning/45 bg-warning/8 shadow-xs"
         >
           <div
-            className="absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-warning via-warning/80 to-warning/30"
+            className="absolute inset-y-0 left-0 w-[3px] bg-linear-to-b from-warning via-warning/80 to-warning/30"
             aria-hidden="true"
           />
           <div className="flex flex-col gap-3 p-4 ps-5 sm:flex-row sm:items-center sm:justify-between">
@@ -1663,7 +1664,7 @@ export default function Settings() {
           </TabsList>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 end-0 flex w-10 items-center justify-end rounded-e-md bg-gradient-to-l rtl:bg-gradient-to-r from-muted to-transparent pe-1.5 lg:hidden"
+            className="pointer-events-none absolute inset-y-0 inset-e-0 flex w-10 items-center justify-end rounded-e-md bg-linear-to-l rtl:bg-linear-to-r from-muted to-transparent pe-1.5 lg:hidden"
           >
             <ChevronRight className="h-4 w-4 text-muted-foreground/80 rtl:-scale-x-100" />
           </div>
@@ -1804,7 +1805,7 @@ export default function Settings() {
                       <Label className="text-sm font-medium">{'Theme'}</Label>
                       <p className="text-xs text-muted-foreground">
                         {
-                          'Choose between the gritty survival look or a clean light theme.'
+                          'Follow your system, or always use light or dark.'
                         }
                       </p>
                     </div>
@@ -2156,7 +2157,7 @@ export default function Settings() {
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>{'Updater Error'}</AlertTitle>
                   <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="break-words">
+                    <span className="wrap-break-word">
                       {panelUpdateStatusError}
                     </span>
                     <Button
@@ -2226,7 +2227,7 @@ export default function Settings() {
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>{'Last Update Error'}</AlertTitle>
-                  <AlertDescription className="break-words whitespace-pre-wrap">
+                  <AlertDescription className="wrap-break-word whitespace-pre-wrap">
                     {panelUpdateStatus.lastError}
                   </AlertDescription>
                 </Alert>
@@ -2258,7 +2259,7 @@ export default function Settings() {
                           panelUpdatePreflight.blockers,
                           panelUpdatePreflight.blockerDetails,
                         ).map((b, i) => (
-                          <li key={`blk-${i}`} className="break-words">
+                          <li key={`blk-${i}`} className="wrap-break-word">
                             {b}
                           </li>
                         ))}
@@ -2285,7 +2286,7 @@ export default function Settings() {
                           panelUpdatePreflight.warnings,
                           panelUpdatePreflight.warningDetails,
                         ).map((w, i) => (
-                          <li key={`wrn-${i}`} className="break-words">
+                          <li key={`wrn-${i}`} className="wrap-break-word">
                             {w}
                           </li>
                         ))}

@@ -1108,12 +1108,12 @@ export default function ServerSetup() {
                 role="button"
                 tabIndex={0}
                 aria-describedby="full-setup-description"
-                className="group relative overflow-hidden cursor-pointer border-primary/35 bg-gradient-to-br from-primary/[0.06] via-card to-card ring-1 ring-primary/15 transition-[border-color,box-shadow,transform] hover:border-primary/55 hover:ring-primary/25 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="group relative overflow-hidden cursor-pointer border-primary/35 bg-linear-to-br from-primary/6 via-card to-card ring-1 ring-primary/15 transition-[border-color,box-shadow,transform] hover:border-primary/55 hover:ring-primary/25 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 onClick={activate}
                 onKeyDown={(event) => handleCardKeyDown(event, activate)}
               >
                 <div
-                  className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-primary via-primary/80 to-primary/40"
+                  className="absolute top-0 inset-x-0 h-[3px] bg-linear-to-r from-primary via-primary/80 to-primary/40"
                   aria-hidden="true"
                 />
                 <div className="absolute right-3 top-3">
@@ -1125,7 +1125,7 @@ export default function ServerSetup() {
                   </Badge>
                 </div>
                 <CardHeader className="pb-3">
-                  <div className="grid place-items-center w-11 h-11 rounded-md border border-primary/30 bg-primary/[0.08] text-primary mb-3 transition-colors group-hover:bg-primary/15">
+                  <div className="grid place-items-center w-11 h-11 rounded-md border border-primary/30 bg-primary/8 text-primary mb-3 transition-colors group-hover:bg-primary/15">
                     <Download className="w-5 h-5" />
                   </div>
                   <CardTitle className="text-lg">{'Fresh Install'}</CardTitle>
@@ -1178,12 +1178,12 @@ export default function ServerSetup() {
                 role="button"
                 tabIndex={0}
                 aria-describedby="quick-setup-description"
-                className="group relative overflow-hidden cursor-pointer border-border/60 bg-card transition-[border-color,box-shadow,transform] hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="group relative overflow-hidden cursor-pointer border-border/60 bg-card transition-[border-color,box-shadow,transform] hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 onClick={activate}
                 onKeyDown={(event) => handleCardKeyDown(event, activate)}
               >
                 <CardHeader className="pb-3">
-                  <div className="grid place-items-center w-11 h-11 rounded-md border border-border/55 bg-muted/40 text-muted-foreground mb-3 transition-colors group-hover:border-primary/30 group-hover:bg-primary/[0.06] group-hover:text-primary">
+                  <div className="grid place-items-center w-11 h-11 rounded-md border border-border/55 bg-muted/40 text-muted-foreground mb-3 transition-colors group-hover:border-primary/30 group-hover:bg-primary/6 group-hover:text-primary">
                     <Plus className="w-5 h-5" />
                   </div>
                   <CardTitle className="text-lg">
@@ -1221,7 +1221,7 @@ export default function ServerSetup() {
           })()}
         </div>
 
-        <Card className="bg-secondary/40 border-border/70 shadow-sm">
+        <Card className="bg-secondary/40 border-border/70 shadow-xs">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg border border-primary/20 bg-primary/10 flex items-center justify-center shrink-0">
@@ -1281,10 +1281,10 @@ export default function ServerSetup() {
                   className={cn(
                     'flex items-center gap-2 px-3 py-2 sm:px-3.5 sm:py-2 rounded-full border transition-colors',
                     isActive &&
-                      'border-primary bg-primary text-primary-foreground shadow-sm',
+                      'border-primary bg-primary text-primary-foreground shadow-xs',
                     !isActive &&
                       isComplete &&
-                      'border-primary/40 bg-primary/[0.08] text-primary',
+                      'border-primary/40 bg-primary/8 text-primary',
                     !isActive &&
                       !isComplete &&
                       'border-border/50 bg-muted/30 text-muted-foreground',
@@ -1332,7 +1332,7 @@ export default function ServerSetup() {
 
       {!hasSteamCmd ? (
         <div className="space-y-6">
-          <Card className="border-primary/35 bg-card shadow-sm">
+          <Card className="border-primary/35 bg-card shadow-xs">
             <CardContent className="pt-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
@@ -1418,7 +1418,7 @@ export default function ServerSetup() {
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
                 <div className="space-y-4">
-                  <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 text-sm shadow-sm">
+                  <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 text-sm shadow-xs">
                     <p className="font-medium text-warning">{'Manual Setup'}</p>
                     <ol className="list-decimal list-inside space-y-1 text-muted-foreground mt-2">
                       <li>{'Download SteamCMD from Valve'}</li>
@@ -1491,7 +1491,7 @@ export default function ServerSetup() {
           </Accordion>
         </div>
       ) : (
-        <Card className="border-primary/30 bg-card shadow-sm">
+        <Card className="border-primary/30 bg-card shadow-xs">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl border border-primary/25 bg-primary/14 flex items-center justify-center">
@@ -1754,7 +1754,7 @@ export default function ServerSetup() {
         </p>
       </div>
 
-      <Card className="border-primary/35 bg-card shadow-sm">
+      <Card className="border-primary/35 bg-card shadow-xs">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
@@ -1869,7 +1869,7 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      <Card className="border-primary/35 bg-card shadow-sm">
+      <Card className="border-primary/35 bg-card shadow-xs">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
@@ -2138,7 +2138,7 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      <div className="bg-muted/50 border border-border/60 rounded-lg p-4 text-sm shadow-sm">
+      <div className="bg-muted/50 border border-border/60 rounded-lg p-4 text-sm shadow-xs">
         <p className="font-medium flex items-center gap-2">
           <Info className="w-4 h-4 text-primary" />
           {'Firewall / Port Forwarding'}
@@ -2244,14 +2244,14 @@ export default function ServerSetup() {
       )}
 
       {installComplete && (
-        <Card className="border-primary/32 bg-card shadow-sm">
+        <Card className="border-primary/32 bg-card shadow-xs">
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-center gap-2 text-primary">
               <CheckCircle className="w-5 h-5" />
               <span className="font-medium">{'Installation Complete'}</span>
             </div>
 
-            <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 text-sm shadow-sm">
+            <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 text-sm shadow-xs">
               <p className="font-medium flex items-center gap-2 text-warning">
                 <Info className="w-4 h-4" />
                 {'First Start Required'}
@@ -2303,7 +2303,7 @@ export default function ServerSetup() {
         </p>
       </div>
 
-      <Card className="bg-secondary/40 border-primary/24 shadow-sm">
+      <Card className="bg-secondary/40 border-primary/24 shadow-xs">
         <CardContent className="pt-6">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-lg border border-primary/20 bg-primary/10 flex items-center justify-center shrink-0">
@@ -2395,7 +2395,7 @@ export default function ServerSetup() {
           </p>
         </div>
 
-        <Card className="border-primary/35 bg-card shadow-sm">
+        <Card className="border-primary/35 bg-card shadow-xs">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
@@ -2510,7 +2510,7 @@ export default function ServerSetup() {
           </CardContent>
         </Card>
 
-        <Card className="border-primary/35 bg-card shadow-sm">
+        <Card className="border-primary/35 bg-card shadow-xs">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
@@ -2883,7 +2883,7 @@ export default function ServerSetup() {
       )}
 
       {installComplete && (
-        <Card className="border-primary/30 bg-card shadow-sm">
+        <Card className="border-primary/30 bg-card shadow-xs">
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-center gap-2 text-primary">
               <CheckCircle className="w-5 h-5" />

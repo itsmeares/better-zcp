@@ -1373,7 +1373,7 @@ export default function Debug() {
           className="space-y-4"
         >
           <div className="relative">
-            <TabsList className="flex h-auto flex-nowrap items-center justify-start gap-1 overflow-x-auto rounded-lg border border-border/60 bg-gradient-to-b from-muted/50 to-muted/25 p-1.5 w-full shadow-inner">
+            <TabsList className="flex h-auto flex-nowrap items-center justify-start gap-1 overflow-x-auto rounded-lg border border-border/60 bg-linear-to-b from-muted/50 to-muted/25 p-1.5 w-full shadow-inner">
               <TabsTrigger value="diagnostics" className="gap-2 shrink-0">
                 <CheckCircle className="w-4 h-4" />
                 {'Diagnostics'}
@@ -1457,7 +1457,7 @@ export default function Debug() {
             </TabsList>
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 end-0 flex w-10 items-center justify-end rounded-e-lg bg-gradient-to-l rtl:bg-gradient-to-r from-muted to-transparent pe-1.5"
+              className="pointer-events-none absolute inset-y-0 inset-e-0 flex w-10 items-center justify-end rounded-e-lg bg-linear-to-l rtl:bg-linear-to-r from-muted to-transparent pe-1.5"
             >
               <ChevronRight className="h-4 w-4 text-muted-foreground/80 rtl:-scale-x-100" />
             </div>
@@ -1740,7 +1740,7 @@ export default function Debug() {
                                           </Badge>
                                         )}
                                       </div>
-                                      <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                                      <p className="text-xs text-muted-foreground mt-0.5 wrap-break-word">
                                         {translated.message}
                                       </p>
                                       {translated.hint && (
@@ -2537,7 +2537,7 @@ export default function Debug() {
                       </SelectContent>
                     </Select>
                     <div className="relative w-full sm:w-auto">
-                      <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Search className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <Input
                         placeholder={'Search action / detail…'}
                         value={activitySearch}
@@ -2935,7 +2935,7 @@ export default function Debug() {
                   { chip: string; value: string; ring: string; hover: string }
                 > = {
                   primary: {
-                    chip: 'border-primary/30 bg-primary/[0.06] text-primary',
+                    chip: 'border-primary/30 bg-primary/6 text-primary',
                     value: 'text-primary',
                     ring: 'ring-primary/50',
                     hover: 'hover:border-primary/30',
@@ -2947,7 +2947,7 @@ export default function Debug() {
                     hover: 'hover:border-warning/30',
                   },
                   destructive: {
-                    chip: 'border-destructive/40 bg-destructive/[0.08] text-destructive',
+                    chip: 'border-destructive/40 bg-destructive/8 text-destructive',
                     value: 'text-destructive',
                     ring: 'ring-destructive/50',
                     hover: 'hover:border-destructive/30',
@@ -3133,7 +3133,7 @@ export default function Debug() {
 
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="relative flex-1 min-w-0 w-full sm:max-w-md">
-                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         ref={searchInputRef}
                         placeholder={'Search logs...'}
@@ -3301,7 +3301,7 @@ export default function Debug() {
                               <Copy className="w-3 h-3 text-muted-foreground" />
                             </button>
                             <span
-                              className={`${getLevelColor(log.level)} break-words min-w-0 grow basis-full sm:basis-0`}
+                              className={`${getLevelColor(log.level)} wrap-break-word min-w-0 grow basis-full sm:basis-0`}
                             >
                               {displayMessage}
                             </span>
@@ -3318,7 +3318,7 @@ export default function Debug() {
             {logFiles.length > 0 && (
               <Card className="relative overflow-hidden">
                 <div
-                  className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-primary via-primary/70 to-primary/20"
+                  className="absolute top-0 inset-x-0 h-[2px] bg-linear-to-r from-primary via-primary/70 to-primary/20"
                   aria-hidden="true"
                 />
                 <CardHeader className="pb-3">
@@ -3333,7 +3333,7 @@ export default function Debug() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="relative overflow-hidden rounded-lg border border-primary/35 bg-gradient-to-br from-primary/[0.09] via-primary/[0.04] to-transparent p-4">
+                  <div className="relative overflow-hidden rounded-lg border border-primary/35 bg-linear-to-br from-primary/9 via-primary/4 to-transparent p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-3">
                         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-primary/35 bg-primary/10 text-primary">

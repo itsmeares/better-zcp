@@ -190,7 +190,7 @@ function SummaryCard({
   }
   const t = toneMap[tone]
   return (
-    <div className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
+    <div className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-xs">
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 left-0 w-[2px] ${t.accent}`}
@@ -247,17 +247,17 @@ function ActionTile({
       label: 'text-foreground/90',
     },
     primary: {
-      base: 'border-primary/30 bg-primary/[0.04] hover:bg-primary/10 hover:border-primary/50',
+      base: 'border-primary/30 bg-primary/4 hover:bg-primary/10 hover:border-primary/50',
       iconWrap: 'border-primary/30 bg-primary/10 text-primary',
       label: 'text-foreground',
     },
     warning: {
-      base: 'border-amber-500/30 bg-amber-500/[0.04] hover:bg-amber-500/10 hover:border-amber-500/50',
+      base: 'border-amber-500/30 bg-amber-500/4 hover:bg-amber-500/10 hover:border-amber-500/50',
       iconWrap: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
       label: 'text-foreground',
     },
     danger: {
-      base: 'border-destructive/35 bg-destructive/[0.04] hover:bg-destructive/10 hover:border-destructive/55',
+      base: 'border-destructive/35 bg-destructive/4 hover:bg-destructive/10 hover:border-destructive/55',
       iconWrap: 'border-destructive/30 bg-destructive/10 text-destructive',
       label: 'text-destructive',
     },
@@ -314,10 +314,10 @@ function VitalBar({
   const severity = goodWhenLow ? value : 1 - value
   const color =
     severity < 0.5
-      ? 'hsl(var(--success))'
+      ? 'var(--success)'
       : severity < 0.75
-        ? 'hsl(var(--warning))'
-        : 'hsl(var(--destructive))'
+        ? 'var(--warning)'
+        : 'var(--destructive)'
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="w-16 shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
@@ -1160,7 +1160,7 @@ export default function Players() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>{'Players page is partially unavailable'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 break-words">
+            <span className="min-w-0 wrap-break-word">
               {playersLoadError || toolsLoadError}
             </span>
             <Button
@@ -1210,7 +1210,7 @@ export default function Players() {
             type="button"
             onClick={() => setUnbanSteamIdDialogOpen(true)}
 
-            className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-xs transition-colors hover:border-destructive/45 hover:bg-destructive/4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label={
               'View ' + String(bannedSteamIds.length) + ' banned SteamIDs'
             }
@@ -1274,7 +1274,7 @@ export default function Players() {
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'online'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
+                    ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -1289,7 +1289,7 @@ export default function Players() {
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'roster'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
+                    ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -1307,7 +1307,7 @@ export default function Players() {
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'banned'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
+                    ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -1325,7 +1325,7 @@ export default function Players() {
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'whitelist'
-                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
+                    ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -1338,7 +1338,7 @@ export default function Players() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
                 placeholder={
@@ -1433,9 +1433,9 @@ export default function Players() {
                         <button
                           key={player.name}
                           type="button"
-                          className={`group w-full text-start p-3 rounded-lg border cursor-pointer transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 ${
+                          className={`group w-full text-start p-3 rounded-lg border cursor-pointer transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 ${
                             isSelected
-                              ? 'bg-primary/10 border-primary shadow-sm'
+                              ? 'bg-primary/10 border-primary shadow-xs'
                               : 'hover:bg-muted/50 border-transparent hover:border-border'
                           }`}
                           onClick={() => setSelectedPlayer(player.name)}
@@ -1547,9 +1547,9 @@ export default function Players() {
                         <button
                           key={name}
                           type="button"
-                          className={`w-full text-start p-3 rounded-lg border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 ${
+                          className={`w-full text-start p-3 rounded-lg border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 ${
                             isSelected
-                              ? 'bg-primary/10 border-primary shadow-sm'
+                              ? 'bg-primary/10 border-primary shadow-xs'
                               : 'hover:bg-muted/50 border-transparent hover:border-border'
                           }`}
                           onClick={() => setSelectedPlayer(name)}
@@ -1885,7 +1885,7 @@ export default function Players() {
                   )
                   const stat = playerStats[selectedPlayer]
                   return (
-                    <div className="relative overflow-hidden rounded-md border border-border/50 bg-gradient-to-br from-muted/30 via-card to-card p-4">
+                    <div className="relative overflow-hidden rounded-md border border-border/50 bg-linear-to-br from-muted/30 via-card to-card p-4">
                       <span
                         aria-hidden="true"
                         className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-primary/40"
@@ -1910,7 +1910,7 @@ export default function Players() {
                               className={cn(
                                 'h-2 w-2 rounded-full',
                                 isOnline
-                                  ? 'bg-emerald-400 motion-safe:animate-pulse shadow-[0_0_8px_hsl(var(--primary)/0.65)]'
+                                  ? 'bg-emerald-400 motion-safe:animate-pulse shadow-[0_0_8px_color-mix(in_srgb,var(--primary)_65%,transparent)]'
                                   : 'bg-muted-foreground/40',
                               )}
                             />
@@ -3177,7 +3177,7 @@ export default function Players() {
                     'border-border/60',
                     selectedPlayer &&
                       !loading &&
-                      'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
+                      'hover:border-primary/50 hover:bg-card/80 hover:shadow-xs',
                     (!selectedPlayer || loading) &&
                       'opacity-60 cursor-not-allowed',
                   )}
@@ -3714,7 +3714,7 @@ export default function Players() {
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle>{'Activity log unavailable'}</AlertTitle>
                       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="min-w-0 break-words">{logsError}</span>
+                        <span className="min-w-0 wrap-break-word">{logsError}</span>
                         <Button
                           variant="outline"
                           size="sm"
@@ -3730,7 +3730,7 @@ export default function Players() {
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="relative flex-1">
-                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         placeholder={'Filter by player name...'}
                         value={logPlayerFilter}
@@ -3796,7 +3796,7 @@ export default function Players() {
                               <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
                                 {new Date(log.logged_at).toLocaleString('en')}
                               </td>
-                              <td className="p-2 text-xs font-medium break-words">
+                              <td className="p-2 text-xs font-medium wrap-break-word">
                                 {log.player_name}
                               </td>
                               <td className="p-2">
@@ -3815,11 +3815,11 @@ export default function Players() {
                                 >
                                   {log.action}
                                 </Badge>
-                                <p className="mt-1 max-w-[220px] text-[11px] text-muted-foreground break-words sm:hidden">
+                                <p className="mt-1 max-w-[220px] text-[11px] text-muted-foreground wrap-break-word sm:hidden">
                                   {log.details || '-'}
                                 </p>
                               </td>
-                              <td className="max-w-[220px] p-2 text-xs text-muted-foreground break-words hidden sm:table-cell">
+                              <td className="max-w-[220px] p-2 text-xs text-muted-foreground wrap-break-word hidden sm:table-cell">
                                 {log.details || '-'}
                               </td>
                             </tr>

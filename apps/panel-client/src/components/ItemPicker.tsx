@@ -517,7 +517,7 @@ export function ItemPicker({
         className={cn(
           'flex items-center gap-2 h-11 sm:h-9 rounded-md border border-input bg-background px-3 text-sm cursor-pointer',
           'motion-safe:transition-colors duration-150',
-          'hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          'hover:border-primary/40 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring',
           open && 'border-primary/60 ring-1 ring-primary/20',
           disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         )}
@@ -552,7 +552,7 @@ export function ItemPicker({
               e.stopPropagation()
               handleClear()
             }}
-            className="-me-1 flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0 motion-safe:transition-colors"
+            className="-me-1 flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring shrink-0 motion-safe:transition-colors"
             aria-label={'Clear selection'}
           >
             <X className="w-3.5 h-3.5" />
@@ -588,7 +588,7 @@ export function ItemPicker({
                 String(nonVehicleItems.length.toLocaleString('en')) +
                 ' items…'
               }
-              className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+              className="flex-1 min-w-0 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/60"
               aria-label={'Filter items'}
               autoFocus
             />
@@ -678,7 +678,7 @@ export function ItemPicker({
               id="itempicker-listbox"
               aria-label={'Item list'}
             >
-              <div className="sticky top-0 z-10 flex items-center gap-2.5 px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border/30">
+              <div className="sticky top-0 z-10 flex items-center gap-2.5 px-4 py-2 bg-muted/80 backdrop-blur-xs border-b border-border/30">
                 <ActiveIcon className="w-3.5 h-3.5 text-muted-foreground/70" />
                 <span className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
                   {activeCategoryLabel}
@@ -725,7 +725,7 @@ export function ItemPicker({
                           'motion-safe:transition-colors duration-75',
                           'hover:bg-accent/10',
                           item.id === value && 'bg-primary/10',
-                          idx === highlightIndex && 'bg-accent/15 outline-none',
+                          idx === highlightIndex && 'bg-accent/15 outline-hidden',
                         )}
                       >
                         {!activeCategory && (

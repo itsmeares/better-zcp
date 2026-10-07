@@ -556,7 +556,7 @@ export function ConflictsPanel({
                     {'Scan failed'}
                   </p>
                   <p
-                    className="text-xs mt-1.5 text-muted-foreground break-words"
+                    className="text-xs mt-1.5 text-muted-foreground wrap-break-word"
                     dir="auto"
                   >
                     {conflictsError}
@@ -583,7 +583,7 @@ export function ConflictsPanel({
                 <div className="flex flex-col items-center text-center mb-6">
                   <div className="relative mb-4" aria-hidden="true">
                     <div className="absolute inset-0 rounded-2xl bg-primary/15 blur-xl" />
-                    <div className="relative w-16 h-16 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center">
+                    <div className="relative w-16 h-16 rounded-2xl border border-primary/25 bg-linear-to-br from-primary/15 to-primary/5 flex items-center justify-center">
                       <Shield className="w-8 h-8 text-primary" />
                     </div>
                   </div>
@@ -703,7 +703,7 @@ export function ConflictsPanel({
                         className="w-3.5 h-3.5 shrink-0"
                         aria-hidden="true"
                       />
-                      <span className="flex-1 min-w-0 break-words" dir="auto">
+                      <span className="flex-1 min-w-0 wrap-break-word" dir="auto">
                         {conflictsError}
                       </span>
                       <Button
@@ -867,10 +867,10 @@ export function ConflictsPanel({
                   <div
                     className={`relative rounded-lg border overflow-hidden ${
                       isWarn
-                        ? 'border-warning/30 bg-warning/[0.04]'
+                        ? 'border-warning/30 bg-warning/4'
                         : isSuccess
-                          ? 'border-success/30 bg-success/[0.04]'
-                          : 'border-border/40 bg-muted/[0.04]'
+                          ? 'border-success/30 bg-success/4'
+                          : 'border-border/40 bg-muted/4'
                     }`}
                     role="status"
                     aria-live="polite"
@@ -1179,7 +1179,7 @@ export function ConflictsPanel({
                               className="max-w-xs text-xs space-y-0.5"
                             >
                               {conflicts.warnings!.slice(0, 5).map((w, i) => (
-                                <p key={i} className="break-words">
+                                <p key={i} className="wrap-break-word">
                                   {w}
                                 </p>
                               ))}
@@ -1420,7 +1420,7 @@ export function ConflictsPanel({
                                   <div className="flex flex-wrap items-center gap-2">
                                     <div className="relative">
                                       <Search
-                                        className="w-3 h-3 absolute start-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none"
+                                        className="w-3 h-3 absolute inset-s-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none"
                                         aria-hidden="true"
                                       />
                                       <input
@@ -1433,7 +1433,7 @@ export function ConflictsPanel({
                                         aria-label={
                                           'Filter conflict pairs by mod name'
                                         }
-                                        className="h-8 w-full min-w-[14rem] ps-6 pe-6 rounded-md text-[11px] bg-background/50 border border-border/40 focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent placeholder:text-muted-foreground/50 sm:w-56"
+                                        className="h-8 w-full min-w-56 ps-6 pe-6 rounded-md text-[11px] bg-background/50 border border-border/40 focus:outline-hidden focus:ring-1 focus:ring-accent focus:border-accent placeholder:text-muted-foreground/50 sm:w-56"
                                       />
                                       {pairSearchQuery && (
                                         <button
@@ -1673,7 +1673,7 @@ export function ConflictsPanel({
                                                   value={pairKey}
                                                   className={`border rounded-lg px-0 overflow-hidden border-s-[3px] conflict-pair-enter ${
                                                     maxSeverity === 'high'
-                                                      ? 'border-s-destructive/60 bg-destructive/[0.02]'
+                                                      ? 'border-s-destructive/60 bg-destructive/2'
                                                       : maxSeverity === 'medium'
                                                         ? 'border-s-warning/50'
                                                         : 'border-s-primary/40'
@@ -1682,7 +1682,7 @@ export function ConflictsPanel({
                                                     animationDelay: `${Math.min(pairIdx * 50, 400)}ms`,
                                                   }}
                                                 >
-                                                  <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/20 [&[data-state=open]]:bg-muted/15 transition-colors">
+                                                  <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/20 data-[state=open]:bg-muted/15 transition-colors">
                                                     <div className="flex min-w-0 flex-1 flex-col gap-2 text-start sm:flex-row sm:items-center sm:gap-3">
                                                       <div
                                                         className={`w-2 h-2 rounded-full shrink-0 ${
@@ -2813,7 +2813,7 @@ export function ConflictsPanel({
                                           </div>
                                         ) : searchState?.error ? (
                                           <div className="flex items-center justify-between gap-2 text-xs">
-                                            <span className="text-destructive break-words">
+                                            <span className="text-destructive wrap-break-word">
                                               {'Search failed: ' +
                                                 String(searchState.error)}
                                             </span>
@@ -3231,9 +3231,9 @@ export function ConflictsPanel({
                         key={`${p.modA.modId}--${p.modB.modId}`}
                         className={`flex items-center gap-2 rounded-md border px-2.5 py-2 ${
                           maxSev === 'high'
-                            ? 'border-destructive/40 bg-destructive/[0.03]'
+                            ? 'border-destructive/40 bg-destructive/3'
                             : maxSev === 'medium'
-                              ? 'border-warning/40 bg-warning/[0.03]'
+                              ? 'border-warning/40 bg-warning/3'
                               : 'border-border/40'
                         }`}
                       >

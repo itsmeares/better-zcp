@@ -79,7 +79,7 @@ export function GameIntegrationStatusBadge({
     'flex items-center gap-2 rounded-lg border px-3 py-1.5',
     c.surface,
     interactive &&
-      'cursor-pointer transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+      'cursor-pointer transition-colors hover:bg-accent/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
     className,
   )
 

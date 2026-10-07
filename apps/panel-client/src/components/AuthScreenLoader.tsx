@@ -40,7 +40,7 @@ export function AuthScreenLoader() {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'radial-gradient(ellipse at 50% 30%, hsl(var(--primary) / 0.10), transparent 55%), radial-gradient(circle at 12% 110%, hsl(var(--destructive) / 0.10), transparent 45%), linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)))',
+            'radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 55%), radial-gradient(circle at 12% 110%, color-mix(in srgb, var(--destructive) 10%, transparent), transparent 45%), linear-gradient(180deg, var(--background), var(--background))',
         }}
       />
       <div
@@ -50,13 +50,13 @@ export function AuthScreenLoader() {
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
-        style={{ boxShadow: 'inset 0 0 220px 40px hsl(var(--background))' }}
+        style={{ boxShadow: 'inset 0 0 220px 40px var(--background)' }}
       />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-5 py-3 font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">
         <span>Project Zomboid // Control Panel</span>
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400/80 shadow-[0_0_8px_hsl(var(--primary)/0.6)]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400/80 shadow-[0_0_8px_color-mix(in_srgb,var(--primary)_60%,transparent)]" />
           <span>Secure Handshake</span>
         </span>
       </div>
@@ -70,22 +70,22 @@ export function AuthScreenLoader() {
       <div className="relative w-full max-w-[520px]">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -start-2 -top-2 h-5 w-5 border-s-2 border-t-2 border-primary/45"
+          className="pointer-events-none absolute -inset-s-2 -top-2 h-5 w-5 border-s-2 border-t-2 border-primary/45"
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -end-2 -top-2 h-5 w-5 border-e-2 border-t-2 border-primary/45"
+          className="pointer-events-none absolute -inset-e-2 -top-2 h-5 w-5 border-e-2 border-t-2 border-primary/45"
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-2 -start-2 h-5 w-5 border-b-2 border-s-2 border-primary/45"
+          className="pointer-events-none absolute -bottom-2 -inset-s-2 h-5 w-5 border-b-2 border-s-2 border-primary/45"
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-2 -end-2 h-5 w-5 border-b-2 border-e-2 border-primary/45"
+          className="pointer-events-none absolute -bottom-2 -inset-e-2 h-5 w-5 border-b-2 border-e-2 border-primary/45"
         />
 
-        <div className="relative rounded-md border border-border/60 bg-card/70 px-6 py-7 backdrop-blur-sm shadow-[0_30px_80px_-50px_hsl(var(--foreground)/0.6)]">
+        <div className="relative rounded-md border border-border/60 bg-card/70 px-6 py-7 backdrop-blur-xs shadow-[0_30px_80px_-50px_color-mix(in_srgb,var(--foreground)_60%,transparent)]">
           <div className="mb-5 flex items-center justify-between border-b border-border/50 pb-3 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
             <span className="text-primary/80">// boot.sequence</span>
             <span>node · admin</span>
@@ -97,7 +97,7 @@ export function AuthScreenLoader() {
                 src={`${import.meta.env.BASE_URL}spiffo.png`}
                 alt=""
                 aria-hidden="true"
-                className="h-16 w-16 select-none drop-shadow-[0_0_18px_hsl(var(--primary)/0.35)]"
+                className="h-16 w-16 select-none drop-shadow-[0_0_18px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
                 style={{ imageRendering: 'pixelated' }}
                 draggable={false}
               />
@@ -167,7 +167,7 @@ export function AuthScreenLoader() {
                 className={`h-1.5 flex-1 rounded-[1px] transition-colors duration-300 ${
                   idx < lit
                     ? idx === lit - 1
-                      ? 'bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]'
+                      ? 'bg-primary shadow-[0_0_8px_color-mix(in_srgb,var(--primary)_70%,transparent)]'
                       : 'bg-primary/70'
                     : 'bg-border/40'
                 }`}

@@ -14,14 +14,14 @@ function Badge({ className, variant = 'default', ...props }: BadgeProps) {
     secondary: "border border-border/70 bg-secondary/70 text-secondary-foreground",
     destructive: "border border-destructive/25 bg-destructive/12 text-destructive",
     outline: "border border-input bg-transparent text-foreground",
-    success: "border border-[hsl(var(--success)/0.28)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]",
-    warning: "border border-[hsl(var(--warning)/0.72)] bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]"
+    success: "border border-[color-mix(in_srgb,var(--success)_28%,transparent)] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)]",
+    warning: "border border-[color-mix(in_srgb,var(--warning)_72%,transparent)] bg-[var(--warning)] text-[var(--warning-foreground)]"
   }
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2",
         variants[variant],
         className
       )}

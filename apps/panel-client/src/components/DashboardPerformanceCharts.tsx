@@ -58,7 +58,7 @@ const TONE_BAR: Record<MetricTone, string> = {
 const TONE_CELL: Record<MetricTone, string> = {
   neutral: '',
   good: '',
-  warn: 'bg-warning/[0.05]',
+  warn: 'bg-warning/5',
   bad: 'bg-destructive/[0.07]',
 }
 

@@ -787,7 +787,7 @@ function TacticalPanel({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-md border bg-card shadow-sm',
+        'overflow-hidden rounded-md border bg-card shadow-xs',
         toneBorder(tone),
         className,
       )}
@@ -2294,7 +2294,7 @@ export default function ServerConfig() {
             {'Configuration data could not be fully loaded'}
           </AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 break-words" dir="auto" title={loadError}>
+            <span className="min-w-0 wrap-break-word" dir="auto" title={loadError}>
               {loadError}
             </span>
             <Button
@@ -2310,7 +2310,7 @@ export default function ServerConfig() {
       )}
 
       {duplicateKeys.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3 sm:items-center">
             <AlertTriangle className="w-5 h-5 text-warning" />
             <div>
@@ -2338,7 +2338,7 @@ export default function ServerConfig() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>{'Active server changed'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 break-words">
+            <span className="min-w-0 wrap-break-word">
               {
                 "The active server changed while this page was open. The settings below are still from the previous server -- reload before saving, or the save would overwrite the new active server's config."
               }
@@ -2819,7 +2819,7 @@ export default function ServerConfig() {
                 <div className="min-h-[400px]">
                   <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="relative min-w-0 flex-1 sm:max-w-md">
-                      <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Search className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         ref={iniSearchRef}
                         placeholder={'Search server settings…'}
@@ -2882,7 +2882,7 @@ export default function ServerConfig() {
                         if (settings.length === 0) return null
                         return (
                           <div key={category.id} className="mb-5">
-                            <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-baseline gap-2 bg-card/95 px-1 py-1.5 backdrop-blur">
+                            <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-baseline gap-2 bg-card/95 px-1 py-1.5 backdrop-blur-sm">
                               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 {getIniCategoryLabel(category)}
                               </span>
@@ -3043,7 +3043,7 @@ export default function ServerConfig() {
                                         </span>
                                       )}
                                       <span
-                                        className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                        className={`shrink-0 min-w-6 rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
                                           isActive
                                             ? 'text-primary/80'
                                             : 'bg-muted text-muted-foreground'
@@ -3082,7 +3082,7 @@ export default function ServerConfig() {
                                   {'Uncategorized / Unknown'}
                                 </span>
                                 <span
-                                  className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                  className={`shrink-0 min-w-6 rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
                                     isActive
                                       ? 'text-amber-500/80'
                                       : 'bg-muted text-muted-foreground'
@@ -3106,7 +3106,7 @@ export default function ServerConfig() {
                             }
                             return (
                               <div>
-                                <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
+                                <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur-sm">
                                   <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500">
                                     {'Uncategorized / Unknown Keys'}
                                   </h3>
@@ -3196,7 +3196,7 @@ export default function ServerConfig() {
                           }
                           return (
                             <div>
-                              <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-border/50 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
+                              <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-border/50 bg-card/95 px-1 pb-2 pt-1 backdrop-blur-sm">
                                 <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">
                                   {active ? getIniCategoryLabel(active) : null}
                                 </h3>
@@ -3367,7 +3367,7 @@ export default function ServerConfig() {
                 <div className="min-h-[400px]">
                   <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="relative min-w-0 flex-1 sm:max-w-md">
-                      <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Search className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         ref={sandboxSearchRef}
                         placeholder={'Search sandbox settings…'}
@@ -3431,7 +3431,7 @@ export default function ServerConfig() {
                         if (settings.length === 0) return null
                         return (
                           <div key={category.id} className="mb-5">
-                            <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-baseline gap-2 bg-card/95 px-1 py-1.5 backdrop-blur">
+                            <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-baseline gap-2 bg-card/95 px-1 py-1.5 backdrop-blur-sm">
                               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 {getSandboxCategoryLabel(category)}
                               </span>
@@ -3612,7 +3612,7 @@ export default function ServerConfig() {
                                         </span>
                                       )}
                                       <span
-                                        className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                        className={`shrink-0 min-w-6 rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
                                           isActive
                                             ? 'text-primary/80'
                                             : 'bg-muted text-muted-foreground'
@@ -3651,7 +3651,7 @@ export default function ServerConfig() {
                                   {'Additional Settings'}
                                 </span>
                                 <span
-                                  className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                  className={`shrink-0 min-w-6 rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
                                     isActive
                                       ? 'text-amber-500/80'
                                       : 'bg-muted text-muted-foreground'
@@ -3675,7 +3675,7 @@ export default function ServerConfig() {
                             }
                             return (
                               <div>
-                                <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
+                                <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur-sm">
                                   <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500">
                                     {'Additional Sandbox Settings'}
                                   </h3>
@@ -3848,7 +3848,7 @@ export default function ServerConfig() {
                           }
                           return (
                             <div>
-                              <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-border/50 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
+                              <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-border/50 bg-card/95 px-1 pb-2 pt-1 backdrop-blur-sm">
                                 <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">
                                   {active
                                     ? getSandboxCategoryLabel(active)
@@ -4324,7 +4324,7 @@ export default function ServerConfig() {
               {modSettings && modSettingsGroups.length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Search className="absolute inset-s-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       ref={modSettingsSearchRef}
                       placeholder={'Search mod settings…  (press /)'}
@@ -4455,7 +4455,7 @@ export default function ServerConfig() {
                       : 'Failed to load mod settings'}
                   </AlertTitle>
                   <AlertDescription className="flex items-center justify-between gap-3">
-                    <span className="break-words min-w-0">
+                    <span className="wrap-break-word min-w-0">
                       {modSettingsError}
                     </span>
                     <Button
@@ -4554,7 +4554,7 @@ export default function ServerConfig() {
                           aria-expanded={isExpanded}
                           className={`flex items-center gap-3 w-full py-2.5 px-4 rounded-lg transition-[background-color,border-color,box-shadow,color] duration-200 ${
                             isExpanded
-                              ? 'border border-primary/30 bg-primary/10 shadow-sm'
+                              ? 'border border-primary/30 bg-primary/10 shadow-xs'
                               : 'bg-muted/50 hover:bg-muted border border-transparent'
                           }`}
                         >
@@ -4970,7 +4970,7 @@ export default function ServerConfig() {
           <div
             role="status"
             aria-live="polite"
-            className="pointer-events-auto flex w-full max-w-3xl items-center gap-3 rounded-lg border border-warning/40 bg-card/95 px-4 py-2.5 shadow-lg shadow-black/30 backdrop-blur supports-[backdrop-filter]:bg-card/80 motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:fade-in"
+            className="pointer-events-auto flex w-full max-w-3xl items-center gap-3 rounded-lg border border-warning/40 bg-card/95 px-4 py-2.5 shadow-lg shadow-black/30 backdrop-blur-sm supports-backdrop-filter:bg-card/80 motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:fade-in"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-warning/15 text-warning">
               <AlertTriangle className="h-4 w-4" />

@@ -258,14 +258,14 @@ export default function Login() {
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <a
         href="#login-form"
-        className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
+        className="sr-only focus:not-sr-only focus:absolute focus:inset-s-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
       >
         {'Skip to form'}
       </a>
 
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,hsl(var(--primary)/0.10),transparent_34rem),linear-gradient(180deg,hsl(var(--background)),hsl(24_8%_4%))]"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_34rem),linear-gradient(180deg,var(--background),hsl(24_8%_4%))]"
       />
       <div
         aria-hidden="true"
@@ -296,7 +296,7 @@ export default function Login() {
 
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center justify-center px-5 pb-12 pt-4 sm:px-8">
         <section
-          className="w-full max-w-[420px] rounded-lg border border-border/70 bg-card/90 p-6 shadow-[0_24px_80px_-48px_hsl(var(--foreground)/0.45)] sm:p-7"
+          className="w-full max-w-[420px] rounded-lg border border-border/70 bg-card/90 p-6 shadow-[0_24px_80px_-48px_color-mix(in_srgb,var(--foreground)_45%,transparent)] sm:p-7"
           aria-labelledby="login-title"
         >
           <div className="mb-6 space-y-2">
@@ -385,7 +385,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 end-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    className="absolute inset-y-0 inset-e-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     title={showNewPassword ? 'Hide password' : 'Show password'}
                     aria-label={
                       showNewPassword ? 'Hide password' : 'Show password'
@@ -535,7 +535,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 end-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      className="absolute inset-y-0 inset-e-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                       title={showPassword ? 'Hide password' : 'Show password'}
                       aria-label={
                         showPassword ? 'Hide password' : 'Show password'
