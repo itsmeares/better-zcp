@@ -3,7 +3,7 @@ import { reportClientWarning } from "./client-errors";
 import { ApiError } from "./ApiError";
 export { ApiError } from "./ApiError";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
-import { toast } from "@/components/ui-legacy/use-toast";
+import { toastManager } from "@/components/ui/toast";
 import type { LifecycleState } from "./serverStatus";
 
 
@@ -385,11 +385,7 @@ function showBackupWarning(data: unknown): void {
       ? (data as { backupWarning?: unknown }).backupWarning
       : undefined;
   if (typeof backupWarning !== "string" || !backupWarning) return;
-  toast({
-    variant: "warning",
-    title: "Backup warning",
-    description: backupWarning,
-  });
+  toastManager.add({ type: "warning", title: "Backup warning", description: backupWarning });
 }
 
 function apiGet<T = any>(

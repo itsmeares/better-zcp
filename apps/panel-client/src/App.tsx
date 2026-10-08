@@ -12,7 +12,7 @@ import {
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { useAuth } from "./contexts/AuthContext";
 import { isDemoMode } from "./lib/demo";
-import { useToast } from "./components/ui-legacy/use-toast";
+import { toastManager } from "./components/ui/toast";
 import { PageLoading } from "./components/PageLoading";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/ui/alert";
 import { Button } from "./components/ui/button";
@@ -35,16 +35,11 @@ function AppContent({
     reconnectAttempt: 0,
     error: null,
   });
-  const { toast } = useToast();
   const { getToken } = useAuth();
 
   const handleReconnectSuccess = useCallback(() => {
-    toast({
-      title: "Reconnected",
-      description: "Connection to server restored",
-      variant: "success" as const,
-    });
-  }, [toast]);
+    toastManager.add({ title: "Reconnected", description: "The connection to the panel is back.", type: "success" });
+  }, []);
 
   useEffect(() => {
     if (demoMode) return;
@@ -134,11 +129,11 @@ function AppContent({
           reconnectAttempt: 0,
           error: "Failed to reconnect after multiple attempts",
         });
-        toast({
-          title: "Connection Lost",
-          description:
-            "Unable to reconnect automatically. Reconnecting once this tab is visible or your network is back — or use Retry in the connection status indicator.",
-          variant: "destructive",
+        toastManager.add({
+          title: "Connection lost",
+          description: "The panel stopped retrying. It tries again when this tab is visible or the network is back, or use Retry in the connection status.",
+          type: "error",
+          timeout: 15000,
         });
 
         disposeRecovery?.();
@@ -156,7 +151,6 @@ function AppContent({
       createdSocket?.close();
     };
   }, [
-    toast,
     handleReconnectSuccess,
     getToken,
     demoMode,

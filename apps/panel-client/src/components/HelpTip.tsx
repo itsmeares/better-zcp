@@ -1,10 +1,5 @@
-import { useState } from 'react'
 import { HelpCircle } from 'lucide-react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui-legacy/tooltip'
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
 interface HelpTipProps {
@@ -14,36 +9,21 @@ interface HelpTipProps {
   className?: string
 }
 
-export function HelpTip({
-  label,
-  children,
-  side = 'top',
-  className,
-}: HelpTipProps) {
-  const [open, setOpen] = useState(false)
-
+/** A small help icon. It opens on hover and on tap, so it works on phones too. */
+export function HelpTip({ label, children, side = 'top', className }: HelpTipProps) {
   return (
-    <Tooltip open={open} onOpenChange={setOpen}>
-      <TooltipTrigger
-        type="button"
-        onClick={(event) => {
-          event.preventDefault()
-          setOpen(true)
-        }}
-        aria-label={'Help: ' + String(label)}
-        className={cn(
-          'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-          className,
-        )}
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={200}
+        aria-label={`Help: ${label}`}
+        className={cn('inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
       >
-        <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-      </TooltipTrigger>
-      <TooltipContent
-        side={side}
-        className="max-w-xs text-start text-xs leading-relaxed"
-      >
+        <HelpCircle className="size-3.5" aria-hidden />
+      </PopoverTrigger>
+      <PopoverPopup tooltipStyle side={side} className="max-w-xs text-xs leading-relaxed">
         {children}
-      </TooltipContent>
-    </Tooltip>
+      </PopoverPopup>
+    </Popover>
   )
 }

@@ -258,10 +258,7 @@ async function runAuthSmoke(baseUrl, setupToken) {
       await waitForVisible(noRememberPage, '#login-form', 'login screen');
       await noRememberPage.locator('#username').fill(username);
       await noRememberPage.locator('#password').fill(password);
-      const rememberMe = noRememberPage.locator('#rememberMe');
-      if ((await rememberMe.getAttribute('aria-checked')) === 'true') {
-        await rememberMe.click();
-      }
+      await noRememberPage.getByRole('checkbox', { name: 'Keep me signed in' }).uncheck();
       await noRememberPage.getByRole('button', { name: 'Sign in' }).click();
       await waitForVisible(noRememberPage, APP_SHELL, 'dashboard after non-persistent login');
       await assertNoRefreshCookie(noRememberContext, baseUrl);

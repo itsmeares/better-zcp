@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -6,14 +5,15 @@ import {
   getUserErrorMessage,
 } from '../lib/errorMessage'
 import { ApiError } from '../lib/ApiError'
-import { Button } from '../components/ui-legacy/button'
-import { Input } from '../components/ui-legacy/input'
-import { Label } from '../components/ui-legacy/label'
-import { Checkbox } from '../components/ui-legacy/checkbox'
-import { panelHealthQueryOptions } from '../lib/panelHealth'
-import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
-
-type PanelStatus = 'checking' | 'online' | 'unreachable'
+import { ArrowLeft, KeyRound } from 'lucide-react'
+import { AuthScreenLayout } from '../components/AuthScreenLayout'
+import { PasswordInput } from '../components/PasswordInput'
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Spinner } from '../components/ui/spinner'
 
 const LOGIN_DEVICE_FAILURE_KEY = 'pz-login-failed-attempts'
 const DEVICE_HINT_THRESHOLD = 3
@@ -26,27 +26,11 @@ function readDeviceFailureCount(): number {
   }
 }
 
-function usePanelHealth() {
-  const { data, isPending, isError } = useQuery({
-    ...panelHealthQueryOptions(),
-    refetchInterval: 15000,
-  })
-  return {
-    status: (isPending
-      ? 'checking'
-      : isError
-        ? 'unreachable'
-        : 'online') as PanelStatus,
-    version: data?.version ?? null,
-  }
-}
-
 export default function Login() {
   const { login } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true)
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const errorId = error ? 'login-error' : undefined
@@ -60,14 +44,11 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
-  const [showNewPassword, setShowNewPassword] = useState(false)
   const [localResetSupported, setLocalResetSupported] = useState(false)
   const [showRecoveryHelp, setShowRecoveryHelp] = useState(false)
   const [checkingResetStatus, setCheckingResetStatus] = useState(false)
   const [creatingLocalReset, setCreatingLocalReset] = useState(false)
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const { status, version } = usePanelHealth()
 
   useEffect(() => {
     return () => {
@@ -236,460 +217,129 @@ export default function Login() {
     }
   }
 
-  const statusMap: Record<
-    PanelStatus,
-    { label: string; tone: string; dot: string }
-  > = {
-    checking: {
-      label: 'Checking',
-      tone: 'text-muted-foreground',
-      dot: 'bg-muted-foreground/60',
-    },
-    online: { label: 'Online', tone: 'text-success', dot: 'bg-success' },
-    unreachable: {
-      label: 'Offline',
-      tone: 'text-destructive',
-      dot: 'bg-destructive',
-    },
+  const busy = loading || checkingResetStatus || creatingLocalReset
+  const errorAlert = error && (
+    <Alert variant="error" id="login-error" aria-live="assertive">
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  )
+
+  if (resetMode) {
+    return (
+      <AuthScreenLayout title="Reset your password" description="Use the recovery token from the panel's computer to choose a new admin password.">
+        <form id="login-form" onSubmit={handleReset} className="grid gap-4">
+          {errorAlert}
+          {resetSuccess && (
+            <Alert variant="success" role="status" aria-live="polite">
+              <AlertDescription>{resetSuccess}</AlertDescription>
+            </Alert>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="resetToken">Recovery token</Label>
+            <Input id="resetToken" value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Paste the token" autoFocus disabled={loading} required minLength={8} maxLength={512} />
+            <p className="text-xs text-muted-foreground">It's in data/reset-token.txt on the panel's computer.</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="newPassword">New password</Label>
+            <PasswordInput id="newPassword" label="new password" value={newPassword} onChange={setNewPassword} placeholder="At least 6 characters" autoComplete="new-password" disabled={loading} required minLength={6} maxLength={128} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <PasswordInput id="confirmPassword" label="password confirmation" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" disabled={loading} required minLength={6} maxLength={128} />
+          </div>
+          <Button type="submit" disabled={loading}>
+            {loading && <Spinner />}
+            {loading ? 'Resetting…' : 'Reset password'}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setResetMode(false)
+              setError('')
+              setResetSuccess('')
+            }}
+          >
+            <ArrowLeft />
+            Back to sign in
+          </Button>
+        </form>
+      </AuthScreenLayout>
+    )
   }
-  const s = statusMap[status]
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <a
-        href="#login-form"
-        className="sr-only focus:not-sr-only focus:absolute focus:inset-s-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
-      >
-        {'Skip to form'}
-      </a>
-
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_34rem),linear-gradient(180deg,var(--background),hsl(24_8%_4%))]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/70"
-      />
-
-      <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 text-sm sm:px-8">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            {'Project Zomboid Control Panel'}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {'Admin access'}
-          </p>
+    <AuthScreenLayout title="Sign in" description="Use your admin account to manage your servers.">
+      <form id="login-form" onSubmit={handleSubmit} className="grid gap-4">
+        {errorAlert}
+        {deviceFailedAttempts >= DEVICE_HINT_THRESHOLD && (
+          <Alert role="status">
+            <AlertTitle>Still not working?</AlertTitle>
+            <AlertDescription>
+              After several failed attempts the admin account locks for 15 minutes, and this screen won't say so. Starting the panel with <code>--reset-password</code> from a terminal resets the password without waiting.
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="grid gap-2">
+          <Label htmlFor="username">Username</Label>
+          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" autoComplete="username" autoFocus maxLength={32} disabled={loading} aria-describedby={errorId} aria-invalid={error ? true : undefined} required />
         </div>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-            <span className={s.tone}>{s.label}</span>
-            {version && (
-              <span className="hidden text-muted-foreground/70 sm:inline">
-                v{version}
-              </span>
-            )}
-          </span>
+        <div className="grid gap-2">
+          <Label htmlFor="password">Password</Label>
+          <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" disabled={loading} aria-describedby={errorId} aria-invalid={error ? true : undefined} required maxLength={128} />
         </div>
-      </header>
-
-      <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center justify-center px-5 pb-12 pt-4 sm:px-8">
-        <section
-          className="w-full max-w-[420px] rounded-lg border border-border/70 bg-card/90 p-6 shadow-[0_24px_80px_-48px_color-mix(in_srgb,var(--foreground)_45%,transparent)] sm:p-7"
-          aria-labelledby="login-title"
-        >
-          <div className="mb-6 space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {resetMode ? 'Account recovery' : 'Secure sign in'}
-            </p>
-            <h1
-              id="login-title"
-              className="text-2xl font-semibold tracking-normal text-foreground"
-            >
-              {resetMode ? 'Reset your password' : 'Sign in'}
-            </h1>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {resetMode
-                ? 'Use the recovery token from the panel host to choose a new admin password.'
-                : 'Use your admin account to manage this server.'}
-            </p>
-          </div>
-
-          {resetMode ? (
-            <form id="login-form" onSubmit={handleReset} className="space-y-4">
-              {error && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {error}
-                </div>
-              )}
-              {resetSuccess && (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success"
-                >
-                  {resetSuccess}
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="resetToken"
-                  className="text-sm font-medium text-foreground"
-                >
-                  {'Recovery token'}
-                </Label>
-                <Input
-                  id="resetToken"
-                  type="text"
-                  value={resetToken}
-                  onChange={(e) => setResetToken(e.target.value)}
-                  placeholder="Paste token"
-                  autoFocus
-                  disabled={loading}
-                  required
-                  minLength={8}
-                  maxLength={512}
-                  className="text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {'Stored at data/reset-token.txt on the panel host.'}
+        <Label className="font-normal text-muted-foreground">
+          <Checkbox id="rememberMe" checked={rememberMe} onCheckedChange={(checked) => setRememberMe(checked === true)} />
+          Keep me signed in
+        </Label>
+        <Button type="submit" disabled={loading}>
+          {loading && <Spinner />}
+          {loading ? 'Signing in…' : 'Sign in'}
+        </Button>
+        <Button type="button" variant="ghost" onClick={handleLostPassword} disabled={busy}>
+          {creatingLocalReset ? <Spinner /> : <KeyRound />}
+          {creatingLocalReset ? 'Preparing recovery…' : resetAvailable ? 'Use recovery token' : localResetSupported ? 'Create recovery file' : 'Recover account'}
+        </Button>
+        {showRecoveryHelp && !resetAvailable && (
+          <Alert>
+            <AlertTitle>Account recovery</AlertTitle>
+            <AlertDescription className="grid gap-3">
+              {localResetSupported ? (
+                <p>This browser runs on the panel's computer. Create a recovery file, then use its token to reset the admin password.</p>
+              ) : (
+                <p>
+                  Create data/reset-token.txt on the panel's computer with any token of 8 characters or more. You can also start the panel with <code>--reset-password</code> from a terminal.
                 </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="newPassword"
-                  className="text-sm font-medium text-foreground"
-                >
-                  {'New password'}
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="newPassword"
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder={'Minimum 6 characters'}
-                    className="pe-10 text-sm"
-                    disabled={loading}
-                    required
-                    minLength={6}
-                    maxLength={128}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute inset-y-0 inset-e-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    title={showNewPassword ? 'Hide password' : 'Show password'}
-                    aria-label={
-                      showNewPassword ? 'Hide password' : 'Show password'
-                    }
-                    aria-pressed={showNewPassword}
-                  >
-                    {showNewPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="confirmPassword"
-                  className="text-sm font-medium text-foreground"
-                >
-                  {'Confirm password'}
-                </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder={'Repeat new password'}
-                  disabled={loading}
-                  required
-                  minLength={6}
-                  maxLength={128}
-                  className="text-sm"
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> {'Resetting…'}
-                  </>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {localResetSupported ? (
+                  <Button type="button" size="sm" variant="outline" onClick={() => void handleCreateLocalReset()} disabled={busy}>
+                    {creatingLocalReset && <Spinner />}
+                    {creatingLocalReset ? 'Preparing…' : 'Create file'}
+                  </Button>
                 ) : (
-                  'Reset password'
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setResetMode(false)
-                  setError('')
-                  setResetSuccess('')
-                }}
-              >
-                <ArrowLeft className="me-1.5 h-4 w-4" />
-                {'Back to sign in'}
-              </Button>
-            </form>
-          ) : (
-            <>
-              <form
-                id="login-form"
-                onSubmit={handleSubmit}
-                className="space-y-4"
-              >
-                {error && (
-                  <div
-                    id="login-error"
-                    role="alert"
-                    aria-live="assertive"
-                    className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                  >
-                    {error}
-                  </div>
-                )}
-
-                {deviceFailedAttempts >= DEVICE_HINT_THRESHOLD && (
-                  <div
-                    role="status"
-                    className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 text-xs leading-5 text-muted-foreground"
-                  >
-                    <p className="font-medium text-foreground">
-                      {'Still not working?'}
-                    </p>
-                    <p className="mt-1">
-                      <>
-                        {
-                          'After several failed attempts, the admin account locks automatically for 15 minutes as a security precaution -- this screen will not say so. Starting the panel with '
-                        }
-                        {'--reset-password'}
-                        {
-                          ' from the server terminal, can reset the password without waiting.'
-                        }
-                      </>
-                    </p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="username"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    {'Username'}
-                  </Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="admin"
-                    autoComplete="username"
-                    autoFocus
-                    maxLength={32}
-                    disabled={loading}
-                    aria-describedby={errorId}
-                    aria-invalid={error ? true : undefined}
-                    required
-                    className="text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="password"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    {'Password'}
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={'Password'}
-                      autoComplete="current-password"
-                      className="pe-10 text-sm"
-                      disabled={loading}
-                      aria-describedby={errorId}
-                      aria-invalid={error ? true : undefined}
-                      required
-                      maxLength={128}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 inset-e-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      title={showPassword ? 'Hide password' : 'Show password'}
-                      aria-label={
-                        showPassword ? 'Hide password' : 'Show password'
-                      }
-                      aria-pressed={showPassword}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-0.5">
-                  <Checkbox
-                    id="rememberMe"
-                    checked={rememberMe}
-                    onCheckedChange={(checked) =>
-                      setRememberMe(checked === true)
-                    }
-                  />
-                  <Label
-                    htmlFor="rememberMe"
-                    className="cursor-pointer text-sm font-normal text-muted-foreground"
-                  >
-                    {'Keep me signed in'}
-                  </Label>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />{' '}
-                        {'Signing in…'}
-                      </>
-                    ) : (
-                      'Sign in'
-                    )}
+                  <Button type="button" size="sm" variant="outline" onClick={handleRecoveryCheck} disabled={checkingResetStatus || loading}>
+                    {checkingResetStatus && <Spinner />}
+                    {checkingResetStatus ? 'Checking…' : 'Check token'}
                   </Button>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full text-muted-foreground hover:text-foreground"
-                    onClick={handleLostPassword}
-                    disabled={
-                      loading || checkingResetStatus || creatingLocalReset
-                    }
-                  >
-                    {creatingLocalReset ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <KeyRound className="h-4 w-4" />
-                    )}
-                    {creatingLocalReset
-                      ? 'Preparing recovery…'
-                      : resetAvailable
-                        ? 'Use recovery token'
-                        : localResetSupported
-                          ? 'Create recovery file'
-                          : 'Recover account'}
-                  </Button>
-                </div>
-
-                {showRecoveryHelp && !resetAvailable && (
-                  <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
-                    <p className="font-medium text-foreground">
-                      {'Account recovery'}
-                    </p>
-                    {localResetSupported ? (
-                      <p className="mt-2 leading-6">
-                        {
-                          'This browser is running on the panel host. Create a recovery file, then use its token to reset the admin password.'
-                        }
-                      </p>
-                    ) : (
-                      <>
-                        <p className="mt-2 leading-6">
-                          {
-                            'Create data/reset-token.txt on the panel host with any token at least 8 characters long.'
-                          }
-                        </p>
-                        <p className="mt-2 leading-6">
-                          <>
-                            {'You can also start the panel with '}
-                            {'--reset-password'}
-                            {' from the server terminal.'}
-                          </>
-                        </p>
-                      </>
-                    )}
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      {localResetSupported ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="sm:flex-1"
-                          onClick={() => void handleCreateLocalReset()}
-                          disabled={
-                            creatingLocalReset || checkingResetStatus || loading
-                          }
-                        >
-                          {creatingLocalReset ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />{' '}
-                              {'Preparing…'}
-                            </>
-                          ) : (
-                            'Create file'
-                          )}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="sm:flex-1"
-                          onClick={handleRecoveryCheck}
-                          disabled={checkingResetStatus || loading}
-                        >
-                          {checkingResetStatus ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />{' '}
-                              {'Checking…'}
-                            </>
-                          ) : (
-                            'Check token'
-                          )}
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="sm:flex-1"
-                        onClick={() => {
-                          setShowRecoveryHelp(false)
-                          setError('')
-                        }}
-                        disabled={
-                          creatingLocalReset || checkingResetStatus || loading
-                        }
-                      >
-                        {'Cancel'}
-                      </Button>
-                    </div>
-                  </div>
                 )}
-              </form>
-            </>
-          )}
-        </section>
-      </main>
-    </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowRecoveryHelp(false)
+                    setError('')
+                  }}
+                  disabled={busy}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+      </form>
+    </AuthScreenLayout>
   )
 }

@@ -1,10 +1,8 @@
 import { lazy, Suspense } from 'react'
-import { DirectionProvider } from '@radix-ui/react-direction'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthScreenLoader } from './components/AuthScreenLoader'
-import { TooltipProvider } from './components/ui-legacy/tooltip'
 import { ToastProvider } from './components/ui/toast'
 
 const App = lazy(() => import('./App'))
@@ -25,17 +23,13 @@ function AuthGate() {
 export default function AppShell() {
   return (
     <ErrorBoundary>
-      <DirectionProvider dir="ltr">
-        <ThemeProvider>
-          <TooltipProvider>
-            <ToastProvider>
-              <AuthProvider>
-                <AuthGate />
-              </AuthProvider>
-            </ToastProvider>
-          </TooltipProvider>
-        </ThemeProvider>
-      </DirectionProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

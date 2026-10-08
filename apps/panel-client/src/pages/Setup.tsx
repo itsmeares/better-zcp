@@ -1,26 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserErrorMessage } from '../lib/errorMessage'
-import { Button } from '../components/ui-legacy/button'
-import { Input } from '../components/ui-legacy/input'
-import { Label } from '../components/ui-legacy/label'
-import { Checkbox } from '../components/ui-legacy/checkbox'
+import { ArrowRight } from 'lucide-react'
+import { cn } from '../lib/utils'
 import { AuthScreenLayout } from '../components/AuthScreenLayout'
 import { HelpTip } from '../components/HelpTip'
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Loader2,
-  RadioTower,
-  Server,
-  ShieldCheck,
-  ShieldAlert,
-  XCircle,
-} from 'lucide-react'
+import { PasswordInput } from '../components/PasswordInput'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Spinner } from '../components/ui/spinner'
 
 type StrengthKey = 'tooShort' | 'weak' | 'fair' | 'good' | 'strong'
 
@@ -55,7 +46,6 @@ export default function Setup() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [panelPort, setPanelPort] = useState('3001')
-  const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -123,446 +113,95 @@ export default function Setup() {
     }
   }
 
+  const strengthLabel = strength.key && { tooShort: 'Too short', weak: 'Weak', fair: 'Fair', good: 'Good', strong: 'Strong' }[strength.key]
+  const strengthColor = { empty: 'bg-muted', weak: 'bg-destructive', fair: 'bg-warning', good: 'bg-primary', strong: 'bg-success' }[strength.tone]
+  const hint = (ok: boolean, text: string) => <p className={cn('text-xs', ok ? 'text-success-foreground' : 'text-muted-foreground')}>{text}</p>
+  const capsProps = { onKeyDown: detectCaps, onKeyUp: detectCaps, onBlur: () => setCapsLockOn(false) }
+
   return (
     <AuthScreenLayout
-      badge={'Initial Provisioning'}
-      title={'Zomboid Control Panel'}
-      description={
-        'Create the first admin account for this panel, then continue to the rest of setup.'
-      }
-      cardTitle={'Create Admin Account'}
-      cardDescription={
-        'This account unlocks the control panel and signs you in right away.'
-      }
-      footer={
-        <span className="inline-flex items-start gap-1.5 text-start">
-          <AlertTriangle
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning/80"
-            aria-hidden="true"
-          />
-          <span>
-            {
-              'Store this password safely. There is no email recovery — resetting it later requires filesystem access to this server.'
-            }
-          </span>
-        </span>
-      }
+      title="Create the admin account"
+      description="This account unlocks the panel and signs you in. Next you add your first server."
+      footer="Keep this password safe. There is no email recovery. Resetting it later needs access to the panel's files."
     >
-      <ol
-        className="-mt-1 mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground"
-        aria-label={'Setup progress'}
-      >
-        <li className="flex items-center gap-1.5">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-[10px] font-semibold text-primary">
-            1
-          </span>
-          <span className="text-foreground/80">{'Account'}</span>
-        </li>
-        <span aria-hidden="true" className="h-px w-6 bg-border/60" />
-        <li className="flex items-center gap-1.5 opacity-70">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">
-            2
-          </span>
-          <span>{'Server'}</span>
-        </li>
-        <span aria-hidden="true" className="h-px w-6 bg-border/60" />
-        <li className="flex items-center gap-1.5 opacity-50">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">
-            3
-          </span>
-          <span>{'Online'}</span>
-        </li>
-      </ol>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="grid gap-4">
         {error && (
-          <div
-            id="setup-error"
-            role="alert"
-            aria-live="assertive"
-            className="flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-3 py-2.5 text-sm text-destructive"
-          >
-            <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" id="setup-error" aria-live="assertive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
-
-        <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
-          <Label htmlFor="setupToken" className="flex items-center gap-1.5">
-            <ShieldAlert
-              className="h-3.5 w-3.5 text-primary"
-              aria-hidden="true"
-            />
-            {'Setup Token'}
-          </Label>
-          <Input
-            id="setupToken"
-            type="text"
-            value={setupToken}
-            onChange={(e) => setSetupToken(e.target.value)}
-            placeholder={'Paste the token from the startup log'}
-            autoComplete="off"
-            disabled={loading}
-            aria-describedby="setup-token-hint"
-            required
-          />
-          <p
-            id="setup-token-hint"
-            className="text-xs leading-5 text-muted-foreground"
-          >
-            {
-              "Printed to the panel's startup log or console output the first time it runs, to prove you're the one setting it up. Restart the panel to print it again if you've lost it."
-            }
+        <div className="grid gap-2">
+          <Label htmlFor="setupToken">Setup token</Label>
+          <Input id="setupToken" value={setupToken} onChange={(e) => setSetupToken(e.target.value)} placeholder="Paste the token from the startup log" autoComplete="off" disabled={loading} aria-describedby="setup-token-hint" required />
+          <p id="setup-token-hint" className="text-xs text-muted-foreground">
+            The panel prints it to its startup log the first time it runs, to prove you're the one setting it up. Restart the panel to print it again.
           </p>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="username">{'Username'}</Label>
-          <Input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder={'admin'}
-            autoComplete="username"
-            autoFocus
-            maxLength={32}
-            disabled={loading}
-            aria-describedby={[usernameHintId, errorId]
-              .filter(Boolean)
-              .join(' ')}
-            aria-invalid={Boolean(error && !usernameValid)}
-            required
-          />
-          <div
-            id={usernameHintId}
-            className="flex items-center gap-1.5 text-xs leading-5"
-          >
-            {username.length === 0 ? (
-              <span className="text-muted-foreground">
-                {
-                  'Use 3-32 characters: letters, numbers, underscores, or hyphens.'
-                }
-              </span>
-            ) : usernameValid ? (
-              <>
-                <CheckCircle
-                  className="h-3.5 w-3.5 text-primary"
-                  aria-hidden="true"
-                />
-                <span className="text-primary">{'Looks good.'}</span>
-              </>
-            ) : (
-              <>
-                <div
-                  className="h-3.5 w-3.5 rounded-full border border-destructive"
-                  aria-hidden="true"
-                />
-                <span className="text-destructive">
-                  {'3-32 chars; letters, numbers, _ or - only.'}
-                </span>
-              </>
-            )}
-          </div>
+        <div className="grid gap-2">
+          <Label htmlFor="username">Username</Label>
+          <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" autoComplete="username" autoFocus maxLength={32} disabled={loading} aria-describedby={[usernameHintId, errorId].filter(Boolean).join(' ')} aria-invalid={username.length > 0 && !usernameValid} required />
+          <div id={usernameHintId}>{hint(usernameValid, username.length > 0 && !usernameValid ? '3 to 32 letters, numbers, _ or -. Nothing else.' : '3 to 32 letters, numbers, underscores or hyphens.')}</div>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="panelPort">{'Panel Port'}</Label>
-          <Input
-            id="panelPort"
-            type="number"
-            value={panelPort}
-            onChange={(e) => setPanelPort(e.target.value)}
-            min="1024"
-            max="65535"
-            inputMode="numeric"
-            disabled={loading}
-            aria-invalid={Boolean(error && !panelPortValid)}
-            required
-          />
-          <p className="text-xs leading-5 text-muted-foreground">
-            {
-              'Port used to open the panel. Default: 3001. If it is busy, the panel will choose and save a free port automatically.'
-            }
-          </p>
+        <div className="grid gap-2">
+          <Label htmlFor="panelPort">Panel port</Label>
+          <Input id="panelPort" type="number" value={panelPort} onChange={(e) => setPanelPort(e.target.value)} min={1024} max={65535} inputMode="numeric" disabled={loading} aria-invalid={!panelPortValid} required />
+          <p className="text-xs text-muted-foreground">The port you open the panel on. If 3001 is busy, the panel picks a free one and saves it.</p>
         </div>
-
-        <div className="space-y-2">
+        <div className="grid gap-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">{'Password'}</Label>
+            <Label htmlFor="password">Password</Label>
             {capsLockOn && (
-              <span
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-warning"
-                role="status"
-              >
-                <KeyRound className="h-3 w-3" aria-hidden="true" />
-                {'Caps Lock is on'}
+              <span role="status" className="text-xs text-warning-foreground">
+                Caps Lock is on
               </span>
             )}
           </div>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={detectCaps}
-              onKeyUp={detectCaps}
-              onBlur={() => setCapsLockOn(false)}
-              placeholder="••••••••"
-              autoComplete="new-password"
-              disabled={loading}
-              aria-describedby={[passwordHintId, errorId]
-                .filter(Boolean)
-                .join(' ')}
-              aria-invalid={Boolean(error && !passwordLongEnough)}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              title={showPassword ? 'Hide password' : 'Show password'}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-
-          <div id={passwordHintId} className="space-y-1.5">
-            <div className="flex items-center gap-1" aria-hidden="true">
-              {[1, 2, 3, 4].map((i) => {
-                const filled = strength.score >= i
-                const tone = strength.tone
-                const cls = !filled
-                  ? 'bg-muted/40'
-                  : tone === 'weak'
-                    ? 'bg-destructive/70'
-                    : tone === 'fair'
-                      ? 'bg-warning/70'
-                      : tone === 'good'
-                        ? 'bg-primary/70'
-                        : 'bg-success/80'
-                return (
-                  <span
-                    key={i}
-                    className={`h-1 flex-1 rounded-full transition-colors duration-200 ${cls}`}
-                  />
-                )
-              })}
+          <PasswordInput id="password" value={password} onChange={setPassword} {...capsProps} autoComplete="new-password" disabled={loading} aria-describedby={[passwordHintId, errorId].filter(Boolean).join(' ')} aria-invalid={Boolean(error && !passwordLongEnough)} required maxLength={128} />
+          <div id={passwordHintId} className="grid gap-1.5">
+            <div className="grid grid-cols-4 gap-1" aria-hidden>
+              {[1, 2, 3, 4].map((step) => (
+                <span key={step} className={cn('h-1 rounded-full', strength.score >= step ? strengthColor : 'bg-muted')} />
+              ))}
             </div>
-            <div className="flex items-center justify-between text-xs leading-5">
-              <span className="flex items-center gap-1.5">
-                {passwordLongEnough ? (
-                  <CheckCircle
-                    className="h-3.5 w-3.5 text-primary"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <div
-                    className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30"
-                    aria-hidden="true"
-                  />
-                )}
-                <span
-                  className={
-                    passwordLongEnough
-                      ? 'text-primary'
-                      : 'text-muted-foreground'
-                  }
-                >
-                  {'Use at least 6 characters.'}
-                </span>
-              </span>
-              {strength.key && (
-                <span
-                  className={
-                    strength.tone === 'weak'
-                      ? 'text-destructive'
-                      : strength.tone === 'fair'
-                        ? 'text-warning'
-                        : strength.tone === 'good'
-                          ? 'text-primary'
-                          : 'text-success'
-                  }
-                  aria-live="polite"
-                >
-                  {(
-                    {
-                      tooShort: 'Too short',
-                      weak: 'Weak',
-                      fair: 'Fair',
-                      good: 'Good',
-                      strong: 'Strong',
-                    } as Record<string, string>
-                  )[String(strength.key)] ?? String(strength.key)}
+            <div className="flex justify-between">
+              {hint(passwordLongEnough, 'At least 6 characters.')}
+              {strengthLabel && (
+                <span className="text-xs text-muted-foreground" aria-live="polite">
+                  {strengthLabel}
                 </span>
               )}
             </div>
           </div>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">{'Confirm Password'}</Label>
-          <Input
-            id="confirmPassword"
-            type={showPassword ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            onKeyDown={detectCaps}
-            onKeyUp={detectCaps}
-            onBlur={() => setCapsLockOn(false)}
-            placeholder="••••••••"
-            autoComplete="new-password"
-            disabled={loading}
-            aria-describedby={[confirmHintId, errorId]
-              .filter(Boolean)
-              .join(' ')}
-            aria-invalid={Boolean(confirmPassword && !passwordsMatch)}
-            required
-          />
-          {confirmPassword && (
-            <div
-              id={confirmHintId}
-              className="flex items-center gap-1.5 text-xs leading-5"
-            >
-              {passwordsMatch ? (
-                <CheckCircle
-                  className="w-3.5 h-3.5 text-primary"
-                  aria-hidden="true"
-                />
+        <div className="grid gap-2">
+          <Label htmlFor="confirmPassword">Confirm password</Label>
+          <PasswordInput id="confirmPassword" label="password confirmation" value={confirmPassword} onChange={setConfirmPassword} {...capsProps} autoComplete="new-password" disabled={loading} aria-describedby={[confirmHintId, errorId].filter(Boolean).join(' ')} aria-invalid={Boolean(confirmPassword && !passwordsMatch)} required maxLength={128} />
+          <div id={confirmHintId}>
+            {confirmPassword ? (
+              passwordsMatch ? (
+                hint(true, 'The passwords match.')
               ) : (
-                <div
-                  className="h-3.5 w-3.5 rounded-full border border-destructive"
-                  aria-hidden="true"
-                />
-              )}
-              <span
-                className={passwordsMatch ? 'text-primary' : 'text-destructive'}
-              >
-                {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
-              </span>
-            </div>
-          )}
-          {!confirmPassword && (
-            <p
-              id={confirmHintId}
-              className="text-xs leading-5 text-muted-foreground"
-            >
-              {'Type the same password again to confirm it.'}
-            </p>
-          )}
+                <p className="text-xs text-destructive-foreground">The passwords don't match.</p>
+              )
+            ) : (
+              hint(false, 'Type the same password again.')
+            )}
+          </div>
         </div>
-
-        <div className="flex items-center space-x-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2.5">
-          <Checkbox
-            id="rememberMe"
-            checked={rememberMe}
-            onCheckedChange={(checked) => setRememberMe(checked === true)}
-          />
-          <Label
-            htmlFor="rememberMe"
-            className="flex cursor-pointer items-center gap-1.5 text-sm font-normal text-foreground/90"
-          >
-            {'Keep me signed in on this browser'}
+        <div className="flex items-center gap-2">
+          <Label className="font-normal">
+            <Checkbox id="rememberMe" checked={rememberMe} onCheckedChange={(checked) => setRememberMe(checked === true)} />
+            Keep me signed in on this browser
           </Label>
-          <HelpTip label={'Keep me signed in on this browser'}>
-            {
-              'Skips the login screen next time you open the panel in this browser. Leave this off on a shared or public computer — anyone who uses that browser afterward would be able to control this server without a password.'
-            }
+          <HelpTip label="Keep me signed in on this browser">
+            Skips the sign-in screen next time in this browser. Leave it off on a shared computer, or anyone who uses that browser later can control your servers without a password.
           </HelpTip>
         </div>
-
-        <Button
-          type="submit"
-          className="w-full onboarding-cta"
-          disabled={
-            loading ||
-            !setupToken.trim() ||
-            !usernameValid ||
-            !passwordLongEnough ||
-            !passwordsMatch ||
-            !panelPortValid
-          }
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {'Creating admin account...'}
-            </>
-          ) : (
-            <>
-              {'Create account & continue'}
-              <ArrowRight className="ms-1 h-4 w-4" aria-hidden="true" />
-            </>
-          )}
+        <Button type="submit" disabled={loading || !setupToken.trim() || !usernameValid || !passwordLongEnough || !passwordsMatch || !panelPortValid}>
+          {loading && <Spinner />}
+          {loading ? 'Creating the account…' : 'Create account & continue'}
+          {!loading && <ArrowRight />}
         </Button>
-
-        <div className="mission-brief rounded-xl border border-border/60 bg-muted/10 p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <ArrowRight className="h-4 w-4 text-primary" aria-hidden="true" />
-              {'After this step'}
-            </div>
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {'Preview'}
-            </span>
-          </div>
-          <div className="mission-step-grid mt-3 space-y-2">
-            <div className="mission-step-card flex items-start gap-3 rounded-lg border border-border/50 bg-background/35 px-3 py-2.5">
-              <div className="mission-step-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                <Server className="h-3.5 w-3.5" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">
-                  {'Bring a server into the panel'}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {
-                    'Add an existing install or run the guided setup to create one.'
-                  }
-                </p>
-              </div>
-            </div>
-
-            <div className="mission-step-card flex items-start gap-3 rounded-lg border border-border/50 bg-background/35 px-3 py-2.5">
-              <div className="mission-step-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">
-                  {'Confirm RCON and paths'}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {
-                    'The panel needs to authenticate against the server before it can do anything useful.'
-                  }
-                </p>
-              </div>
-            </div>
-
-            <div className="mission-step-card flex items-start gap-3 rounded-lg border border-border/50 bg-background/35 px-3 py-2.5">
-              <div className="mission-step-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">
-                  {'Take the dashboard live'}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {
-                    'Verify status, players, backups, and quick admin actions from one screen.'
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </form>
     </AuthScreenLayout>
   )

@@ -1,16 +1,10 @@
 import type { ComponentType } from 'react'
-import { FeatureErrorBoundary } from './components/FeatureErrorBoundary'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
-export function FeatureRoute({
-  featureName,
-  Component,
-}: {
-  featureName: string
-  Component: ComponentType
-}) {
+export function FeatureRoute({ featureName, Component }: { featureName: string; Component: ComponentType }) {
   return (
-    <FeatureErrorBoundary featureName={featureName}>
+    <ErrorBoundary featureName={featureName}>
       <Component />
-    </FeatureErrorBoundary>
+    </ErrorBoundary>
   )
 }
