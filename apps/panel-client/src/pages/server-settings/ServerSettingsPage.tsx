@@ -13,7 +13,7 @@ import { NumberInput } from '@/components/NumberInput'
 import { PageHeader } from '@/components/PageHeader'
 import { PasswordInput } from '@/components/PasswordInput'
 import { RconTestConnection } from '@/components/RconTestConnection'
-import { SettingsCard, SettingsRow } from '@/components/settings-layout'
+import { SaveBar, SettingsCard, SettingsRow } from '@/components/settings-layout'
 import { RemoveServerDialog } from '@/components/server/RemoveServerDialog'
 import { isCustomLauncherPath } from '@/components/server/SteamOperationDialog'
 import { WipeServerDialog } from '@/components/server/WipeServerDialog'
@@ -338,18 +338,7 @@ export default function ServerSettingsPage() {
       />
 
       {isDirty && (
-        <div role="status" className="fixed inset-x-0 bottom-4 z-20 flex justify-center px-4">
-          <div className="flex w-full max-w-lg items-center gap-3 rounded-xl border bg-popover py-2 ps-4 pe-2 shadow-lg">
-            <span className="flex-1 text-sm">Unsaved changes</span>
-            <Button variant="ghost" size="sm" onClick={() => setDraft(server)} disabled={saving}>
-              Discard
-            </Button>
-            <Button size="sm" onClick={() => void save()} disabled={saving}>
-              {saving && <Loader2 className="animate-spin" />}
-              Save
-            </Button>
-          </div>
-        </div>
+        <SaveBar message="Unsaved changes" saving={saving} onSave={() => void save()} onDiscard={() => setDraft(server)} />
       )}
     </div>
   )

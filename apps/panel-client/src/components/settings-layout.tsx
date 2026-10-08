@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 /** A titled group of settings rows. */
@@ -59,6 +61,43 @@ export function SettingsRow({
         {description && <div className="text-sm text-muted-foreground">{description}</div>}
       </div>
       <div className={cn('flex flex-wrap items-center gap-2', !stacked && 'sm:justify-end')}>{children}</div>
+    </div>
+  )
+}
+
+/** The floating bar that appears while a page has unsaved edits. */
+export function SaveBar({
+  message,
+  detail,
+  saving,
+  saveLabel = 'Save',
+  saveDisabled,
+  onSave,
+  onDiscard,
+}: {
+  message: ReactNode
+  detail?: ReactNode
+  saving: boolean
+  saveLabel?: string
+  saveDisabled?: boolean
+  onSave: () => void
+  onDiscard: () => void
+}) {
+  return (
+    <div role="status" className="fixed inset-x-0 bottom-4 z-20 flex justify-center px-4">
+      <div className="flex w-full max-w-lg items-center gap-3 rounded-xl border bg-popover py-2 ps-4 pe-2 shadow-lg">
+        <span className="grid flex-1 text-sm">
+          {message}
+          {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
+        </span>
+        <Button variant="ghost" size="sm" onClick={onDiscard} disabled={saving}>
+          Discard
+        </Button>
+        <Button size="sm" onClick={onSave} disabled={saving || saveDisabled}>
+          {saving && <Spinner />}
+          {saveLabel}
+        </Button>
+      </div>
     </div>
   )
 }

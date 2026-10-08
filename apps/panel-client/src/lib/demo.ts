@@ -764,11 +764,13 @@ export function installDemoFetchShim(): void {
     if (path === '/api/server-files/sandbox') {
       return jsonResponse({
         sandbox: {
+          VERSION: 4,
+          settings: { DayLength: 3, StartYear: 1, StartMonth: 7, StartDay: 9, StartTime: 2, WaterShut: 2, ElecShut: 2, Zombies: 4 },
           ZombieLore: { Speed: 2, Strength: 2 },
-          World: { WaterShut: 2, ElecShut: 2 },
-          StartYear: 1,
-          StartMonth: 7,
-          StartDay: 9,
+          ZombieConfig: {},
+          MultiplierConfig: {},
+          Map: {},
+          Basement: {},
         },
         path: '/home/pz/Zomboid/Server/DoomerZDemo_SandboxVars.lua',
       })

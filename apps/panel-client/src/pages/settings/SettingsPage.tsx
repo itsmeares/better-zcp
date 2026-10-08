@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { usePageShortcut } from '@/hooks/useKeyboardShortcuts'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
 import { PageLoading } from '@/components/PageLoading'
+import { SaveBar } from '@/components/settings-layout'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -170,20 +171,13 @@ export default function SettingsPage() {
       </div>
 
       {isDirty && (
-        <div role="status" className="fixed inset-x-0 bottom-4 z-20 flex justify-center px-4">
-          <div className="flex w-full max-w-lg items-center gap-3 rounded-xl border bg-popover py-2 ps-4 pe-2 shadow-lg">
-            <span className="flex-1 text-sm">
-              {state.changed.length === 1 ? '1 unsaved change' : `${state.changed.length} unsaved changes`}
-            </span>
-            <Button variant="ghost" size="sm" onClick={state.discard} disabled={saving}>
-              Discard
-            </Button>
-            <Button size="sm" onClick={() => void save()} disabled={saving || Boolean(corsError)}>
-              {saving && <Loader2 className="animate-spin" />}
-              Save
-            </Button>
-          </div>
-        </div>
+        <SaveBar
+          message={state.changed.length === 1 ? '1 unsaved change' : `${state.changed.length} unsaved changes`}
+          saving={saving}
+          saveDisabled={Boolean(corsError)}
+          onSave={() => void save()}
+          onDiscard={state.discard}
+        />
       )}
     </div>
   )

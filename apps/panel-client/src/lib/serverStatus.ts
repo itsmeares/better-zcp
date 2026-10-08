@@ -93,37 +93,6 @@ export function resolveServerCardRunning(
   return processStatus.running
 }
 
-export async function resolveServerRunning(
-  server: { dockerContainerName?: string | null } | null | undefined,
-  fetchNativeStatus: () => Promise<{ running?: boolean; scanFailed?: boolean }>,
-  fetchComposedStatus: () => Promise<ComposedStatusSignals>,
-): Promise<boolean | null> {
-  const provider = resolveClientProvider(server)
-  if (provider == null) return null
-  if (provider === 'native') {
-    try {
-      const status = await fetchNativeStatus()
-      if (status.scanFailed) return null
-      return Boolean(status.running)
-    } catch {
-      return null
-    }
-  }
-  try {
-    const composed = await fetchComposedStatus()
-    const hostRunning = composed.host.status === 'running'
-    const rconConnected = composed.server.status === 'connected'
-    const gameIntegrationActive = composed.gameIntegration.status === 'active'
-    const hostUnknown = ['unknown', 'not-applicable'].includes(
-      composed.host.status,
-    )
-    if (hostRunning || rconConnected || gameIntegrationActive) return true
-    return hostUnknown ? null : false
-  } catch {
-    return null
-  }
-}
-
 export interface ServerStatusEntry {
   id: string | number
   running: boolean
