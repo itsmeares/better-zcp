@@ -32,36 +32,15 @@ import type { ConflictScanResult, ScanStreamConflictFound } from '@/types'
 import { modsApi } from '@/lib/api'
 import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui-legacy/card'
-import { Button } from '@/components/ui-legacy/button'
-import { Badge } from '@/components/ui-legacy/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { FileDiffViewer } from '@/components/FileDiffViewer'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui-legacy/dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui-legacy/tooltip'
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DisabledReason } from '@/components/DisabledReason'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui-legacy/accordion'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { notify } from '@/pages/mods/modsShared'
 import {
   CONFLICT_FILE_LIMIT,
   useLocalStorageState,
@@ -80,7 +59,6 @@ export interface ConflictsPanelProps {
   scanModsScanned: number
   scanTotalMods: number
   streamConflicts: ScanStreamConflictFound[]
-  focusDependencies?: boolean
 
   fetchData: () => void | Promise<void>
   busyRef: MutableRefObject<boolean>
@@ -91,7 +69,6 @@ export interface ConflictsPanelProps {
     loserModId: string,
     loserName: string,
   ) => Promise<void>
-  toast: (opts: any) => void
 
   depSearchOpen: Set<string>
   setDepSearchOpen: Dispatch<SetStateAction<Set<string>>>
@@ -115,12 +92,10 @@ export function ConflictsPanel({
   scanModsScanned,
   scanTotalMods,
   streamConflicts,
-  focusDependencies,
   fetchData,
   busyRef,
   savingModOrder,
   promoteModOverOpponent,
-  toast,
   depSearchOpen,
   setDepSearchOpen,
   depSearchData,
@@ -158,11 +133,6 @@ export function ConflictsPanel({
     setGraphFilterMod(null)
     setOpenPairs([])
   }, [conflictsLoading])
-
-  useEffect(() => {
-    if (focusDependencies) setConflictSubTab('dependencies')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusDependencies])
 
   const severityCounts = useMemo(() => {
     if (!conflicts?.pairs?.length) return { all: 0, high: 0, medium: 0, low: 0 }
@@ -952,7 +922,7 @@ export function ConflictsPanel({
                         </div>
                         {dedupedDepCount > 0 && (
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger render={<span className="inline-flex" />}>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -988,7 +958,7 @@ export function ConflictsPanel({
 
                       <div className="flex items-center gap-4 border-s border-border/30 px-4 py-3 text-[11px] bg-background/30">
                         <Tooltip>
-                          <TooltipTrigger asChild>
+                          <TooltipTrigger render={<span className="inline-flex" />}>
                             <div className="text-center cursor-help">
                               <div className="tabular-nums font-semibold text-foreground/80 leading-none">
                                 {conflicts.modsScanned}
@@ -1025,7 +995,7 @@ export function ConflictsPanel({
                         </Tooltip>
                         {(conflicts.modsNotFound ?? 0) > 0 && (
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger render={<span className="inline-flex" />}>
                               <div className="text-center cursor-help">
                                 <div className="tabular-nums font-semibold text-muted-foreground leading-none">
                                   {conflicts.modsNotFound}
@@ -1047,7 +1017,7 @@ export function ConflictsPanel({
                         )}
                         {(conflicts.identicalSkipped ?? 0) > 0 && (
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger render={<span className="inline-flex" />}>
                               <div className="text-center cursor-help opacity-70">
                                 <div className="tabular-nums font-medium text-success/70 leading-none text-[11px]">
                                   {conflicts.identicalSkipped}
@@ -1071,7 +1041,7 @@ export function ConflictsPanel({
                           (conflicts.pzAdditiveSkipped ?? 0) >
                           0 && (
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger render={<span className="inline-flex" />}>
                               <div className="text-center cursor-help opacity-70">
                                 <div className="tabular-nums font-medium text-success/70 leading-none text-[11px]">
                                   {(conflicts.additiveSkipped ?? 0) +
@@ -1162,7 +1132,7 @@ export function ConflictsPanel({
                         )}
                         {(conflicts.warnings?.length ?? 0) > 0 && (
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger render={<span className="inline-flex" />}>
                               <div className="text-center cursor-help">
                                 <div className="tabular-nums font-semibold text-warning leading-none">
                                   {conflicts.warnings!.length}
@@ -1306,7 +1276,7 @@ export function ConflictsPanel({
                       {'Missing Dependencies'}
                       {dedupedDepCount > 0 && (
                         <Badge
-                          variant="destructive"
+                          variant="error"
                           className="text-[11px] h-4 px-1 ms-0.5"
                         >
                           {dedupedDepCount}
@@ -1622,9 +1592,8 @@ export function ConflictsPanel({
                                             </div>
                                           )}
                                         <Accordion
-                                          type="multiple"
                                           value={openPairs}
-                                          onValueChange={setOpenPairs}
+                                          onValueChange={(value) => setOpenPairs(value as string[])}
                                           className="space-y-1.5"
                                         >
                                           {__group.pairs.map(
@@ -1671,6 +1640,7 @@ export function ConflictsPanel({
                                                 <AccordionItem
                                                   key={pairKey}
                                                   value={pairKey}
+                                                  data-pair={pairKey}
                                                   className={`border rounded-lg px-0 overflow-hidden border-s-[3px] conflict-pair-enter ${
                                                     maxSeverity === 'high'
                                                       ? 'border-s-destructive/60 bg-destructive/2'
@@ -1682,7 +1652,7 @@ export function ConflictsPanel({
                                                     animationDelay: `${Math.min(pairIdx * 50, 400)}ms`,
                                                   }}
                                                 >
-                                                  <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/20 data-[state=open]:bg-muted/15 transition-colors">
+                                                  <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/20 data-panel-open:bg-muted/15 transition-colors">
                                                     <div className="flex min-w-0 flex-1 flex-col gap-2 text-start sm:flex-row sm:items-center sm:gap-3">
                                                       <div
                                                         className={`w-2 h-2 rounded-full shrink-0 ${
@@ -1883,9 +1853,7 @@ export function ConflictsPanel({
 
                                                               {tpWinsAll ? (
                                                                 <Tooltip>
-                                                                  <TooltipTrigger
-                                                                    asChild
-                                                                  >
+                                                                  <TooltipTrigger render={<span className="inline-flex" />}>
                                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border border-muted-foreground/20 text-muted-foreground cursor-help">
                                                                       {thirdPartyName
                                                                         ? String(
@@ -1921,9 +1889,7 @@ export function ConflictsPanel({
                                                                 pair.mediumCount >
                                                                   0 ? (
                                                                   <Tooltip>
-                                                                    <TooltipTrigger
-                                                                      asChild
-                                                                    >
+                                                                    <TooltipTrigger render={<span className="inline-flex" />}>
                                                                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border border-warning/30 bg-warning/10 text-warning cursor-help">
                                                                         <FileWarning
                                                                           className="w-3 h-3"
@@ -1959,9 +1925,7 @@ export function ConflictsPanel({
                                                                 tp > 0 ||
                                                                 uk > 0 ? (
                                                                 <Tooltip>
-                                                                  <TooltipTrigger
-                                                                    asChild
-                                                                  >
+                                                                  <TooltipTrigger render={<span className="inline-flex" />}>
                                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium border border-warning/30 bg-warning/10 text-warning cursor-help tabular-nums">
                                                                       {'mixed ' +
                                                                         String(
@@ -2048,7 +2012,7 @@ export function ConflictsPanel({
                                                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                                                         {pair.highCount > 0 && (
                                                           <Badge
-                                                            variant="destructive"
+                                                            variant="error"
                                                             className="text-[11px] leading-none h-[18px] px-1.5"
                                                           >
                                                             {String(
@@ -2444,19 +2408,9 @@ export function ConflictsPanel({
                             return next
                           })
                           fetchData()
-                          toast({
-                            title: 'Removed',
-                            description: 'Dependency unadded.',
-                          })
+                          notify('Removed', 'The dependency is out again.', 'success')
                         } catch (err) {
-                          toast({
-                            title: 'Undo failed',
-                            description: getUserErrorMessage(
-                              err,
-                              'Could not remove the mod',
-                            ),
-                            variant: 'destructive',
-                          })
+                          notify('Undo failed', getUserErrorMessage(err, "Couldn't remove the mod"), 'error')
                         } finally {
                           setDepAdding((prev) => prev.filter((k) => k !== key))
                           busyRef.current = false
@@ -2706,10 +2660,10 @@ export function ConflictsPanel({
                                             {'Added'}
                                           </span>
                                           <Tooltip>
-                                            <TooltipTrigger asChild>
+                                            <TooltipTrigger render={<span className="inline-flex" />}>
                                               <Button
                                                 variant="ghost"
-                                                size="iconDense"
+                                                size="icon-sm"
                                                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                                 onClick={() =>
                                                   row.depWorkshopId &&
@@ -3080,7 +3034,7 @@ export function ConflictsPanel({
           if (!open) setModDetailsId(null)
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto sm:max-h-[80vh]">
+        <DialogPopup className="sm:max-w-2xl">
           {(() => {
             if (!modDetailsId || !conflicts) return null
             const allPairs = conflicts.pairs ?? []
@@ -3147,7 +3101,7 @@ export function ConflictsPanel({
               setModDetailsId(null)
               setTimeout(() => {
                 const el = document.querySelector(
-                  `[data-state][value="${CSS.escape(key)}"]`,
+                  `[data-pair="${CSS.escape(key)}"]`,
                 ) as HTMLElement | null
                 el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }, 120)
@@ -3186,6 +3140,7 @@ export function ConflictsPanel({
                   </DialogDescription>
                 </DialogHeader>
 
+                <DialogPanel className="grid gap-3">
                 {topExts.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap pb-1 border-b border-border/30">
                     <span className="text-[11px] text-muted-foreground">
@@ -3325,8 +3280,9 @@ export function ConflictsPanel({
                     )
                   })}
                 </ul>
+                </DialogPanel>
 
-                <DialogFooter className="pt-2">
+                <DialogFooter>
                   <Button
                     variant="outline"
                     size="sm"
@@ -3338,7 +3294,7 @@ export function ConflictsPanel({
               </>
             )
           })()}
-        </DialogContent>
+        </DialogPopup>
       </Dialog>
     </div>
   )

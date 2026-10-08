@@ -807,11 +807,6 @@ export const modsApi = {
   getModInfo: (workshopId: string) =>
     apiPost("/mods/get-mod-info", { workshopId }),
 
-  writeToIni: (
-    mods: Array<{ workshopId: string; modId: string }>,
-    mapFolders?: string[],
-  ) => apiPost("/mods/write-to-ini", { mods, mapFolders }),
-
   getCurrentConfig: () => apiGet("/mods/current-config"),
 
   addToIni: (workshopId: string, modId?: string) =>

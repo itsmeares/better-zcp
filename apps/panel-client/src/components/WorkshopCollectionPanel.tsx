@@ -18,35 +18,12 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { Button } from '@/components/ui-legacy/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui-legacy/alert-dialog'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui-legacy/card'
-import { Checkbox } from '@/components/ui-legacy/checkbox'
-import { Input } from '@/components/ui-legacy/input'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui-legacy/dropdown-menu'
-import { useToast } from '@/components/ui-legacy/use-toast'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Menu, MenuGroup, MenuGroupLabel, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from '@/components/ui/menu'
+import { notify } from '@/pages/mods/modsShared'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { modsApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
@@ -81,14 +58,12 @@ function formatAgo(date: Date | null, locale?: string): string {
 }
 
 export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { toast } = useToast()
   const confirm = useConfirm()
   const [diff, setDiff] = useState<DiffResponse | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffCheckedAt, setDiffCheckedAt] = useState<Date | null>(null)
   const [bulkBusy, setBulkBusy] = useState<RowAction | null>(null)
-  const [purgeTarget, setPurgeTarget] = useState<DiffItem | null>(null)
   const [filter, setFilter] = useState<FilterKey>('missing')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -221,17 +196,10 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
         if (!items.find((item) => item.workshopId === workshopId)?.inTracked) {
           await modsApi.trackMod(workshopId)
         }
-        toast({
-          title: 'Added to server configuration',
-          description:
-            'Project Zomboid will download and load this mod on the next server restart.',
-        })
+        notify('Added to the server config', 'The server downloads and loads it on the next restart.', 'success')
       } else if (action === 'remove-server') {
         await modsApi.batchRemove([workshopId])
-        toast({
-          title: 'Removed from server configuration',
-          description: 'Steam collection was left unchanged.',
-        })
+        notify('Removed from the server config', 'The Steam collection is unchanged.', 'success')
       } else if (action === 'purge') {
         const item = items.find((it) => it.workshopId === workshopId)
         const r = await modsApi.purgeMod(workshopId, item?.name)
@@ -240,19 +208,11 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
           r.deletedFromDisk ? 'deleted from disk' : 'no files on disk',
           'untracked and ignored',
         ].filter(Boolean)
-        toast({
-          title: 'Removed ' + String(r.name || workshopId) + ' everywhere',
-          description:
-            String(done.join(', ')) + '. Restart the server to apply.',
-        })
+        notify(`Removed ${r.name || workshopId} everywhere`, `${done.join(', ')}. Restart the server to apply it.`, 'success')
       }
       await refresh()
     } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Action failed',
-        description: getUserErrorMessage(err, 'Steam rejected the change'),
-      })
+      notify('That didn’t work', getUserErrorMessage(err, 'Steam rejected the change'), 'error')
     } finally {
       setRowBusy((prev) => {
         const next = { ...prev }
@@ -272,10 +232,7 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
       return false
     })
     if (targets.length === 0) {
-      toast({
-        title: 'Nothing to do',
-        description: 'None of the selected rows need this action.',
-      })
+      notify('Nothing to do', 'None of the selected rows need this.')
       return
     }
     if (action === 'untrack') {
@@ -302,24 +259,9 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
       )
       try {
         await modsApi.batchRemove(targets.map((item) => item.workshopId))
-        toast({
-          title: 'Removed from server configuration',
-            description:
-              Number(targets.length) === 1
-                ? String(targets.length) +
-                  ' mod removed. Steam collection was left unchanged.'
-                : String(targets.length) +
-                  ' mods removed. Steam collection was left unchanged.',
-        })
+        notify('Removed from the server config', `${targets.length === 1 ? '1 mod' : `${targets.length} mods`} removed. The Steam collection is unchanged.`, 'success')
       } catch (err: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Server removal failed',
-          description: getUserErrorMessage(
-            err,
-            'Unable to update the server configuration.',
-          ),
-        })
+        notify("Couldn't remove from the server", getUserErrorMessage(err, "The server config wasn't changed."), 'error')
       } finally {
         setBulkBusy(null)
         setRowBusy({})
@@ -355,36 +297,14 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
     await refresh()
     clearSelection()
     if (errors.length === 0) {
-      toast({
-        title: 'Bulk action complete',
-        description:
-          Number(ok) === 1
-            ? String(ok) + ' mod updated.'
-            : String(ok) + ' mods updated.',
-      })
+      notify('Done', `${ok === 1 ? '1 mod' : `${ok} mods`} updated.`, 'success')
     } else {
-      const uniqueErrors = [...new Set(errors.map((e) => e.error))]
-      toast({
-        variant: 'destructive',
-        title:
-          Number(errors.length) === 1
-            ? 'Bulk action: ' + String(errors.length) + ' failure'
-            : 'Bulk action: ' + String(errors.length) + ' failures',
-        description:
-          uniqueErrors.length === 1
-            ? String(ok) +
-              ' succeeded, ' +
-              String(errors.length) +
-              ' failed — all with the same error: ' +
-              String(uniqueErrors[0])
-            : String(ok) +
-              ' succeeded, ' +
-              String(errors.length) +
-              ' failed with ' +
-              String(uniqueErrors.length) +
-              ' different errors. First: ' +
-              String(uniqueErrors[0]),
-      })
+      const unique = [...new Set(errors.map((entry) => entry.error))]
+      notify(
+        `${errors.length} failed`,
+        unique.length === 1 ? `${ok} worked, ${errors.length} failed with: ${unique[0]}` : `${ok} worked, ${errors.length} failed with ${unique.length} different errors. First: ${unique[0]}`,
+        'error',
+      )
     }
   }
 
@@ -771,13 +691,8 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
                   <tr className="text-start text-muted-foreground border-b border-border/50">
                     <th className="font-medium px-3 py-2 w-[36px]">
                       <Checkbox
-                        checked={
-                          allVisibleSelected
-                            ? true
-                            : someVisibleSelected
-                              ? 'indeterminate'
-                              : false
-                        }
+                        checked={allVisibleSelected}
+                        indeterminate={!allVisibleSelected && someVisibleSelected}
                         onCheckedChange={toggleSelectAllVisible}
                         aria-label={'Select all visible'}
                       />
@@ -801,7 +716,15 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
                       busy={rowBusy[it.workshopId] || null}
                       onAction={(action) => {
                         if (action === 'purge') {
-                          setPurgeTarget(it)
+                          confirm({
+                            title: `Remove ${it.name || it.workshopId} everywhere?`,
+                            description: "It comes out of these, then goes on the ignore list so a later scan can't bring it back. Restart the server to apply it.",
+                            items: ['the server config (WorkshopItems, Mods, Map)', 'the downloaded files on disk', "the panel's tracked list"],
+                            confirmLabel: 'Remove everywhere',
+                            destructive: true,
+                          }).then((ok) => {
+                            if (ok) runRowAction(it.workshopId, 'purge')
+                          })
                           return
                         }
                         if (action === 'untrack') {
@@ -850,58 +773,6 @@ export function WorkshopCollectionPanel({ onOpenSettings }: { onOpenSettings: ()
             </span>
           </div>
         </div>
-        <AlertDialog
-          open={!!purgeTarget}
-          onOpenChange={(open) => !open && setPurgeTarget(null)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {'Remove ' +
-                  String(purgeTarget?.name || purgeTarget?.workshopId) +
-                  ' everywhere?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-2">
-                  <p>{'This removes the mod from the server and panel data:'}</p>
-                  <ul className="list-disc ps-5 space-y-0.5">
-                    <li>
-                      <>
-                        {'the server config ('}
-                        <code>{'WorkshopItems'}</code>
-                        {', '}
-                        <code>{'Mods'}</code>
-                        {', '}
-                        <code>{'Map'}</code>
-                        {')'}
-                      </>
-                    </li>
-                    <li>{'the downloaded files on disk'}</li>
-                    <li>{"the panel's tracked list"}</li>
-                  </ul>
-                  <p>
-                    {
-                      "It is then added to the ignore list so a later scan can't quietly bring it back. Restart the server to apply."
-                    }
-                  </p>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => {
-                  const target = purgeTarget
-                  setPurgeTarget(null)
-                  if (target) runRowAction(target.workshopId, 'purge')
-                }}
-              >
-                {'Remove everywhere'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </CardContent>
     </Card>
   )
@@ -964,7 +835,6 @@ function Row({
   busy: RowAction | null
   onAction: (action: RowAction) => void
 }) {
-  const { toast } = useToast()
   const statusMeta =
     item.status === 'synced'
       ? {
@@ -1122,59 +992,33 @@ function Row({
               <span className="ms-1 hidden sm:inline">{'Track'}</span>
             </Button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                disabled={!!busy}
-                // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("More"), disables only transiently while an action is in flight. Triaged 2026-08-27.
-                title={'More'}
-              >
-                <span className="text-base leading-none">⋯</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
-                {item.workshopId}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a
-                  href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="cursor-pointer"
+          <Menu>
+            <MenuTrigger render={<Button size="icon-sm" variant="ghost" disabled={!!busy} aria-label={`More for ${item.name || item.workshopId}`} />}>
+              <span className="text-base leading-none">⋯</span>
+            </MenuTrigger>
+            <MenuPopup align="end" className="min-w-48">
+              <MenuGroup>
+                <MenuGroupLabel>{item.workshopId}</MenuGroupLabel>
+                <MenuItem render={<a href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`} target="_blank" rel="noreferrer" />}>
+                  <ExternalLink />
+                  Open on Steam
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    copyText(item.workshopId).then((ok) => (ok ? notify('Copied', item.workshopId) : notify('Copy failed', undefined, 'error')))
+                  }}
                 >
-                  <ExternalLink className="w-3.5 h-3.5 me-2" />
-                  {'Open on Steam'}
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  copyText(item.workshopId).then((ok) => {
-                    toast(
-                      ok
-                        ? { title: 'Copied', description: item.workshopId }
-                        : { title: 'Copy failed', variant: 'destructive' },
-                    )
-                  })
-                }}
-              >
-                <Library className="w-3.5 h-3.5 me-2" />
-                {'Copy workshop ID'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => onAction('purge')}
-              >
-                <Trash2 className="w-3.5 h-3.5 me-2" />
-                {'Remove everywhere'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Library />
+                  Copy the Workshop ID
+                </MenuItem>
+              </MenuGroup>
+              <MenuSeparator />
+              <MenuItem variant="destructive" onClick={() => onAction('purge')}>
+                <Trash2 />
+                Remove everywhere
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
         </div>
       </td>
     </tr>
