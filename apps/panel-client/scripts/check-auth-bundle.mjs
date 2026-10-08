@@ -17,7 +17,7 @@ for (const href of preloads) {
   const bytes = readFileSync(path.join('dist', assetPath.slice(assetIndex + 1)))
   rawBytes += bytes.length
   gzipBytes += gzipSync(bytes).length
-  if (/\b(?:charts|Dashboard|DebugPerformanceCharts|App)-/.test(href)) {
+  if (/\b(?:charts|PerformanceChart|OverviewPage|DiagnosticsPage|App)-/.test(href)) {
     throw new Error(`Authenticated feature preloaded before login: ${href}`)
   }
 }

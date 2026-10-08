@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { CircleAlert, Download, ExternalLink, FileText, History, Map, MapPin, MoreHorizontal, Puzzle, RefreshCw, Settings } from 'lucide-react'
-import { serverFilesApi, type SandboxData } from '@/lib/api'
+import { saveBlob, serverFilesApi, type SandboxData } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { parseNumericSettingValue, SANDBOX_SCHEMA } from '@/lib/serverConfigSchema'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -224,12 +224,7 @@ export default function ConfigPage() {
   const download = async (target: ConfigFile) => {
     try {
       const data = await serverFilesApi.getRaw(target)
-      const url = URL.createObjectURL(new Blob([data.content], { type: 'text/plain' }))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${data.filename}_${new Date().toISOString().replace(/[:.]/g, '-')}.bak`
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(new Blob([data.content], { type: 'text/plain' }), `${data.filename}_${new Date().toISOString().replace(/[:.]/g, '-')}.bak`)
     } catch (error) {
       toastManager.add({ title: 'Download failed', description: getUserErrorMessage(error, 'Try again.'), type: 'error' })
     }

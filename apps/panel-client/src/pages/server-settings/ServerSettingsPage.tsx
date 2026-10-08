@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Download, Loader2, Trash2, Unplug } from 'lucide-react'
-import { serversApi, type ServerInstance } from '@/lib/api'
+import { saveBlob, serversApi, type ServerInstance } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { panelQueryKeys } from '@/lib/queryClient'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -59,12 +59,7 @@ function LifecycleProvider({ server, onActivated }: { server: ServerInstance; on
     setBusy(true)
     try {
       const template = await serversApi.getLifecycleTemplate(server.id, provider)
-      const url = URL.createObjectURL(new Blob([template.content], { type: 'text/plain;charset=utf-8' }))
-      const anchor = Object.assign(document.createElement('a'), { href: url, download: template.filename })
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      URL.revokeObjectURL(url)
+      saveBlob(new Blob([template.content], { type: 'text/plain;charset=utf-8' }), template.filename)
       toastManager.add({ title: 'Service file generated', description: `Review it, then install it at ${template.installPath} as an administrator.` })
     } catch (error) {
       toastManager.add({ title: "Couldn't generate the service file", description: getUserErrorMessage(error, 'Try again.'), type: 'error' })

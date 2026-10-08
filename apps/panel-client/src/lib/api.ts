@@ -1874,25 +1874,122 @@ export const backupApi = {
     throw new Error(payload?.error || `Upload failed (HTTP ${status})`);
   },
 
-  downloadBackup: async (name: string): Promise<void> => {
-    const response = await fetchWithRetry(
-      apiUrl(`/backup/download/${encodeURIComponent(name)}`),
-    );
-    if (!response.ok) {
-      const payload = await parseResponseBody(response);
-      throw buildResponseError(response, payload);
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  },
+  downloadBackup: (name: string): Promise<void> =>
+    downloadFile(`/backup/download/${encodeURIComponent(name)}`, name),
 };
+
+/** Fetches a file from the panel and hands it to the browser as a download. */
+export async function downloadFile(endpoint: string, filename: string): Promise<void> {
+  const response = await fetchWithRetry(apiUrl(endpoint));
+  if (!response.ok) {
+    throw buildResponseError(response, await parseResponseBody(response));
+  }
+  saveBlob(await response.blob(), filename);
+}
+
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Some browsers start the download after the click returns.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export type DiagnosticStatus = "ok" | "warn" | "fail" | "info" | "skip";
+
+export interface DiagnosticCheck {
+  id: string;
+  label: string;
+  status: DiagnosticStatus;
+  message: string;
+  hint?: string;
+  category: string;
+}
+
+export interface DiagnosticSummary {
+  ok: number;
+  warn: number;
+  fail: number;
+  info: number;
+  skip: number;
+}
+
+export interface DiagnosticsReport {
+  timestamp: string;
+  overall: "ok" | "warn" | "fail";
+  summary: DiagnosticSummary;
+  categories: Record<string, { label: string; order: number }>;
+  checks: DiagnosticCheck[];
+  durationMs: number;
+}
+
+export interface MapDiagnostics {
+  timestamp: string;
+  overall: "ok" | "warn" | "fail";
+  summary: DiagnosticSummary;
+  checks: DiagnosticCheck[];
+  durationMs: number;
+  map: {
+    available: boolean;
+    folders: Array<{ id: number; name: string; source: "vanilla" | "workshop"; image: object | null }>;
+    floors: { min: number; max: number };
+    warnings: string[];
+  } | null;
+  save: {
+    zomboidDataPath: string | null;
+    activeSaveName: string | null;
+    activeSavePath: string | null;
+    saveCount: number;
+    build: "b42" | "unknown";
+  };
+}
+
+export interface PanelHealth {
+  status: "ok" | "error";
+  timestamp: string;
+  services: {
+    rcon: { connected: boolean; host: string };
+    server: { running: boolean | null; scanFailed?: boolean };
+    modChecker: { running: boolean; interval: number };
+  };
+  memory: { heapUsed: number; heapTotal: number; heapLimit?: number; rss: number };
+  uptime: number;
+}
+
+export interface PanelSystem {
+  nodeVersion: string;
+  platform: string;
+  dbPath: string;
+  logsPath: string;
+}
+
+export interface PanelLogEntry {
+  level: "info" | "warn" | "error" | "debug";
+  message: string;
+  timestamp: string;
+  source?: string;
+}
+
+export interface PanelFile {
+  name: string;
+  size: number;
+  modified: string;
+}
+
+export type ActivitySource = "rcon" | "player" | "server";
+
+export interface ActivityEntry {
+  id: string | number;
+  source: ActivitySource;
+  action: string;
+  detail: string;
+  success: boolean;
+  timestamp: string;
+}
 
 export const debugApi = {
   getRam: (): Promise<{
@@ -1918,6 +2015,18 @@ export const debugApi = {
       hostSwapTotal?: number | null;
     }>;
   }> => apiRoute("GET", "/debug/performance-history", { limit }),
+  getDiagnostics: (): Promise<DiagnosticsReport> => apiRoute("GET", "/debug/diagnostics"),
+  getMapDiagnostics: (): Promise<MapDiagnostics> => apiRoute("GET", "/debug/worldmap"),
+  getHealth: (): Promise<PanelHealth> => apiRoute("GET", "/debug/health"),
+  getSystem: (): Promise<PanelSystem> => apiRoute("GET", "/debug/system"),
+  getLogs: (): Promise<{ logs: PanelLogEntry[] }> => apiRoute("GET", "/debug/logs"),
+  getLogFiles: (): Promise<{ files: PanelFile[] }> => apiRoute("GET", "/debug/logs/files"),
+  getCrashLogs: (): Promise<{ crashLogs: PanelFile[]; totalCount: number }> =>
+    apiRoute("GET", "/debug/crash-logs"),
+  getCrashLog: (filename: string): Promise<{ content: string | null; truncated?: boolean }> =>
+    apiRoute("GET", "/debug/crash-logs/:filename", { filename }),
+  getActivity: (source: ActivitySource | "all"): Promise<{ entries: ActivityEntry[] }> =>
+    apiRoute("GET", "/debug/activity", { limit: 200, source }),
 };
 
 export const authApi = {

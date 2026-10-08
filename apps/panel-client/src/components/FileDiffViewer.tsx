@@ -10,6 +10,7 @@ import {
 import { getAccessToken } from '@/lib/authToken'
 import { ApiError } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
+import { formatBytes } from '@/lib/utils'
 
 interface DiffLine {
   type: 'context' | 'add' | 'remove'
@@ -76,11 +77,6 @@ interface FileDiffViewerProps {
   } | null
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function overlapKindLabel(
   kind:
@@ -540,7 +536,7 @@ function ImageDiffView({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground truncate">
-            {modAName} ({formatSize(diff.modA.size)})
+            {modAName} ({formatBytes(diff.modA.size)})
           </p>
           {diff.modA.base64 ? (
             <img
@@ -560,7 +556,7 @@ function ImageDiffView({
         </div>
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground truncate">
-            {modBName} ({formatSize(diff.modB.size)})
+            {modBName} ({formatBytes(diff.modB.size)})
           </p>
           {diff.modB.base64 ? (
             <img
@@ -604,14 +600,14 @@ function BinaryDiffView({
         <div>
           <p className="font-medium text-foreground/80">{modAName}</p>
           <p>
-            {formatSize(diff.modA.size)}
+            {formatBytes(diff.modA.size)}
             {diff.modA.hash && ` · ${diff.modA.hash.slice(0, 8)}…`}
           </p>
         </div>
         <div>
           <p className="font-medium text-foreground/80">{modBName}</p>
           <p>
-            {formatSize(diff.modB.size)}
+            {formatBytes(diff.modB.size)}
             {diff.modB.hash && ` · ${diff.modB.hash.slice(0, 8)}…`}
           </p>
         </div>

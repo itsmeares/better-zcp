@@ -20,13 +20,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardFooter, CardHeader, CardPanel } from '@/components/ui/card'
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip'
 import { toastManager } from '@/components/ui/toast'
+import { formatBytes } from '@/lib/utils'
 
-function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
-}
 
 export function resolveDockerCardHostStatus(dockerAvailable: boolean, container: { state: string } | undefined): 'running' | 'stopped' | 'unknown' {
   if (!dockerAvailable || !container) return 'unknown'

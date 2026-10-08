@@ -531,6 +531,88 @@ function demoPlayerStats() {
   ]
 }
 
+function demoDiagnostics(path: string) {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  const summary = (checks: Array<{ status: string }>) => ({
+    ok: checks.filter((c) => c.status === 'ok').length,
+    warn: checks.filter((c) => c.status === 'warn').length,
+    fail: checks.filter((c) => c.status === 'fail').length,
+    info: checks.filter((c) => c.status === 'info').length,
+    skip: checks.filter((c) => c.status === 'skip').length,
+  })
+  if (path === '/api/debug/diagnostics') {
+    const checks = [
+      { id: 'rcon', category: 'services', status: 'ok', label: 'RCON', message: 'Connected to 127.0.0.1:27015.' },
+      { id: 'integration', category: 'services', status: 'ok', label: 'Game integration', message: 'Argus 1.4.0 answered in 38 ms.' },
+      { id: 'install', category: 'paths', status: 'ok', label: 'Install folder', message: '/opt/pz found, Build 42.12.' },
+      { id: 'zomboid', category: 'paths', status: 'ok', label: 'Zomboid data folder', message: '/home/pz/Zomboid is writable.' },
+      { id: 'disk', category: 'storage', status: 'warn', label: 'Free disk space', message: '9.8 GB free on /home, 88% used.', hint: 'Delete old backups or move them to another disk.' },
+      { id: 'backups', category: 'storage', status: 'ok', label: 'Backups', message: 'Last backup 2 hours ago.' },
+      { id: 'steamcmd', category: 'updates', status: 'skip', label: 'SteamCMD', message: 'Not needed for this server.' },
+      { id: 'mods', category: 'updates', status: 'info', label: 'Workshop updates', message: '2 mods have updates.' },
+    ]
+    return {
+      timestamp: at(0), overall: 'warn', durationMs: 214, summary: summary(checks), checks,
+      categories: { services: { label: 'Services', order: 1 }, paths: { label: 'Paths', order: 2 }, storage: { label: 'Storage', order: 3 }, updates: { label: 'Updates', order: 4 } },
+    }
+  }
+  if (path === '/api/debug/worldmap') {
+    const checks = [
+      { id: 'tiles', category: 'map', status: 'ok', label: 'Map image', message: 'Muldraugh, KY has a map image.' },
+      { id: 'positions', category: 'map', status: 'ok', label: 'Player positions', message: 'The game integration reports positions.' },
+    ]
+    return {
+      timestamp: at(0), overall: 'ok', durationMs: 61, summary: summary(checks), checks,
+      map: { available: true, folders: [{ id: 1, name: 'Muldraugh, KY', source: 'vanilla', image: {} }], floors: { min: -1, max: 7 }, warnings: [] },
+      save: { zomboidDataPath: '/home/pz/Zomboid', activeSaveName: 'DoomerZDemo', activeSavePath: '/home/pz/Zomboid/Saves/Multiplayer/DoomerZDemo', saveCount: 1, build: 'b42' },
+    }
+  }
+  if (path === '/api/debug/health') {
+    return {
+      status: 'ok', timestamp: at(0), uptime: DEMO_UPTIME_SECONDS,
+      services: { rcon: { connected: true, host: '127.0.0.1' }, server: { running: true, scanFailed: false }, modChecker: { running: true, interval: 1_800_000 } },
+      memory: { heapUsed: 96_000_000, heapTotal: 128_000_000, heapLimit: 4_345_000_000, rss: 210_000_000 },
+    }
+  }
+  if (path === '/api/debug/system') {
+    return { nodeVersion: 'v24.4.0', platform: 'linux', dbPath: '.../data/panel.db', logsPath: '.../data/logs' }
+  }
+  if (path === '/api/debug/logs') {
+    return {
+      logs: [
+        { level: 'info', source: 'server', message: 'Server started.', timestamp: at(190) },
+        { level: 'info', source: 'rcon', message: 'Connected to 127.0.0.1:27015.', timestamp: at(189) },
+        { level: 'warn', source: 'mods', message: 'Workshop item 2392709985 has an update.', timestamp: at(60) },
+        { level: 'debug', source: 'scheduler', message: 'Next run: Daily restart at 04:00.', timestamp: at(30) },
+        { level: 'error', source: 'backup', message: 'Backup took 41 s, longer than the 30 s warning limit.', timestamp: at(12) },
+        { level: 'info', source: 'players', message: 'Marisol joined.', timestamp: at(4) },
+      ],
+    }
+  }
+  if (path === '/api/debug/logs/files') {
+    return { files: [{ name: 'panel.log', size: 412_000, modified: at(1) }, { name: 'panel.1.log', size: 1_048_576, modified: at(1440) }] }
+  }
+  if (path === '/api/debug/crash-logs') {
+    return { crashLogs: [{ name: 'hs_err_pid48211.log', size: 88_000, modified: at(300) }, { name: 'hs_err_pid30117.log', size: 91_000, modified: at(4000) }], totalCount: 2 }
+  }
+  if (path.startsWith('/api/debug/crash-logs/')) {
+    return { content: '#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n#  SIGSEGV (0xb) at pc=0x00007f3c, pid=48211\n#\n# JRE version: OpenJDK Runtime Environment (17.0.6)\n', truncated: false }
+  }
+  if (path === '/api/debug/activity') {
+    return {
+      entries: [
+        { id: 1, source: 'rcon', action: 'servermsg "Restart in 15 minutes"', detail: '', success: true, timestamp: at(3) },
+        { id: 8, source: 'player', action: 'connect', detail: 'Marisol', success: true, timestamp: at(4) },
+        { id: 2, source: 'rcon', action: 'kickuser GrieferJoe', detail: 'User not found', success: false, timestamp: at(20) },
+        { id: 3, source: 'server', action: 'backup', detail: 'Backup finished in 41 s.', success: true, timestamp: at(12) },
+        { id: 7, source: 'player', action: 'death', detail: 'Baldspot', success: true, timestamp: at(19) },
+        { id: 4, source: 'server', action: 'start', detail: 'Server started.', success: true, timestamp: at(190) },
+      ].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    }
+  }
+  return null
+}
+
 function queryParam(input: RequestInfo | URL, name: string): string | null {
   const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
   try {
@@ -658,6 +740,10 @@ export function installDemoFetchShim(): void {
     }
     if (path === '/api/players/activity') {
       return jsonResponse({ logs: demoActivity() })
+    }
+    if (path.startsWith('/api/debug/') && path !== '/api/debug/performance-history') {
+      const payload = demoDiagnostics(path)
+      if (payload) return jsonResponse(payload)
     }
     if (path === '/api/debug/performance-history') {
       const limit = Math.min(1440, Math.max(1, Number(queryParam(input, 'limit')) || 60))

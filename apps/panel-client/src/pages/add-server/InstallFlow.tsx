@@ -14,6 +14,7 @@ import { Progress, ProgressIndicator, ProgressTrack } from '@/components/ui/prog
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toastManager } from '@/components/ui/toast'
 import { PathInput, registerServer, ReviewList, ServerSettingsFields, SetupComplete, SetupLog, useNewServerForm, Wizard, type SetupLogLine } from './shared'
+import { formatBytes } from '@/lib/utils'
 
 const LINUX_SERVICE_INSTALL_PATH = '/opt/zomboid-panel/data/pzserver'
 export const INSTALL_INFLIGHT_KEY = 'zcp-install-inflight'
@@ -61,11 +62,6 @@ export function installationErrorGuidance(rawMessage: string, displayMessage: st
   return `${rawMessage} On Linux, use ${LINUX_SERVICE_INSTALL_PATH}, or add both your install folder and its _Data folder to ReadWritePaths in zomboid-panel.service, then restart the service.`
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / 1024 ** i).toFixed(1)} ${['B', 'KB', 'MB', 'GB', 'TB'][i]}`
-}
 
 type Progress = { percent: number; detail: string; status: string }
 

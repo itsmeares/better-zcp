@@ -5,7 +5,7 @@ import { AlertTriangle, Archive, Download, FileText, Loader2, MoreHorizontal, Re
 import { backupApi, serversApi, type BackupSnapshot, type ServerBackupArchive } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { panelQueryKeys } from '@/lib/queryClient'
-import { cn } from '@/lib/utils'
+import { cn, formatBytes } from '@/lib/utils'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm, type ConfirmOptions } from '@/contexts/ConfirmContext'
 import { EmptyState } from '@/components/EmptyState'
@@ -54,12 +54,6 @@ const SCHEDULES: Record<string, string> = {
 }
 export const describeBackupSchedule = (cron: string | undefined) => (cron ? SCHEDULES[cron] || cron : 'not scheduled')
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-}
 
 const formatDate = (value: string) => new Date(value).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })
 

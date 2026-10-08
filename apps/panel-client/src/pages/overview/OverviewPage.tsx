@@ -505,7 +505,7 @@ export default function OverviewPage() {
           <CardTitle className="text-base">Recent activity</CardTitle>
           <CardDescription>Joins, departures, deaths and moderation.</CardDescription>
           <CardAction>
-            <Button size="sm" variant="ghost" render={<Link to="/diagnostics" />}>
+            <Button size="sm" variant="ghost" render={<Link to="/diagnostics" search={{ tab: 'activity' }} />}>
               Open log
             </Button>
           </CardAction>
