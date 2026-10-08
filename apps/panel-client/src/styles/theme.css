@@ -12,13 +12,26 @@
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* The map tiles are dark in both themes, so the canvas behind them is too. */
+  --color-map: #14130f;
+
   /* Used by coss Skeleton, OTP field and Toast. */
   --animate-skeleton: skeleton 2s -1s infinite linear;
+  --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;
   --animate-caret-blink: 1s ease-out infinite caret-blink;
   --animate-toast-success-odd: toast-success-odd 0.32s cubic-bezier(0.5, 1, 0.89, 1);
   --animate-toast-success-even: toast-success-even 0.32s cubic-bezier(0.5, 1, 0.89, 1);
   --animate-toast-error-odd: toast-error-odd 0.28s cubic-bezier(0.5, 1, 0.89, 1);
   --animate-toast-error-even: toast-error-even 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+
+  @keyframes progress-indeterminate {
+    from {
+      translate: -100% 0;
+    }
+    to {
+      translate: 250% 0;
+    }
+  }
 
   @keyframes skeleton {
     to {

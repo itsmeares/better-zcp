@@ -452,7 +452,7 @@ function apiRoute<T = any>(
   }).then((response) => handleResponse<T>(response));
 }
 
-export interface SteamBranch {
+interface SteamBranch {
   name: string;
   description: string;
   buildId?: string | null;
@@ -470,12 +470,7 @@ export const serverApi = {
   forceStop: () => apiRoute("POST", "/server/force-stop"),
   restart: (warningMinutes?: number) =>
     apiRoute("POST", "/server/restart", { warningMinutes }),
-  restartNow: () =>
-    apiRoute("POST", "/server/restart", { warningMinutes: 0 }),
   save: () => apiRoute("POST", "/server/save"),
-  sendMessage: (message: string) =>
-    apiRoute("POST", "/server/message", { message }),
-
   wipePreview: (targets: string[]) =>
     apiPost("/server/wipe/preview", { targets }),
   wipe: (targets: string[], createBackup: boolean = true) =>
@@ -513,17 +508,8 @@ export const serverApi = {
   quickSetup: (config: Record<string, unknown>) =>
     apiPost("/server/quick-setup", config),
 
-  configureRcon: (config: { rconPassword: string; rconPort?: number }) =>
-    apiPost("/server/configure-rcon", config),
-
-  configureNetwork: (config: { serverPort?: number; useUpnp?: boolean }) =>
-    apiPost("/server/configure-network", config),
-
   downloadSteamCmd: (installPath?: string) =>
     apiPost("/server/steamcmd/download", { installPath }),
-  checkSteamCmd: (path: string) =>
-    apiGet(`/server/steamcmd/check?path=${encodeURIComponent(path)}`),
-
   listDirectory: (dirPath?: string) =>
     apiPost("/server/list-directory", { dirPath }) as Promise<{
       entries: Array<{
@@ -535,15 +521,6 @@ export const serverApi = {
       currentPath: string | null;
       parentPath: string | null;
     }>,
-
-  reloadLua: (filename: string) =>
-    apiRoute("POST", "/server/reloadlua", { filename }),
-
-  setLogLevel: (type: string, level: string) =>
-    apiRoute("POST", "/server/log", { type, level }),
-
-  setStats: (mode: string, period?: number) =>
-    apiRoute("POST", "/server/stats", { mode, period }),
 
   getConsoleLog: (lines?: number) =>
     apiGet(`/server/console-log${lines ? `?lines=${lines}` : ""}`),
@@ -586,8 +563,6 @@ export const playersApi = {
     apiRoute("POST", "/players/unban", { username }),
   setAccessLevel: (username: string, level: string) =>
     apiRoute("POST", "/players/access-level", { username, level }),
-  addToWhitelist: (username: string, password: string) =>
-    apiRoute("POST", "/players/whitelist/add", { username, password }),
   removeFromWhitelist: (username: string) =>
     apiRoute("POST", "/players/whitelist/remove", { username }),
   addAllowedSteamId: (steamId: string) =>
@@ -630,11 +605,9 @@ export const playersApi = {
     apiRoute("POST", "/players/voiceban", { username, enabled }),
   addUser: (username: string, password: string) =>
     apiRoute("POST", "/players/adduser", { username, password }),
-  addAllToWhitelist: () => apiRoute("POST", "/players/whitelist/addall"),
   getActivityLogs: (player?: string, limit?: number) =>
     apiRoute("GET", "/players/activity", { player, limit: limit || 100 }),
   getStats: () => apiRoute("GET", "/players/stats"),
-  getStat: (playerName: string) => apiRoute("GET", "/players/stats/:playerName", { playerName }),
 };
 
 export interface RconTestResult {
@@ -646,13 +619,10 @@ export interface RconTestResult {
 export const rconApi = {
   execute: (command: string) =>
     apiRoute("POST", "/rcon/execute", { command }),
-  getStatus: () => apiRoute("GET", "/rcon/status"),
   connect: (host?: string, port?: number, password?: string) =>
     apiRoute("POST", "/rcon/connect", { host, port, password }),
-  disconnect: () => apiRoute("POST", "/rcon/disconnect"),
   getHistory: (limit?: number) =>
     apiRoute("GET", "/rcon/history", { limit }),
-  getCommands: () => apiRoute("GET", "/rcon/commands"),
   testConnection: (host: string, port: number, password: string) =>
     apiRoute("POST", "/rcon/test", { host, port, password }),
 };
@@ -668,7 +638,7 @@ export interface ScheduleHistoryEntry {
   executed_at: string;
 }
 
-export interface RestartWarningSettings {
+interface RestartWarningSettings {
   locale: "en" | "zh-CN" | "fr" | "de" | "es" | "ht";
   template: string;
 }
@@ -750,9 +720,6 @@ export const modsApi = {
     apiRoute("GET", "/mods/tracked"),
   trackMod: (workshopId: string) =>
     apiRoute("POST", "/mods/track", { workshopId }),
-  untrackMod: (workshopId: string) =>
-    apiRoute("DELETE", "/mods/track/:workshopId", { workshopId }),
-
   getIgnoredMods: () => apiRoute("GET", "/mods/ignored"),
   unignoreMod: (workshopId: string) =>
     apiRoute("DELETE", "/mods/ignored/:workshopId", { workshopId }),
@@ -775,15 +742,8 @@ export const modsApi = {
     apiRoute("DELETE", "/mods/ignored-pairs", { modIdA, modIdB }),
   checkUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/check-updates", undefined, options),
-  getServerMods: () => apiRoute("GET", "/mods/server-mods"),
   syncFromServer: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/sync-from-server", undefined, options),
-  clearUpdates: (options?: { signal?: AbortSignal }) =>
-    apiPost("/mods/clear-updates", undefined, options),
-  start: (_options?: { signal?: AbortSignal }) =>
-    apiRoute("POST", "/mods/start"),
-  stop: (_options?: { signal?: AbortSignal }) =>
-    apiRoute("POST", "/mods/stop"),
   setAutoRestart: (enabled: boolean) =>
     apiRoute("POST", "/mods/auto-restart", { enabled }),
   setRestartOptions: (options: {
@@ -795,13 +755,8 @@ export const modsApi = {
     apiRoute("PUT", "/mods/restart-options", options),
   cancelPendingRestart: () =>
     apiRoute("POST", "/mods/cancel-pending-restart"),
-  getWorkshopStatus: () => apiRoute("GET", "/mods/workshop-status"),
-
   importCollection: (collectionUrl: string) =>
     apiPost("/mods/import-collection", { collectionUrl }),
-
-  getModInfo: (workshopId: string) =>
-    apiPost("/mods/get-mod-info", { workshopId }),
 
   getCurrentConfig: () => apiGet("/mods/current-config"),
 
@@ -852,25 +807,6 @@ export const modsApi = {
       deletedFromDisk: number;
       modIdsStripped: number;
       results: Array<{ workshopId: string; deletedFromDisk: boolean }>;
-    }>,
-
-  resolveOrphanWorkshop: (workshopIds: string[]) =>
-    apiPost("/mods/resolve-orphan-workshop", { workshopIds }) as Promise<{
-      success: boolean;
-      total: number;
-      counts: {
-        enabled: number;
-        droppedIgnored: number;
-        droppedMissing: number;
-        droppedNoModInfo: number;
-      };
-      modIdsAdded: number;
-      wsDropped: number;
-      breakdown: Array<{
-        workshopId: string;
-        action: string;
-        modIds: string[];
-      }>;
     }>,
 
   toggleModId: (modId: string, enabled: boolean) =>
@@ -964,19 +900,6 @@ export const modsApi = {
       searchUrl: string;
     }>,
 
-  resolveMissingDeps: (
-    deps: Array<{ missingDep: string; resolvedWorkshopId?: string }>,
-  ) =>
-    apiPost("/mods/resolve-missing-deps", { deps }) as Promise<{
-      success: boolean;
-      deps: Array<{
-        missingDep: string;
-        resolvedWorkshopId?: string;
-        resolvedModName?: string;
-      }>;
-      resolvedCount: number;
-    }>,
-
   collectionDiff: () =>
     apiGet("/mods/collection/diff") as Promise<{
       ok: boolean;
@@ -1064,8 +987,6 @@ export const modsApi = {
 
   saveModOrder: (modIds: string[]) => apiPost("/mods/save-order", { modIds }),
 
-  getConflicts: (options?: RequestInit) =>
-    apiGet<import("@/types").ConflictScanResult>("/mods/conflicts", options),
   getCachedConflicts: () =>
     apiGet<
       | (import("@/types").ConflictScanResult & {
@@ -1142,15 +1063,6 @@ export const configApi = {
     apiRoute("POST", "/config/test-rcon"),
 };
 
-export interface ConfigTestRconResult {
-  success: boolean;
-  connected: boolean;
-  message?: string;
-  warning?: boolean;
-  error?: "unreachable" | "auth_failed";
-  detail?: string;
-}
-
 export interface ServerInstance {
   id: string | number;
   name: string;
@@ -1186,13 +1098,13 @@ export interface DiscoveredMount {
   hasGameIntegration: boolean;
 }
 
-export interface ServerStatusSignal {
+interface ServerStatusSignal {
   status: string;
   label: string;
   detail: string | null;
 }
 
-export interface ComposedServerStatus {
+interface ComposedServerStatus {
   provider: string;
   selected: boolean;
   state?: LifecycleState;
@@ -1253,8 +1165,6 @@ export const serversApi = {
           | "unavailable";
       }>;
     }>,
-  get: (id: string | number) =>
-    apiRoute("GET", "/servers/:id", { id: String(id) }) as Promise<{ server: ServerInstance }>,
   create: (
     config: Partial<ServerInstance> & {
       importIniFrom?: { dataPath: string; serverName: string };
@@ -1406,19 +1316,10 @@ export interface SandboxData {
   Debug?: Record<string, string | number | boolean>;
 }
 
-export interface ConfigBackupFile {
+interface ConfigBackupFile {
   filename: string;
   size: number;
   created: string;
-}
-
-export interface BackupHistoryRecord {
-  id: string;
-  fileName: string;
-  createdAt: string;
-  size: number;
-  serverId: string | number | null;
-  serverName: string;
 }
 
 export interface BackupSnapshot {
@@ -1480,22 +1381,6 @@ export const serverFilesApi = {
       unpersistedKeys?: string[];
       restartRequired?: boolean;
     }>,
-  validateSandbox: () =>
-    apiGet("/server-files/sandbox/validate") as Promise<{
-      valid: boolean;
-      braceDepth: number;
-    }>,
-  repairSandbox: () =>
-    apiPost("/server-files/sandbox/repair") as Promise<{
-      success: boolean;
-      alreadyValid?: boolean;
-      repaired?: boolean;
-      changes?: string[];
-      message?: string;
-      error?: string;
-      restartRequired?: boolean;
-    }>,
-
   getSpawnPoints: () =>
     apiGet("/server-files/spawnpoints") as Promise<{
       spawnpoints: SpawnPointsByProfession;
@@ -1605,7 +1490,7 @@ export interface GameIntegrationStatus {
   };
 }
 
-export interface GameIntegrationActionResult {
+interface GameIntegrationActionResult {
   success: boolean;
   data?: {
     name?: string;
@@ -1654,10 +1539,6 @@ export const gameIntegrationApi = {
     apiRoute("POST", "/game-integration/players/:username/heal", { username }) as Promise<GameIntegrationActionResult>,
   killPlayer: (username: string) =>
     apiRoute("POST", "/game-integration/players/:username/kill", { username }) as Promise<GameIntegrationActionResult>,
-  getSandbox: () => apiRoute("GET", "/game-integration/sandbox") as Promise<{
-    values?: Record<string, unknown>;
-    [key: string]: unknown;
-  }>,
   getSandboxOptions: () =>
     apiRoute("GET", "/game-integration/sandbox/options") as Promise<{
       success?: boolean;
@@ -1689,7 +1570,7 @@ export const gameIntegrationApi = {
     }>,
 };
 
-export interface BackupSettings {
+interface BackupSettings {
   enabled: boolean;
   schedule: string;
   maxBackups: number;
@@ -1698,7 +1579,7 @@ export interface BackupSettings {
   forceWarningMinutes: number;
 }
 
-export interface BackupStatus extends BackupSettings {
+interface BackupStatus extends BackupSettings {
   backupInProgress: boolean;
   restoreInProgress: boolean;
   lastBackup: {
@@ -1725,25 +1606,11 @@ export interface ServerBackupArchive {
   created: string;
 }
 
-export interface BackupContentsInfo {
-  description: string;
-  includes: string[];
-  location: string;
-  note: string;
-}
-
 export const backupApi = {
   getStatus: (): Promise<BackupStatus> => apiRoute("GET", "/backup/status"),
 
-  getInfo: (): Promise<BackupContentsInfo> => apiRoute("GET", "/backup/info"),
-
   listBackups: (): Promise<{ backups: ServerBackupArchive[] }> =>
     apiRoute("GET", "/backup/list"),
-
-  getHistory: (serverId?: string | number) =>
-    apiRoute("GET", "/backup/history", { serverId }) as Promise<{
-      records: BackupHistoryRecord[];
-    }>,
 
   getSnapshot: (name: string): Promise<{ success: boolean; snapshot?: BackupSnapshot; message?: string }> =>
     apiRoute("GET", "/backup/:name/snapshot", { name }),
@@ -1791,9 +1658,6 @@ export const backupApi = {
     message?: string;
   }> =>
     apiRoute("POST", "/backup/delete-older-than", { days, expectedServerId }),
-
-  getDownloadUrl: (name: string): string =>
-    apiUrl(`/backup/download/${encodeURIComponent(name)}`),
 
   uploadBackup: async (
     file: File,
@@ -1914,7 +1778,7 @@ export interface DiagnosticSummary {
   skip: number;
 }
 
-export interface DiagnosticsReport {
+interface DiagnosticsReport {
   timestamp: string;
   overall: "ok" | "warn" | "fail";
   summary: DiagnosticSummary;
@@ -1956,7 +1820,7 @@ export interface PanelHealth {
   uptime: number;
 }
 
-export interface PanelSystem {
+interface PanelSystem {
   nodeVersion: string;
   platform: string;
   dbPath: string;
@@ -1970,7 +1834,7 @@ export interface PanelLogEntry {
   source?: string;
 }
 
-export interface PanelFile {
+interface PanelFile {
   name: string;
   size: number;
   modified: string;
@@ -2067,7 +1931,7 @@ export interface UpdateStatus {
   lastCheck: string;
 }
 
-export interface UpdateCheckerStatus {
+interface UpdateCheckerStatus {
   updateAvailable: UpdateStatus | null;
   gameVersion: string | null;
   lastCheck: string | null;
@@ -2075,12 +1939,6 @@ export interface UpdateCheckerStatus {
   isChecking: boolean;
   updating: boolean;
   lastUpdateResult: { success: boolean; message?: string; at: string } | null;
-}
-
-export interface PanelUpdateAsset {
-  name: string;
-  size?: number;
-  downloadUrl?: string;
 }
 
 export interface PanelUpdateStatus {
@@ -2102,7 +1960,7 @@ export interface PanelUpdateStatus {
   lastApplyResult: PanelUpdateApplyResult | null;
 }
 
-export interface PanelUpdateApplyResult {
+interface PanelUpdateApplyResult {
   message?: string;
   status: "success" | "failed";
   appliedVersion?: string;
@@ -2112,7 +1970,7 @@ export interface PanelUpdateApplyResult {
 
 }
 
-export interface PanelUpdateMessage {
+interface PanelUpdateMessage {
   key: string;
   params?: Record<string, string | number>;
 }
@@ -2150,7 +2008,7 @@ export interface RestartAssessment {
   reason: string;
 }
 
-export interface PanelUpdateActionResult {
+interface PanelUpdateActionResult {
   success: boolean;
   message?: string;
   error?: string;
@@ -2158,18 +2016,8 @@ export interface PanelUpdateActionResult {
 }
 
 export const updateApi = {
-  check: (
-    force: boolean = false,
-  ): Promise<UpdateStatus | UpdateCheckerStatus> =>
-    apiGet(`/server/update-check?force=${force}`),
-
   getStatus: (): Promise<UpdateCheckerStatus> =>
     apiGet("/server/update-check/status"),
-
-  setInterval: (
-    minutes: number,
-  ): Promise<{ success: boolean; intervalMinutes: number }> =>
-    apiPost("/server/update-check/interval", { minutes }),
 
   install: (): Promise<{ success: boolean; message: string }> => apiPost("/server/steam-update"),
 };
@@ -2226,11 +2074,9 @@ export const panelUpdateApi = {
     apiGet("/panel/update-preflight"),
   install: (): Promise<PanelUpdateActionResult> =>
     apiPost("/panel/update", {}),
-  getApplyLog: (): Promise<{ log: string | null; logPath: string }> =>
-    apiGet("/panel/update-apply-log"),
 };
 
-export interface DiskSpaceStatus {
+interface DiskSpaceStatus {
   path: string | null;
   totalBytes: number;
   freeBytes: number;
@@ -2240,7 +2086,7 @@ export interface DiskSpaceStatus {
   ok: boolean;
 }
 
-export interface DiskSpaceReport {
+interface DiskSpaceReport {
   saveVolume: DiskSpaceStatus | null;
   panelData: DiskSpaceStatus;
 }
@@ -2260,8 +2106,6 @@ export interface RuntimeInfo {
 }
 
 export const systemApi = {
-  getDiskSpace: (): Promise<DiskSpaceReport> =>
-    apiRoute("GET", "/system/disk-space"),
   getStorageHealth: (): Promise<StorageHealth> =>
     apiRoute("GET", "/system/storage-health"),
   getRuntime: (): Promise<RuntimeInfo> => apiRoute("GET", "/system/runtime"),

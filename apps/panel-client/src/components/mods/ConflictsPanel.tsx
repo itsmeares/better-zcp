@@ -34,6 +34,7 @@ import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { FileDiffViewer } from '@/components/FileDiffViewer'
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from '@/components/ui/dialog'
@@ -434,21 +435,7 @@ export function ConflictsPanel({
                       <span className="tabular-nums">{scanProgress}%</span>
                     )}
                   </div>
-                  <div
-                    className={`h-1.5 rounded-full bg-border/50 overflow-hidden ${scanProgress === 0 ? 'scan-indeterminate' : ''}`}
-                    role="progressbar"
-                    aria-valuenow={scanProgress}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={'Conflict scan progress'}
-                  >
-                    {scanProgress > 0 && (
-                      <div
-                        className={`h-full rounded-full bg-primary transition-all duration-500 ease-out ${scanProgress > 0 && scanProgress < 100 ? 'scan-progress-glow' : ''} ${scanProgress >= 100 ? 'scan-complete-flash' : ''}`}
-                        style={{ width: `${scanProgress}%` }}
-                      />
-                    )}
-                  </div>
+                  <Progress value={scanProgress > 0 ? scanProgress : null} aria-label="Conflict scan progress" />
                   {scanTotalMods > 0 && (
                     <p className="text-[11px] text-muted-foreground">
                       {String(scanModsScanned) +
@@ -478,7 +465,7 @@ export function ConflictsPanel({
                       {streamConflicts.slice(-8).map((c) => (
                         <div
                           key={`${c.file}:${c.conflictsSoFar}`}
-                          className={`flex items-center gap-2 px-3 py-1 text-[11px] conflict-stream-enter ${
+                          className={`flex items-center gap-2 px-3 py-1 text-[11px] ${
                             c.severity === 'high'
                               ? 'bg-destructive/5'
                               : c.severity === 'medium'
@@ -489,7 +476,7 @@ export function ConflictsPanel({
                           <div
                             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                               c.severity === 'high'
-                                ? 'bg-destructive severity-pulse'
+                                ? 'bg-destructive'
                                 : c.severity === 'medium'
                                   ? 'bg-warning'
                                   : 'bg-primary/50'
@@ -638,7 +625,7 @@ export function ConflictsPanel({
             </div>
           ) : (
             <div
-              className={`space-y-3 stagger-in relative ${conflictsLoading ? 'pointer-events-none' : ''}`}
+              className={`space-y-3 relative ${conflictsLoading ? 'pointer-events-none' : ''}`}
             >
               {conflictsLoading && (
                 <div
@@ -1184,7 +1171,7 @@ export function ConflictsPanel({
               {conflicts.modsScanned > 0 &&
                 conflicts.totalConflicts === 0 &&
                 dedupedDepCount === 0 && (
-                  <div className="flex items-center justify-center py-8 text-muted-foreground scan-complete-flash">
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
                     <div className="text-center max-w-xs">
                       <CheckCircle
                         className="w-8 h-8 mx-auto text-success/70 mb-2"
@@ -1641,7 +1628,7 @@ export function ConflictsPanel({
                                                   key={pairKey}
                                                   value={pairKey}
                                                   data-pair={pairKey}
-                                                  className={`border rounded-lg px-0 overflow-hidden border-s-[3px] conflict-pair-enter ${
+                                                  className={`border rounded-lg px-0 overflow-hidden border-s-[3px] ${
                                                     maxSeverity === 'high'
                                                       ? 'border-s-destructive/60 bg-destructive/2'
                                                       : maxSeverity === 'medium'
@@ -1657,7 +1644,7 @@ export function ConflictsPanel({
                                                       <div
                                                         className={`w-2 h-2 rounded-full shrink-0 ${
                                                           maxSeverity === 'high'
-                                                            ? 'bg-destructive severity-pulse'
+                                                            ? 'bg-destructive'
                                                             : maxSeverity ===
                                                                 'medium'
                                                               ? 'bg-warning'

@@ -297,7 +297,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
       </button>
 
       {expanded && (
-        <div className="diff-panel-enter ms-5 me-2 mt-1.5 mb-2.5 rounded-md border border-border/50 overflow-hidden bg-background/50">
+        <div className="ms-5 me-2 mt-1.5 mb-2.5 rounded-md border border-border/50 overflow-hidden bg-background/50">
           {overlap &&
             overlap.total > 0 &&
             overlap.kind !== 'lua-shadow' &&
@@ -440,7 +440,7 @@ function TextDiffView({
         </span>
       </div>
 
-      <div className="diff-code overflow-x-auto text-[11px] font-mono leading-[1.6] max-h-[250px] sm:max-h-[400px] overflow-y-auto">
+      <div className="overflow-x-auto [tab-size:4] [font-variant-ligatures:none] text-[11px] font-mono leading-[1.6] max-h-[250px] sm:max-h-[400px] overflow-y-auto">
         {diff.hunks.slice(0, maxHunks).map((hunk, hIdx) => (
           <div key={hIdx}>
             {hIdx > 0 && (
@@ -451,15 +451,15 @@ function TextDiffView({
             {hunk.lines.map((line, lIdx) => (
               <div
                 key={`${hIdx}-${lIdx}`}
-                className={`diff-line flex ${
+                className={`flex min-h-[1.6em] ${
                   line.type === 'add'
-                    ? 'bg-success/8 diff-line-add'
+                    ? 'border-s-2 border-success/35 bg-success/8'
                     : line.type === 'remove'
-                      ? 'bg-destructive/8 diff-line-remove'
+                      ? 'border-s-2 border-destructive/30 bg-destructive/8'
                       : ''
                 }`}
               >
-                <span className="diff-gutter w-8 sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
+                <span className="w-8 tabular-nums sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
                   {line.type === 'remove' && line.lineA != null
                     ? line.lineA
                     : ''}
@@ -467,7 +467,7 @@ function TextDiffView({
                     ? line.lineA
                     : ''}
                 </span>
-                <span className="diff-gutter w-8 sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
+                <span className="w-8 tabular-nums sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
                   {line.type === 'add' && line.lineB != null ? line.lineB : ''}
                   {line.type === 'context' && line.lineB != null
                     ? line.lineB

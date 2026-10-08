@@ -5,6 +5,8 @@
 
   html {
     @apply bg-background font-sans text-foreground antialiased;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 
   body {

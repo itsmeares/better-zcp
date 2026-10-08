@@ -581,13 +581,13 @@ export default function WorldMap() {
   }, [contextMenu])
 
   return (
-    <div className="space-y-4 page-transition">
+    <div className="space-y-4">
       <PageHeader
         title="Map"
         description="Live player positions. Right-click the map to teleport or heal someone."
       />
 
-      <div className="relative overflow-hidden rounded-xl border bg-[#14130f]" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
+      <div className="relative overflow-hidden rounded-xl border bg-map" style={{ height: 'calc(100vh - 180px)', minHeight: 480 }}>
         <div ref={containerRef} className="h-full w-full" role="application" aria-label="World map. Drag to pan, scroll to zoom, comma and period change floor." />
 
         {(loading || mapError) && (

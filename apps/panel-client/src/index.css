@@ -1,5 +1,5 @@
 /* Imports only. Shared CSS lives in styles/. */
-@layer theme, base, legacy, components, utilities;
+@layer theme, base, components, utilities;
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
@@ -10,4 +10,3 @@
 @import './styles/theme.css';
 @import './styles/base.css';
 @import './styles/utilities.css';
-@import './styles/legacy.css' layer(legacy);

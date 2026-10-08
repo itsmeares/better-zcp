@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 
 export function NotFoundRoute() {
   return (
-    <div className="space-y-6 page-transition">
+    <div className="space-y-6">
       <div className="rounded-xl border border-border/70 bg-card/70 p-6">
         <h1 className="text-2xl font-semibold tracking-tight">Page Not Found</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">

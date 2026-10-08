@@ -6,7 +6,6 @@ import tseslint from 'typescript-eslint'
 import noRawErrorMessage from '../../scripts/eslint-rules/no-raw-error-message.js'
 import noDuplicateInterfaceName from '../../scripts/eslint-rules/no-duplicate-interface-name.js'
 import noDeadDisabledTitle from '../../scripts/eslint-rules/no-dead-disabled-title.js'
-import noUnguardedCapabilityMenuItem from '../../scripts/eslint-rules/no-unguarded-capability-menu-item.js'
 
 export default tseslint.config(
   {
@@ -27,7 +26,6 @@ export default tseslint.config(
           'no-raw-error-message': noRawErrorMessage,
           'no-duplicate-interface-name': noDuplicateInterfaceName,
           'no-dead-disabled-title': noDeadDisabledTitle,
-          'no-unguarded-capability-menu-item': noUnguardedCapabilityMenuItem,
         },
       },
     },
@@ -52,10 +50,16 @@ export default tseslint.config(
       // this as a warning until every ambiguous case has been reviewed.
       'local/no-dead-disabled-title': 'warn',
 
-      // Radix menu items are not native buttons, so `disabled` does not stop
-      // every click path. Keep this as a warning while existing call sites
-      // are reviewed.
-      'local/no-unguarded-capability-menu-item': 'warn',
+      // The design system is coss ui on Base UI. Colors come from theme
+      // tokens (styles/theme.css), not one-off values in class names.
+      'no-restricted-imports': ['error', { patterns: [{ group: ['@radix-ui/*'], message: 'Use the coss component in components/ui.' }] }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXAttribute[name.name="className"] :matches(Literal[value=/-\\[(#|rgba?\\(|hsla?\\(|oklch\\()/], TemplateElement[value.raw=/-\\[(#|rgba?\\(|hsla?\\(|oklch\\()/])',
+          message: 'Use a theme color token instead of an arbitrary color value.',
+        },
+      ],
     },
   },
 )
