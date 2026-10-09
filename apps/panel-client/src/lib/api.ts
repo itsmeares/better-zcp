@@ -56,7 +56,7 @@ const RETRY_CONFIG = {
   maxRetries: 3,
   baseDelay: 1000,
   maxDelay: 5000,
-  fetchTimeout: 15000, // 15 second timeout for fetch requests
+  fetchTimeout: 15000, // reads only
 };
 
 const RETRY_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -270,8 +270,10 @@ async function fetchWithRetry(
 ): Promise<Response> {
   let lastError: unknown;
   const { timeout, ...requestOptions } = options || {};
-  const effectiveTimeout = timeout ?? RETRY_CONFIG.fetchTimeout;
   const method = requestMethod(options);
+  // Writes run until the server answers. Backups, restores and updates take
+  // minutes, and giving up early reports a failure for work that still runs.
+  const effectiveTimeout = timeout ?? (RETRY_SAFE_METHODS.has(method) ? RETRY_CONFIG.fetchTimeout : 0);
   const transportRetries = RETRY_SAFE_METHODS.has(method) ? retries : 0;
   let authenticationReplayUsed = false;
 
@@ -1885,6 +1887,7 @@ export const debugApi = {
     apiRoute("GET", "/debug/crash-logs"),
   getCrashLog: (filename: string): Promise<{ content: string | null; truncated?: boolean }> =>
     apiRoute("GET", "/debug/crash-logs/:filename", { filename }),
+  backupDatabase: (): Promise<{ success: boolean; file: string }> => apiRoute("POST", "/debug/database/backup"),
   getActivity: (source: ActivitySource | "all"): Promise<{ entries: ActivityEntry[] }> =>
     apiRoute("GET", "/debug/activity", { limit: 200, source }),
 };

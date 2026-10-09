@@ -40,6 +40,7 @@ export function useShellStatus() {
   })
   const servers = serversData?.servers ?? null
   const selectedServer = servers?.find((server) => server.isActive) ?? null
+  const selectedServerId = selectedServer?.id
   const serversConfirmedEmpty = servers !== null && servers.length === 0
   const provider = resolveClientProvider(selectedServer)
 
@@ -174,6 +175,7 @@ export function useShellStatus() {
   }, [socket, provider, queryClient, selectedServer?.id])
 
   useEffect(() => {
+    if (!selectedServerId) return
     let cancelled = false
     const refresh = async () => {
       try {
@@ -191,8 +193,9 @@ export function useShellStatus() {
       socket?.off('mods:updates_available', refresh)
       socket?.off('mods:update_detected', refresh)
     }
-  }, [socket, selectedServer?.id])
+  }, [socket, selectedServerId])
 
+  const hasServer = Boolean(selectedServer)
   useEffect(() => {
     let cancelled = false
     panelUpdateApi
@@ -201,16 +204,18 @@ export function useShellStatus() {
         if (!cancelled) setPanelUpdate(status?.updateAvailable ? { version: status.latestVersion } : null)
       })
       .catch(() => {})
-    updateApi
-      .getStatus()
-      .then((status) => {
-        if (!cancelled && status.updateAvailable?.updateAvailable) setGameUpdate(status.updateAvailable)
-      })
-      .catch(() => {})
+    // Game updates belong to a server; mod and update routes reject requests without one.
+    if (hasServer)
+      updateApi
+        .getStatus()
+        .then((status) => {
+          if (!cancelled && status.updateAvailable?.updateAvailable) setGameUpdate(status.updateAvailable)
+        })
+        .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [hasServer])
 
   const dismissGameUpdate = () => {
     setGameUpdateDismissed(true)

@@ -1,7 +1,7 @@
 import { serversApi } from "./lib/api";
 import { getSelectedServerId, selectServer } from "./lib/serverSelection";
 import { Outlet, useSearch } from "@tanstack/react-router";
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import type { Socket } from "socket.io-client";
 import Layout from "./components/Layout";
 import {
@@ -176,18 +176,22 @@ function ServerGate() {
   const { server: serverId } = useSearch({ from: "__root__" });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadedRef = useRef(false);
   const validateSelection = useCallback(async () => {
     try {
       const { servers } = await serversApi.getAll();
       if (getSelectedServerId() !== (serverId ?? null)) return;
-      const next = servers.some((server) => String(server.id) === serverId)
-        ? serverId
-        : (servers[0]?.id ?? null);
+      // Pick the first server on load, or when the selected one is gone. Once
+      // the app runs without a selection, a new server doesn't take over: the
+      // switch would remount the page, such as the add-server flow mid-finish.
+      const keep = serverId ? servers.some((server) => String(server.id) === serverId) : loadedRef.current;
+      const next = keep ? (serverId ?? null) : (servers[0]?.id ?? null);
       if ((next ?? null) !== (serverId ?? null)) {
         await selectServer(next ?? null);
         return;
       }
       setError(null);
+      loadedRef.current = true;
       setReady(true);
     } catch (error) {
       setError(getUserErrorMessage(error, "Could not load servers"));

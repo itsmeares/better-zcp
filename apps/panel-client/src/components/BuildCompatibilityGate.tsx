@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card'
@@ -19,7 +19,13 @@ export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: false,
   })
 
-  if (!demoMode && isPending) {
+  // Block only until the first answer. The login screen shares this query and
+  // refetches it, and an errored query with no data goes back to pending.
+  // Unmounting the app then would remount it on every failed health check.
+  const answered = useRef(false)
+  if (!isPending) answered.current = true
+
+  if (!demoMode && isPending && !answered.current) {
     return <main className="min-h-screen bg-background" aria-label="Checking panel compatibility" />
   }
   if (demoMode || isError || !backend) return <>{children}</>

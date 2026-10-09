@@ -17,7 +17,8 @@ export function SetupFilesFlow({ onExit }: { onExit: () => void }) {
   const { form, set, settingsProblem } = state
   const [step, setStep] = useState(0)
   const [working, setWorking] = useState(false)
-  const [complete, setComplete] = useState(false)
+  const [created, setCreated] = useState<string | null>(null)
+  const complete = created !== null
   const [logs, setLogs] = useState<SetupLogLine[]>([])
   const log = (line: SetupLogLine) => setLogs((prev) => [...prev, line])
   const startScript = runtimeInfo?.family === 'windows' ? 'StartServer64.bat' : 'start-server.sh'
@@ -25,7 +26,7 @@ export function SetupFilesFlow({ onExit }: { onExit: () => void }) {
   const create = async () => {
     if (settingsProblem) return
     setWorking(true)
-    setComplete(false)
+    setCreated(null)
     setLogs([{ type: 'info', message: 'Creating the server configuration…' }])
     try {
       const data = await serverApi.quickSetup({
@@ -46,7 +47,7 @@ export function SetupFilesFlow({ onExit }: { onExit: () => void }) {
       for (const warning of (data.warnings ?? []) as Array<{ progressCode?: string; message: string; params?: Record<string, string | number> }>) {
         log({ type: 'warning', message: getInstallProgressMessage(warning, warning.message) })
       }
-      const ok = await registerServer(
+      const id = await registerServer(
         {
           name: data.serverName || form.serverName,
           serverName: data.serverName || form.serverName,
@@ -66,7 +67,7 @@ export function SetupFilesFlow({ onExit }: { onExit: () => void }) {
         },
         log,
       )
-      if (ok) setComplete(true)
+      if (id !== null) setCreated(id)
     } catch (error) {
       const message = getUserErrorMessage(error, 'Unexpected error while creating the server.')
       log({ type: 'error', message })
@@ -118,7 +119,7 @@ export function SetupFilesFlow({ onExit }: { onExit: () => void }) {
             </Button>
           )}
           <SetupLog lines={logs} running={working} />
-          {complete && <SetupComplete title="Server created" />}
+          {created !== null && <SetupComplete title="Server created" serverId={created} />}
         </div>
       )}
     </Wizard>

@@ -32,6 +32,7 @@ import {
   getAllSettings,
   getDatabaseHealth,
   getDatabaseFilePath,
+  DATABASE_BACKUP_PATTERN,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
 import { checkSandboxBraceBalance } from "./serverFiles.ts";
@@ -2685,7 +2686,6 @@ router.get("/diagnostics", async (req, res) => {
     const paths = getDataPaths();
     const databasePath = getDatabaseFilePath();
     const databaseName = path.basename(databasePath);
-    const databaseExtension = path.extname(databasePath);
 
     const serverStatePromise = getServerProcessState(
       serverManager,
@@ -2772,7 +2772,7 @@ router.get("/diagnostics", async (req, res) => {
             "server.process",
             "Server process",
             "Server is stopped. Start it from the dashboard.",
-            { category: "services", hint: "Dashboard → Start Server" },
+            { category: "services", hint: "Overview → Start" },
           ),
         );
       }
@@ -2814,7 +2814,7 @@ router.get("/diagnostics", async (req, res) => {
             "Server is running but RCON is not connected. Check RCON port and password.",
             {
               category: "services",
-              hint: "Settings → RCON · server.ini → RCONPassword",
+              hint: "Server settings → RCON, and RCONPassword in the server .ini",
             },
           ),
         );
@@ -2855,7 +2855,7 @@ router.get("/diagnostics", async (req, res) => {
             "modChecker",
             "Mod update checker",
             "Waiting for Steam Workshop folder — checker starts after the server install path is configured.",
-            { category: "services", hint: "Settings → Server Path" },
+            { category: "services", hint: "Server settings → Install folder" },
           ),
         );
       } else {
@@ -2925,7 +2925,7 @@ router.get("/diagnostics", async (req, res) => {
             "server.active",
             "No active server",
             "Configure a server to enable most panel features.",
-            { category: "server", hint: "Servers → Add Server" },
+            { category: "server", hint: "Servers → Add a server" },
           ),
         );
       } else {
@@ -2946,7 +2946,7 @@ router.get("/diagnostics", async (req, res) => {
               "server.installPath",
               "Install path missing",
               "Active server has no installPath configured.",
-              { category: "server", hint: "Servers → Edit → Install Path" },
+              { category: "server", hint: "Server settings → Install folder" },
             ),
           );
         } else if (await safePathExists(installPath)) {
@@ -2985,7 +2985,7 @@ router.get("/diagnostics", async (req, res) => {
                 "Configured install path does not exist or is unreadable.",
                 {
                   category: "server",
-                  hint: "Check the path in Servers → Edit",
+                  hint: "Check the path in Server settings",
                   variant: "local",
                 },
               ),
@@ -3002,7 +3002,7 @@ router.get("/diagnostics", async (req, res) => {
               "Set the Zomboid user data folder so saves and config can be located.",
               {
                 category: "server",
-                hint: "Servers → Edit → Zomboid Data Path",
+                hint: "Server settings → Zomboid data folder",
               },
             ),
           );
@@ -3195,7 +3195,7 @@ router.get("/diagnostics", async (req, res) => {
               "No RCON password configured. RCON commands will fail.",
               {
                 category: "server",
-                hint: "Servers → Edit → RCON Password (must match server.ini)",
+                hint: "Server settings → RCON password. It must match the server .ini.",
               },
             ),
           );
@@ -3284,7 +3284,7 @@ router.get("/diagnostics", async (req, res) => {
                   `${wf.ids.length} Workshop item${plural} could not be downloaded and the server crashed during install (last log update ${ageLabel}). Failing ID${plural}: ${idList}. The mod${plural} ${plural ? "are" : "is"} most likely delisted, made private, or region-restricted.`,
                   {
                     category: "server",
-                    hint: `Open Server Config and remove ${wf.ids.length > 1 ? "these IDs" : "this ID"} from both WorkshopItems= and Mods=, then restart.`,
+                    hint: `Open Configuration and remove ${wf.ids.length > 1 ? "these IDs" : "this ID"} from both WorkshopItems= and Mods=, then restart.`,
                     meta,
                     params: { count: wf.ids.length, ageLabel, idList },
                   },
@@ -3467,7 +3467,7 @@ router.get("/diagnostics", async (req, res) => {
                 `${unresolvedMods.length} of ${ini.Mods.length} Mods= entries don't match any installed Workshop or local mod ID: ${list}.`,
                 {
                   category: "server",
-                  hint: "Usually a typo, missing WorkshopItems= ID, or the mod hasn't finished downloading. Fix in Server Config.",
+                  hint: "Usually a typo, a missing WorkshopItems= ID, or a mod that hasn't finished downloading. Fix it in Configuration.",
                   meta: { unresolvedMods, unresolvedTriage },
                   params: { count: unresolvedMods.length, total: ini.Mods.length, list },
                 },
@@ -3560,7 +3560,7 @@ router.get("/diagnostics", async (req, res) => {
                 `${dupWs.length} duplicate WorkshopItems= entr${dupWs.length === 1 ? "y" : "ies"}`,
               );
             const dupMessage = `${parts.join(", ")} in the server config.`;
-            const dupHint = "Tidy up Server Config — duplicates can confuse mod-load order.";
+            const dupHint = "Remove the duplicates in Configuration. They can confuse the mod load order.";
             const dupMeta = {
               dupMods: [...new Set(dupMods)],
               dupWs: [...new Set(dupWs)],
@@ -3673,7 +3673,7 @@ router.get("/diagnostics", async (req, res) => {
               checks.push(
                 diagFail("mods.maps", "Map= entries do not resolve", mapsMessage, {
                   category: "server",
-                  hint: "Players will spawn into the void. Add the matching map mod or fix the spelling in Server Config.",
+                  hint: "Players will spawn into the void. Add the matching map mod or fix the spelling in Configuration.",
                   meta: mapsMeta,
                   params: { count: missingMaps.length, trulyMissingCount: trulyMissing.length, trulyMissingList },
                   variant: "missingOnly",
@@ -3723,7 +3723,7 @@ router.get("/diagnostics", async (req, res) => {
                 drift.join("; ") + ".",
                 {
                   category: "server",
-                  hint: "Edit Servers → Edit to match server.ini, or update server.ini via Server Config.",
+                  hint: "Change Server settings to match the .ini, or change the .ini in Configuration.",
                   meta: { drift },
                 },
               ),
@@ -3786,7 +3786,7 @@ router.get("/diagnostics", async (req, res) => {
                 `${activeServer.serverName}_SandboxVars.lua not found. Server will boot with built-in defaults; any custom sandbox tuning will be ignored.`,
                 {
                   category: "server",
-                  hint: "Open Server Config → Sandbox to generate one, or copy from another server.",
+                  hint: "Open Configuration → Sandbox to generate one, or copy one from another server.",
                   params: { serverName: activeServer.serverName },
                 },
               ),
@@ -4114,7 +4114,7 @@ router.get("/diagnostics", async (req, res) => {
         } else {
           const stats = await Promise.all(
             files
-              .filter((f) => f.startsWith("db-") && f.endsWith(databaseExtension))
+              .filter((f) => DATABASE_BACKUP_PATTERN.test(f))
               .map(async (f) => {
                 const st = await safeStat(path.join(backupsDir, f));
                 return st ? st.mtimeMs : 0;
@@ -4130,7 +4130,7 @@ router.get("/diagnostics", async (req, res) => {
                 `No ${databaseName} backups found. Manual backup recommended before risky changes.`,
                 {
                   category: "storage",
-                  hint: "Debug → Database → Create Backup",
+                  hint: "Diagnostics → Panel health → Back up database",
                   variant: "none",
                 },
               ),
@@ -4154,7 +4154,7 @@ router.get("/diagnostics", async (req, res) => {
                 `Newest backup ${ageText}. Consider creating a fresh one.`,
                 {
                   category: "storage",
-                  hint: "Debug → Database → Create Backup",
+                  hint: "Diagnostics → Panel health → Back up database",
                   params: { age: ageText },
                   variant: "old",
                 },
@@ -4579,7 +4579,7 @@ router.get("/diagnostics", async (req, res) => {
               "update.mods",
               "Mod updates available",
               `${outdated} mod${outdated === 1 ? "" : "s"} have updates on Steam Workshop.`,
-              { category: "updates", hint: "Mods → Update Subscriptions", params: { count: outdated } },
+              { category: "updates", hint: "Mods → Workshop items", params: { count: outdated } },
             ),
           );
         } else if ((trackedMods || []).length > 0) {
@@ -4692,7 +4692,7 @@ router.get("/worldmap", async (req, res) => {
           "No server is currently active in the panel. The map still loads, but players cannot be shown.",
           {
             category: "worldmap",
-            hint: "Servers → select one and click “Set active”.",
+            hint: "Pick a server in the server switcher at the top of the sidebar.",
           },
         ),
       );
@@ -4883,7 +4883,7 @@ router.get("/worldmap", async (req, res) => {
           "worldmap.save.dataPath",
           "No Zomboid data path set",
           "Cannot locate save folders. Build 42 map layout detection will be skipped.",
-          { category: "worldmap", hint: "Servers → Edit → Zomboid Data Path" },
+          { category: "worldmap", hint: "Server settings → Zomboid data folder" },
         ),
       );
     }

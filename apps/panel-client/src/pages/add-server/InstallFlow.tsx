@@ -78,7 +78,8 @@ export function InstallFlow({ onExit, resume }: { onExit: () => void; resume?: I
   const [branch, setBranch] = useState('public')
   const [branches, setBranches] = useState<Array<{ name: string; description: string; buildId?: string | null }>>([{ name: 'public', description: 'Stable release (Build 42)' }])
   const [installing, setInstalling] = useState(false)
-  const [complete, setComplete] = useState(false)
+  const [created, setCreated] = useState<string | null>(null)
+  const complete = created !== null
   const [logs, setLogs] = useState<SetupLogLine[]>([])
   const [progress, setProgress] = useState<Progress | null>(null)
   const installing_ = useRef(false)
@@ -164,7 +165,7 @@ export function InstallFlow({ onExit, resume }: { onExit: () => void; resume?: I
         log({ type: 'success', message })
         for (const warning of data.warnings ?? []) log({ type: 'warning', message: getInstallProgressMessage(warning, warning.message) })
         const f = formRef.current
-        const ok = await registerServer(
+        const id = await registerServer(
           {
             name: data.serverName || f.serverName,
             serverName: data.serverName || f.serverName,
@@ -185,8 +186,8 @@ export function InstallFlow({ onExit, resume }: { onExit: () => void; resume?: I
           },
           log,
         )
-        if (ok) {
-          setComplete(true)
+        if (id !== null) {
+          setCreated(id)
           toastManager.add({ title: 'Server installed', type: 'success' })
         }
       } finally {
@@ -402,7 +403,7 @@ export function InstallFlow({ onExit, resume }: { onExit: () => void; resume?: I
             </Progress>
           )}
           <SetupLog lines={logs} running={installing} />
-          {complete && <SetupComplete title="Server installed" firstStart />}
+          {created !== null && <SetupComplete title="Server installed" serverId={created} firstStart />}
         </div>
       )}
     </Wizard>

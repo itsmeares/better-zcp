@@ -351,4 +351,25 @@ describe('ServerManager status state', () => {
     expect(status.scanFailed).toBe(true);
     expect(status.startTime).not.toBeNull();
   });
+  it('keeps the launching process while a start is still in progress', async () => {
+    const manager = new ServerManager();
+    const child = { pid: 4242 };
+    manager.configLoaded = true;
+    manager.configLoadedFor = null;
+    manager.fetchingIp = true;
+    manager.gamePort = 16261;
+    manager.serverPath = '/srv/pz';
+    manager.serverProcess = child;
+    manager.startTime = new Date();
+    manager._starting = true;
+    manager.loadConfig = async () => {};
+    manager.getLocalIp = async () => null;
+    // The start script runs, but the game process isn't visible to a scan yet.
+    manager.getServerProcessDetails = async () => ({ running: false, matched: [], scanFailed: false });
+
+    await manager.getServerStatus();
+
+    expect(manager.serverProcess).toBe(child);
+    expect(manager.startTime).not.toBeNull();
+  });
 });

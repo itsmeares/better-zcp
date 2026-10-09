@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, AlertTriangle, CheckCircle2, CircleHelp, RefreshCw } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, AlertTriangle, CheckCircle2, CircleHelp, DatabaseBackup, RefreshCw } from 'lucide-react'
 import { debugApi } from '@/lib/api'
 import { cn, formatBytes, formatUptime } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card'
 import { Meter, MeterIndicator, MeterTrack } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
+import { toastManager } from '@/components/ui/toast'
+import { getUserErrorMessage } from '@/lib/errorMessage'
 import { CopyPath } from './CopyPath'
 import { ReportError, ReportLoading } from './CheckList'
 import { getHealthHeadline, type HealthTone } from './healthHeadline'
@@ -34,6 +36,16 @@ export function HealthPanel() {
   const query = useQuery({ queryKey: ['diagnostics', 'health'], queryFn: debugApi.getHealth, refetchInterval: 30_000, retry: false })
   const system = useQuery({ queryKey: ['diagnostics', 'system'], queryFn: debugApi.getSystem, retry: false, staleTime: Infinity })
   const health = query.data
+  const queryClient = useQueryClient()
+  // The panel keeps the newest five copies in data/backups.
+  const backup = useMutation({
+    mutationFn: debugApi.backupDatabase,
+    onSuccess: ({ file }) => {
+      toastManager.add({ title: 'Database backed up', description: `Saved as data/backups/${file}.`, type: 'success' })
+      void queryClient.invalidateQueries({ queryKey: ['diagnostics', 'checks'] })
+    },
+    onError: (error) => toastManager.add({ title: "Couldn't back up the database", description: getUserErrorMessage(error, 'Try again.'), type: 'error' }),
+  })
 
   if (!health) {
     return query.isError ? (
@@ -135,6 +147,10 @@ export function HealthPanel() {
               <Row label="Database">{system.data ? <CopyPath label="Database path" value={system.data.dbPath} /> : system.isError ? 'Unavailable' : '…'}</Row>
               <Row label="Logs">{system.data ? <CopyPath label="Logs folder" value={system.data.logsPath} /> : system.isError ? 'Unavailable' : '…'}</Row>
             </dl>
+            <Button size="sm" variant="outline" className="mt-4" onClick={() => backup.mutate()} disabled={backup.isPending}>
+              {backup.isPending ? <Spinner /> : <DatabaseBackup />}
+              Back up database
+            </Button>
           </CardPanel>
         </Card>
       </div>

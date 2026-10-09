@@ -4,7 +4,6 @@ import { Check, ChevronLeft, ChevronRight, Copy, FolderOpen, Play, RefreshCw } f
 import { debugApi, serverApi, serversApi } from '@/lib/api'
 import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import { selectServer } from '@/lib/serverSelection'
 import { cn, copyText } from '@/lib/utils'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
 import { FolderBrowser } from '@/components/FolderBrowser'
@@ -176,7 +175,7 @@ export function ServerSettingsFields({ state, showDataPath = true }: { state: Ne
               >
                 <div className="grid w-full gap-2">
                   <label className="flex items-center gap-2 text-sm">
-                    <Switch checked={form.useCustomDataPath} onCheckedChange={(value) => set('useCustomDataPath', value)} />
+                    <Switch checked={form.useCustomDataPath} onCheckedChange={(value) => set('useCustomDataPath', value)} aria-label="Use a custom folder" />
                     Use a custom folder
                   </label>
                   {form.useCustomDataPath && (
@@ -216,7 +215,9 @@ export interface SetupLogLine {
 
 export function SetupLog({ lines, running }: { lines: SetupLogLine[]; running?: boolean }) {
   const end = useRef<HTMLDivElement>(null)
-  useEffect(() => end.current?.scrollIntoView({ block: 'nearest' }), [lines])
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'nearest' })
+  }, [lines])
   if (lines.length === 0) return null
   return (
     <div className="max-h-64 overflow-y-auto rounded-lg border bg-muted p-3 font-mono text-xs leading-relaxed" role="log" aria-live="polite">
@@ -238,12 +239,16 @@ export function SetupLog({ lines, running }: { lines: SetupLogLine[]; running?: 
   )
 }
 
-/** Saves the new server profile and selects it. Returns false if either step failed. */
-export async function registerServer(profile: Parameters<typeof serversApi.create>[0], log: (line: SetupLogLine) => void): Promise<boolean> {
-  let id: string | number | undefined
+/**
+ * Saves the new server profile. Returns its id, '' if the panel didn't send one, or null on failure.
+ * It doesn't select the server: selecting remounts the app, which would drop the setup screen.
+ * SetupComplete selects it when the user moves on.
+ */
+export async function registerServer(profile: Parameters<typeof serversApi.create>[0], log: (line: SetupLogLine) => void): Promise<string | null> {
   try {
-    id = (await serversApi.create(profile)).server?.id
+    const id = (await serversApi.create(profile)).server?.id
     log({ type: 'success', message: 'Server added to the panel.' })
+    return id === undefined ? '' : String(id)
   } catch (error) {
     reportClientError('Failed to create server entry.', error)
     log({ type: 'error', message: "The files are ready, but the panel couldn't add the server." })
@@ -252,30 +257,21 @@ export async function registerServer(profile: Parameters<typeof serversApi.creat
       description: "The game files are on disk, but the panel couldn't save this server. Check the log, then run setup again; it's safe to repeat.",
       type: 'error',
     })
-    return false
-  }
-  if (id === undefined) return true
-  try {
-    await selectServer(id)
-    log({ type: 'success', message: 'Switched to the new server.' })
-    return true
-  } catch (error) {
-    reportClientError('Failed to activate newly created server.', error)
-    log({ type: 'error', message: "The server was added, but the panel couldn't switch to it." })
-    toastManager.add({ title: "Added, but not selected", description: 'Pick the new server in the server switcher before starting it.', type: 'error' })
-    return false
+    return null
   }
 }
 
-export function SetupComplete({ title, firstStart }: { title: string; firstStart?: boolean }) {
+export function SetupComplete({ title, serverId, firstStart }: { title: string; serverId: string; firstStart?: boolean }) {
   const navigate = useNavigate()
   const [starting, setStarting] = useState(false)
+  // Opening Overview with ?server= selects the new server.
+  const openOverview = () => void navigate({ to: '/', search: (previous) => ({ ...previous, server: serverId || previous.server }) })
   const start = async () => {
     setStarting(true)
     try {
-      await serverApi.start()
+      await serverApi.start(serverId)
       toastManager.add({ title: 'Server starting', description: 'Taking you to Overview…' })
-      void navigate({ to: '/' })
+      openOverview()
     } catch (error) {
       toastManager.add({ title: "The server didn't start", description: getUserErrorMessage(error, 'Unknown error.'), type: 'error' })
     } finally {
@@ -289,11 +285,13 @@ export function SetupComplete({ title, firstStart }: { title: string; firstStart
       <AlertDescription>
         {firstStart && <p>Start the server once to create its config files and world. The first start can take a minute.</p>}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void start()} disabled={starting}>
-            <Play />
-            {starting ? 'Starting…' : 'Start server'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => void navigate({ to: '/' })}>
+          {serverId && (
+            <Button size="sm" onClick={() => void start()} disabled={starting}>
+              <Play />
+              {starting ? 'Starting…' : 'Start server'}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={openOverview}>
             Open Overview
           </Button>
         </div>

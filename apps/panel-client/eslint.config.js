@@ -59,6 +59,12 @@ export default tseslint.config(
           selector: 'JSXAttribute[name.name="className"] :matches(Literal[value=/-\\[(#|rgba?\\(|hsla?\\(|oklch\\()/], TemplateElement[value.raw=/-\\[(#|rgba?\\(|hsla?\\(|oklch\\()/])',
           message: 'Use a theme color token instead of an arbitrary color value.',
         },
+        {
+          // React calls whatever an effect returns as its cleanup. Some calls
+          // return values in newer browsers, such as scrollIntoView's Promise.
+          selector: 'CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression[body.type!="BlockStatement"][body.type!="ArrowFunctionExpression"]:not([body.operator="void"])',
+          message: 'Wrap the effect body in braces, or prefix it with void. React treats a returned value as the cleanup function.',
+        },
       ],
     },
   },

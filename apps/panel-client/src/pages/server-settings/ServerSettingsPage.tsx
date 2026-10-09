@@ -52,7 +52,9 @@ function LifecycleProvider({ server, onActivated }: { server: ServerInstance; on
   const [busy, setBusy] = useState(false)
   const current = server.lifecycleProvider || 'direct'
 
-  useEffect(() => setProvider(server.lifecycleProvider || 'direct'), [server.lifecycleProvider])
+  useEffect(() => {
+    setProvider(server.lifecycleProvider || 'direct')
+  }, [server.lifecycleProvider])
 
   const downloadServiceFile = async () => {
     if (provider === 'direct') return

@@ -70,6 +70,9 @@ export function GameIntegrationSection() {
   }
 
   const install_ = status?.localInstall
+  // The server repeats the summary as the only issue while waiting.
+  const issues = (status?.connection?.issues ?? []).filter((issue) => issue !== status?.connection?.summary)
+
   return (
     <SettingsCard
       title="Game integration"
@@ -94,9 +97,9 @@ export function GameIntegrationSection() {
                 {status.modStatus.serverName} · version {status.modStatus.version} · {status.modStatus.playerCount} online
               </span>
             )}
-            {!!status?.connection?.issues?.length && (
+            {issues.length > 0 && (
               <ul className="mt-1 list-disc ps-5">
-                {status.connection.issues.map((issue) => (
+                {issues.map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
