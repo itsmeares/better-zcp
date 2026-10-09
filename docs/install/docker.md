@@ -24,7 +24,7 @@ Every path ends at the web UI on `http://localhost:3001`.
 
 Both compose files read `BETTER_ZCP_VERSION` from a `.env` file beside them and
 default to `latest`. Until 3.0.0 ships there is no `stable` tag. To pin, put
-`BETTER_ZCP_VERSION=3.0.0-rc2` (or any exact version) in `.env`.
+`BETTER_ZCP_VERSION=3.0.0-rc3` (or any exact version) in `.env`.
 
 ---
 
