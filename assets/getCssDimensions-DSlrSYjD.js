@@ -1,0 +1,1 @@
+import{it as e,q as t}from"./createBaseUIEventDetails-W2ryhqC4.js";import{K as n}from"./FloatingPortal-BadCt5mF.js";function r(r){let i=t(r),a=parseFloat(i.width)||0,o=parseFloat(i.height)||0,s=e(r),c=s?r.offsetWidth:a,l=s?r.offsetHeight:o;return(n(a)!==c||n(o)!==l)&&(a=c,o=l),{width:a,height:o}}export{r as t};

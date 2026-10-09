@@ -1,0 +1,1 @@
+import{n as e,r as t}from"./link-Ct_8_VOh.js";import{C as n}from"./index-Br5t07d5.js";function r(r){let i=t();return e(i.stores.location,n(r,i))}export{r as t};

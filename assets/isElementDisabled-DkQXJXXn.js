@@ -1,0 +1,1 @@
+import{N as e}from"./errorMessage-BBeGeKLg.js";var t=e(`chevron-down`,[[`path`,{d:`m6 9 6 6 6-6`,key:`qrunsl`}]]);function n(e){return e==null||e.hasAttribute(`disabled`)||e.getAttribute(`aria-disabled`)===`true`}export{t as n,n as t};

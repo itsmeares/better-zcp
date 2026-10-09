@@ -1,0 +1,1 @@
+import{N as e}from"./errorMessage-BBeGeKLg.js";var t=e(`arrow-down-to-line`,[[`path`,{d:`M12 17V3`,key:`1cwfxf`}],[`path`,{d:`m6 11 6 6 6-6`,key:`12ii2o`}],[`path`,{d:`M19 21H5`,key:`150jfl`}]]),n=e(`pause`,[[`rect`,{x:`14`,y:`3`,width:`5`,height:`18`,rx:`1`,key:`kaeet6`}],[`rect`,{x:`5`,y:`3`,width:`5`,height:`18`,rx:`1`,key:`1wsw3u`}]]);export{t as n,n as t};

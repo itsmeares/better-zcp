@@ -1,0 +1,1 @@
+import{r as e}from"./rolldown-runtime-hePW80VL.js";import{n as t}from"./jsx-runtime-BNakU3Ej.js";var n=e(t(),1);function r(e){let[t,r]=n.useState({current:e,previous:null});return Object.is(e,t.current)||r({current:e,previous:t.current}),t.previous}export{r as t};

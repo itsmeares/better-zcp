@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/better-zcp/zombie.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Admin control panel for Project Zomboid dedicated servers - manage players, mods, backups, and more" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#161616" />
+    <!-- Applies the theme class before first paint. Must match parseTheme()
+         and applyTheme() in contexts/ThemeContext.tsx. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('pz-panel-theme');
+          var theme = stored === 'survival' ? 'dark' : stored;
+          var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.classList.toggle('light', !dark);
+        } catch (e) { /* storage unavailable: the static dark class stands */ }
+      })();
+    </script>
+    <title>Zomboid Control Panel</title>
+    <script type="module" crossorigin src="/better-zcp/assets/index-Br5t07d5.js"></script>
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/jsx-runtime-BNakU3Ej.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/react-dom-hf6EcyAr.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/with-selector-CoMyWBAX.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/link-Ct_8_VOh.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/clsx-DB0hHKMi.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/errorMessage-BBeGeKLg.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/createBaseUIEventDetails-W2ryhqC4.js">
+    <link rel="modulepreload" crossorigin href="/better-zcp/assets/FloatingPortal-BadCt5mF.js">
+    <link rel="stylesheet" crossorigin href="/better-zcp/assets/index-dXB33bE3.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

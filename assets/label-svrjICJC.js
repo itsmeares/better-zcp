@@ -1,0 +1,1 @@
+import{b as e,h as t,j as n}from"./errorMessage-BBeGeKLg.js";function r({className:r,render:i,...a}){let o={className:t(`inline-flex items-center gap-2 font-medium text-base/4.5 text-foreground sm:text-sm/4`,r),"data-slot":`label`};return e({defaultTagName:`label`,props:n(o,a),render:i})}export{r as t};
