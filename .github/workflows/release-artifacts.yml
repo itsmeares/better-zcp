@@ -126,9 +126,58 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish:
+  image:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        with:
+          images: ghcr.io/itsmeares/better-zcp
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            PANEL_BUILD_SHA=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build, image]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -168,8 +217,8 @@ jobs:
             ZomboidControlPanel \
             ZomboidControlPanel-windows.zip \
             ZomboidControlPanel-linux.tar.gz \
-            docker-compose.install.yml \
-            Dockerfile > checksums.txt
+            docker-compose.yml \
+            docker-compose.panel-only.yml > checksums.txt
 
       - name: Create or update GitHub release
         env:
@@ -213,8 +262,8 @@ jobs:
               ZomboidControlPanel \
               ZomboidControlPanel-windows.zip \
               ZomboidControlPanel-linux.tar.gz \
-              docker-compose.install.yml \
-              Dockerfile \
+              docker-compose.yml \
+              docker-compose.panel-only.yml \
               checksums.txt; then
               exit 0
             fi
@@ -222,3 +271,41 @@ jobs:
             sleep 5
           done
           exit 1
+
+  latest:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move latest and stable to this release
+        run: |
+          set -euo pipefail
+          image=ghcr.io/itsmeares/better-zcp
+          version="${GITHUB_REF_NAME#v}"
+          # Newest first, with a release candidate sorting before its final release.
+          versions="$(git -c versionsort.suffix=- ls-remote --sort=-v:refname --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'refs/tags/v*' | sed 's#.*refs/tags/v##')"
+          newest="$(head -n 1 <<<"$versions")"
+          newest_stable="$(grep -v -- '-' <<<"$versions" | head -n 1 || true)"
+          tags=()
+          if [[ "$version" == "$newest" ]]; then
+            tags+=(--tag "$image:latest")
+          else
+            echo "v$newest is newer; leaving latest alone."
+          fi
+          if [[ "$version" != *-* && "$version" == "$newest_stable" ]]; then
+            tags+=(--tag "$image:stable")
+          fi
+          if (( ${#tags[@]} )); then
+            docker buildx imagetools create "${tags[@]}" "$image:$version"
+          fi

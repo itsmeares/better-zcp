@@ -117,7 +117,7 @@ export function getDockerClient(): DockerControl | null {
 }
 
 export function isBundledGameProfile(server: ServerProfile | null | undefined): boolean {
-  return process.env.PANEL_DOCKER_INSTALL_KIND === "split" &&
+  return process.env.PANEL_MANAGED_GAMES === "true" &&
     server?.installPath === "/pz-server" &&
     server?.zomboidDataPath === "/zomboid" &&
     server?.dockerContainerName === `zomboid-game-${server?.id}`;

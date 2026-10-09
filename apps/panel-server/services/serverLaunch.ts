@@ -463,7 +463,7 @@ export async function refreshLaunchTargetBeforeStart(
   activeServer: AnyRecord | null,
   { managedHandled = false }: { managedHandled?: boolean } = {},
 ) {
-  if (process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(activeServer)) managedHandled = false;
+  if (process.env.PANEL_MANAGED_GAMES === "true" && isBundledGameProfile(activeServer)) managedHandled = false;
   try {
     const rconReady = await ensureRconConfigured();
     if (rconReady) {

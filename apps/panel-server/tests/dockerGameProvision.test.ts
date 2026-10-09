@@ -16,7 +16,7 @@ const profile = {
 describe.skipIf(process.platform === "win32")("bundled game provisioning", () => {
   let daemon: http.Server | null = null;
   let root = "";
-  const previousKind = process.env.PANEL_DOCKER_INSTALL_KIND;
+  const previousManaged = process.env.PANEL_MANAGED_GAMES;
   const previousHostname = process.env.HOSTNAME;
 
   afterEach(async () => {
@@ -24,8 +24,8 @@ describe.skipIf(process.platform === "win32")("bundled game provisioning", () =>
     if (root) fs.rmSync(root, { recursive: true, force: true });
     daemon = null;
     root = "";
-    if (previousKind === undefined) delete process.env.PANEL_DOCKER_INSTALL_KIND;
-    else process.env.PANEL_DOCKER_INSTALL_KIND = previousKind;
+    if (previousManaged === undefined) delete process.env.PANEL_MANAGED_GAMES;
+    else process.env.PANEL_MANAGED_GAMES = previousManaged;
     if (previousHostname === undefined) delete process.env.HOSTNAME;
     else process.env.HOSTNAME = previousHostname;
   });
@@ -39,14 +39,14 @@ describe.skipIf(process.platform === "win32")("bundled game provisioning", () =>
     let gameImage = "";
     let inspectionFails = false;
     let unmanaged = false;
-    process.env.PANEL_DOCKER_INSTALL_KIND = "split";
+    process.env.PANEL_MANAGED_GAMES = "true";
     process.env.HOSTNAME = "panel123";
     daemon = http.createServer((request, response) => {
       if (request.url === "/containers/panel123/json") {
         response.setHeader("Content-Type", "application/json");
         response.end(JSON.stringify({
           Image: panelImage,
-          Config: { Image: "zomboid-panel-allinone:latest" },
+          Config: { Image: "ghcr.io/itsmeares/better-zcp:latest" },
           Mounts: [
             { Type: "volume", Name: "ctx_pz-server", Destination: "/pz-server" },
             { Type: "volume", Name: "ctx_zomboid-data", Destination: "/zomboid" },

@@ -182,7 +182,7 @@ RCON access and local access to the server files it manages.
 | Windows PC or Windows server  | [docs/install/windows.md](docs/install/windows.md) |
 | Linux PC, VPS, or home server | [docs/install/linux.md](docs/install/linux.md)     |
 | macOS                         | [macOS](#macos) below                              |
-| Docker or Unraid              | [docs/install/docker.md](docs/install/docker.md)   |
+| Docker                        | [docs/install/docker.md](docs/install/docker.md)   |
 
 **Not sure which?** Pick the row that matches the computer the _panel_ will run on; Docker needs the fewest manual steps if that machine has it.
 
@@ -192,39 +192,38 @@ Every path above ends the same way: a browser tab open to the panel's setup scre
 
 There's no native macOS binary. Run the panel with Docker Desktop or OrbStack
 and connect it to a PZ server on Linux; see the macOS row in
-[docs/install/docker.md](docs/install/docker.md). The managed stack installer
-requires an amd64 Linux Docker host.
+[docs/install/docker.md](docs/install/docker.md). The managed stack requires an
+amd64 Linux Docker host.
 
-### Docker and Unraid
+### Docker
 
-The fastest path to a fully working setup — panel **and** a new Project
-Zomboid server — is the Docker stack installer:
+The fastest path to a fully working setup, panel **and** a new Project Zomboid
+server, is the managed stack:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
+mkdir -p ~/zomboid-panel && cd ~/zomboid-panel
+curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.yml
+docker compose up -d
 ```
 
-It checks Docker, creates persistent configuration, pulls the release image,
-installs PZ, and starts the panel. Each server profile gets its own game
-container when started. The panel can start and stop those containers; its
+The panel installs Project Zomboid on first start. Each server profile then gets
+its own game container. The panel starts and stops those containers, and its
 Docker socket mount grants it host-level Docker control.
 
-If PZ already runs on the host, in another container, or on another machine,
-use the panel-only image instead:
+If Project Zomboid already runs on this host, in another container, or on another
+machine, use the panel-only file instead:
 
 ```bash
-curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.install.yml
-docker compose -f docker-compose.install.yml up -d
+curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.panel-only.yml
+docker compose -f docker-compose.panel-only.yml up -d
 ```
 
-The panel-only image deliberately does not publish PZ game ports; those belong
-to the existing game-server host or container.
-
-See [docs/install/docker.md](docs/install/docker.md) for the full walkthrough
-of these and the other two configurations (bind-mounting an existing PZ
-install, and Unraid specifically) — including running PZ in a separate
-container from the panel, and choosing between the published image and
-building from source.
+It deliberately publishes no game ports; those belong to the existing server.
+Both files pull `ghcr.io/itsmeares/better-zcp`. Tags: `stable` is the newest
+release without a prerelease suffix (from 3.0.0 on), `latest` is the newest
+release including release candidates, and `X.Y.Z` pins one release. See
+[docs/install/docker.md](docs/install/docker.md) for tags, bind mounts, updates
+and moving from a 3.0 RC managed stack.
 
 ---
 

@@ -311,14 +311,14 @@ function PanelUpdates({ isDirty }: { isDirty: boolean }) {
 
         {isDocker && status?.updateAvailable && status.updateCommand && (
           <div className="grid gap-2 text-sm">
-            <p className="text-muted-foreground">Run this command on the Docker host to update the panel:</p>
+            <p className="text-muted-foreground">Run this command in the folder with your docker-compose.yml to update the panel:</p>
             <code className="block overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-sm select-all">{status.updateCommand}</code>
-            {status.dockerInstallKind === 'aio' && (
+            {status.dockerImagePinned && (
               <p className="text-warning-foreground">
-                This older combined container also runs Project Zomboid. Save and stop the game once before migrating with the host command.
+                Your compose file pins this version. Also set <code className="font-mono">BETTER_ZCP_VERSION={status.latestVersion}</code> in its <code className="font-mono">.env</code> so restarts keep the new one.
               </p>
             )}
-            {status.dockerInstallKind === 'split' && <p className="text-muted-foreground">This updates the panel container. Running game containers stay online.</p>}
+            {status.dockerManagedGames && <p className="text-muted-foreground">This updates the panel container. Running game containers stay online.</p>}
           </div>
         )}
 

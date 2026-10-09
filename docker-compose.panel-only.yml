@@ -1,0 +1,40 @@
+# Panel only, for a Project Zomboid server that already runs on this host, in
+# another container, or on another machine. Use docker-compose.yml instead if you
+# want the panel to install and run the game for you.
+# Updating: docker compose up -d --pull always --no-deps panel
+name: better-zcp
+
+services:
+  panel:
+    image: ghcr.io/itsmeares/better-zcp:${BETTER_ZCP_VERSION:-latest}
+    container_name: zomboid-panel
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Docker control of a labelled PZ container (see docs/install/docker.md).
+    # Set PANEL_DOCKER_CONTROL_ENABLED=true and DOCKER_GID in .env, then uncomment:
+    # group_add:
+    #   - "${DOCKER_GID:-999}"
+    volumes:
+      - panel-data:/app/data
+      - panel-logs:/app/logs
+      # Project Zomboid on this host: replace the left side with your real
+      # folders, then set the install path to /pz-server and the data path to
+      # /zomboid in Settings. PUID/PGID in .env must match their owner.
+      # - /srv/pz/server:/pz-server
+      # - /srv/pz/Zomboid:/zomboid
+      # - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      NODE_ENV: production
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      PANEL_IMAGE_TAG: ${BETTER_ZCP_VERSION:-latest}
+      PANEL_DOCKER_CONTROL_ENABLED: ${PANEL_DOCKER_CONTROL_ENABLED:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+
+volumes:
+  panel-data:
+  panel-logs:

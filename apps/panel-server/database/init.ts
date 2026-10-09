@@ -521,7 +521,7 @@ export function normalizeServerMemory(
     maxMemory: normalizeMemoryGb(server.maxMemory, 8),
   };
   if (
-    process.env.PANEL_DOCKER_INSTALL_KIND === "split" &&
+    process.env.PANEL_MANAGED_GAMES === "true" &&
     installPath === "/pz-server" &&
     zomboidDataPath === "/zomboid" &&
     !server.dockerContainerName &&

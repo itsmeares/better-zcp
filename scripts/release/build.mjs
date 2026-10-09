@@ -297,7 +297,8 @@ needs internet).
 - start.sh                 - Linux launch script
 - zomboid-panel.service    - systemd unit file (Linux) — see docs/install/linux.md, in this folder
 - install-linux-service.sh - explicit systemd installer; run with --enable to start the service
-- docker-compose.install.yml - Docker Compose installer (published panel image)
+- docker-compose.yml       - Docker Compose, managed stack (panel plus game containers)
+- docker-compose.panel-only.yml - Docker Compose, panel for an existing Project Zomboid server
 - docs/install/            - Install guides for every platform (see Where To Go Next, above)
 - client/dist/             - Web interface copy for manual upgrades and legacy installs
 - data/panel.sqlite        - Panel database (created on first run)
@@ -590,25 +591,22 @@ Windows: extract everything except data/, or back up data/ first.
     );
   }
 
-  if (fs.existsSync("./infra/services/linux/zomboid-panel.service")) {
+  if (fs.existsSync("./packaging/linux/zomboid-panel.service")) {
     fs.copyFileSync(
-      "./infra/services/linux/zomboid-panel.service",
+      "./packaging/linux/zomboid-panel.service",
       "./release/zomboid-panel.service",
     );
   }
-  if (fs.existsSync("./infra/services/linux/install-linux-service.sh")) {
+  if (fs.existsSync("./packaging/linux/install-linux-service.sh")) {
     fs.copyFileSync(
-      "./infra/services/linux/install-linux-service.sh",
+      "./packaging/linux/install-linux-service.sh",
       "./release/install-linux-service.sh",
     );
     fs.chmodSync("./release/install-linux-service.sh", 0o755);
   }
 
-  if (fs.existsSync("./docker-compose.install.yml")) {
-    fs.copyFileSync(
-      "./docker-compose.install.yml",
-      "./release/docker-compose.install.yml",
-    );
+  for (const compose of ["docker-compose.yml", "docker-compose.panel-only.yml"]) {
+    fs.copyFileSync(`./${compose}`, `./release/${compose}`);
   }
 
   const startBat = generateStartBat();
@@ -675,9 +673,8 @@ Windows: extract everything except data/, or back up data/ first.
   if (fs.existsSync("./release/install-linux-service.sh")) {
     console.log("  - install-linux-service.sh");
   }
-  if (fs.existsSync("./release/docker-compose.install.yml")) {
-    console.log("  - docker-compose.install.yml");
-  }
+  console.log("  - docker-compose.yml");
+  console.log("  - docker-compose.panel-only.yml");
   console.log("  - README.txt");
 
   if (targets.includes("linux")) {

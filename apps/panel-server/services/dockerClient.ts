@@ -240,7 +240,7 @@ export class DockerClient {
   }
 
   async ensureBundledGameContainer(profile: BundledGameProfile): Promise<void> {
-    if (!this.available || process.env.PANEL_DOCKER_INSTALL_KIND !== "split") {
+    if (!this.available || process.env.PANEL_MANAGED_GAMES !== "true") {
       throw new Error("Bundled Docker game control is unavailable");
     }
     const name = `zomboid-game-${profile.id}`;
@@ -308,7 +308,7 @@ export class DockerClient {
   }
 
   async removeBundledGameContainer(profile: BundledGameProfile): Promise<void> {
-    if (!this.available || process.env.PANEL_DOCKER_INSTALL_KIND !== "split") {
+    if (!this.available || process.env.PANEL_MANAGED_GAMES !== "true") {
       throw new Error("Docker control is unavailable; the game profile was not deleted");
     }
     const name = `zomboid-game-${profile.id}`;
