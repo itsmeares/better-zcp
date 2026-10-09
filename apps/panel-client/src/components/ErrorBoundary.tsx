@@ -1,94 +1,74 @@
 import React from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { Button } from './ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Link } from '@tanstack/react-router'
+import { AlertTriangle } from 'lucide-react'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'
+import { Button } from '@/components/ui/button'
+import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card'
 
 interface Props {
   children: React.ReactNode
+  /** Set for one page. The rest of the panel keeps working around it. Unset, it covers the screen. */
+  featureName?: string
 }
 
-interface State {
-  hasError: boolean
-  error: Error | null
-}
+export class ErrorBoundary extends React.Component<Props, { error: Error | null }> {
+  state = { error: null as Error | null }
 
-class ErrorBoundaryBase extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
-
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    reportClientError('ErrorBoundary caught an error.', { error, errorInfo })
-  }
-
-  handleReset = () => {
-    this.setState({ hasError: false, error: null })
+    reportClientError(`[${this.props.featureName ?? 'App'}] Error.`, { error, errorInfo })
   }
 
   render() {
-    if (this.state.hasError) {
-      const recoveryUrl = this.state.error
-        ? getRecoveryUrl(this.state.error)
-        : null
-      return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-          <Card className="max-w-md w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="w-6 h-6" />
-                {'Something went wrong'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">
-                {
-                  'An unexpected error occurred. Please try refreshing the page.'
-                }
-              </p>
-              {this.state.error && (
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                    {'Show technical details'}
-                  </summary>
-                  <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto max-h-32">
-                    {rawErrorMessageIntentional(
-                      this.state.error,
-                      String(this.state.error),
-                    )}
-                  </pre>
-                </details>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => window.location.reload()}>
-                  <RefreshCw className="w-4 h-4 me-2" />
-                  {'Refresh Page'}
-                </Button>
-                <Button variant="outline" onClick={this.handleReset}>
-                  {'Try Again'}
-                </Button>
-                {recoveryUrl && (
-                  <Button variant="outline" asChild>
-                    <a href={recoveryUrl}>
-                      {'Open the page that can fix this'}
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )
-    }
+    const { error } = this.state
+    if (!error) return this.props.children
+    const { featureName } = this.props
+    const recoveryUrl = getRecoveryUrl(error)
+    const reset = () => this.setState({ error: null })
 
-    return this.props.children
+    const card = (
+      <Card className="w-full max-w-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertTriangle className="size-5 text-destructive" />
+            {featureName ? `${featureName} hit an error` : 'Something went wrong'}
+          </CardTitle>
+          <CardDescription>{featureName ? 'The rest of the panel still works. Try again, or go back to Overview.' : 'Reload the page. If it keeps happening, the details below help with a bug report.'}</CardDescription>
+        </CardHeader>
+        <CardPanel className="grid gap-4">
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Technical details</summary>
+            <pre className="mt-2 max-h-32 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs">{rawErrorMessageIntentional(error, String(error))}</pre>
+          </details>
+          <div className="flex flex-wrap gap-2">
+            {featureName ? (
+              <>
+                <Button onClick={reset}>Try again</Button>
+                <Button variant="ghost" render={<Link to="/" />}>
+                  Overview
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => window.location.reload()}>Reload page</Button>
+                <Button variant="outline" onClick={reset}>
+                  Try again
+                </Button>
+              </>
+            )}
+            {recoveryUrl && (
+              <Button variant="ghost" render={<a href={recoveryUrl} />}>
+                Open the page that can fix this
+              </Button>
+            )}
+          </div>
+        </CardPanel>
+      </Card>
+    )
+    return featureName ? card : <div className="flex min-h-screen items-center justify-center bg-background p-4">{card}</div>
   }
 }
-
-export const ErrorBoundary = ErrorBoundaryBase

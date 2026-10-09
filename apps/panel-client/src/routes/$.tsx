@@ -1,31 +1,22 @@
-import { createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { createFileRoute, Navigate, useLocation } from '@tanstack/react-router'
 import { NotFoundRoute } from '../components/NotFoundRoute'
 
-function NavigateTo({ to, tab }: { to: '/' | '/settings' | '/server-config'; tab?: string }) {
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    void navigate({
-      to,
-      ...(tab ? { search: { tab } } : {}),
-      replace: true,
-    })
-  }, [navigate, tab, to])
-
-  return null
-}
+// Paths from before 3.0, so bookmarks and old links keep working.
+const MOVED = {
+  '/dashboard': '/',
+  '/world-map': '/map',
+  '/server-config': '/config',
+  '/serverconfig': '/config',
+  '/scheduler': '/schedule',
+  '/debug': '/diagnostics',
+  '/server-setup': '/servers/new',
+} as const
 
 function LegacyRoute() {
-  const { pathname } = useLocation()
-
-  if (pathname === '/dashboard') return <NavigateTo to="/" />
-  if (pathname === '/roles') return <NavigateTo to="/settings" tab="roles" />
-  if (pathname === '/users') return <NavigateTo to="/settings" tab="users" />
-  if (pathname === '/sso') return <NavigateTo to="/settings" tab="sso" />
-  if (pathname === '/serverconfig') return <NavigateTo to="/server-config" />
-
-  return <NotFoundRoute />
+  const { pathname, search } = useLocation()
+  const to = MOVED[pathname as keyof typeof MOVED]
+  if (!to) return <NotFoundRoute />
+  return <Navigate to={to} search={search as never} replace />
 }
 
 export const Route = createFileRoute('/$')({

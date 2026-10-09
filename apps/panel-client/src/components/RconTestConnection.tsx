@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { rconApi, type RconTestResult } from '@/lib/api'
-import { cn } from '@/lib/utils'
 import { getRecoveryUrl, getUserErrorMessage } from '@/lib/errorMessage'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 interface RconTestConnectionProps {
   host: string
@@ -22,11 +22,9 @@ export function RconTestConnection({ host, port, password, className }: RconTest
     setResult(null)
     setRecoveryUrl(null)
     try {
-      const outcome = await rconApi.testConnection(host, port, password)
-      setResult(outcome)
+      setResult(await rconApi.testConnection(host, port, password))
     } catch (error) {
-      const detail = getUserErrorMessage(error, 'Test request failed')
-      setResult({ success: false, error: 'internal_error', detail })
+      setResult({ success: false, error: 'internal_error', detail: getUserErrorMessage(error, 'The test request failed.') })
       setRecoveryUrl(getRecoveryUrl(error))
     } finally {
       setTesting(false)
@@ -34,43 +32,21 @@ export function RconTestConnection({ host, port, password, className }: RconTest
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={runTest}
-        disabled={testing || !host.trim() || !port}
-      >
-        {testing ? (
-          <><Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" /> Testing...</>
-        ) : (
-          'Test Connection'
-        )}
+    <div className={cn('grid justify-items-start gap-1.5', className)}>
+      <Button type="button" variant="outline" size="sm" onClick={() => void runTest()} disabled={testing || !host.trim() || !port}>
+        {testing && <Loader2 className="animate-spin" />}
+        {testing ? 'Testing…' : 'Test connection'}
       </Button>
       {result && (
-        <div className="space-y-1">
-          <p
-            role="status"
-            aria-live="polite"
-            className={cn(
-              'flex items-start gap-1.5 text-xs',
-              result.success ? 'text-muted-foreground' : 'text-destructive',
-            )}
-          >
-            {result.success ? (
-              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            ) : (
-              <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            )}
-            {result.detail}
-          </p>
-          {!result.success && recoveryUrl && (
-            <a href={recoveryUrl} className="text-xs text-primary hover:underline">
-              Open connection settings
-            </a>
-          )}
-        </div>
+        <p role="status" aria-live="polite" className={cn('flex items-start gap-1.5 text-sm', result.success ? 'text-success-foreground' : 'text-destructive-foreground')}>
+          {result.success ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <XCircle className="mt-0.5 size-4 shrink-0" />}
+          {result.detail}
+        </p>
+      )}
+      {result && !result.success && recoveryUrl && (
+        <a href={recoveryUrl} className="text-sm underline underline-offset-4">
+          Open connection settings
+        </a>
       )}
     </div>
   )

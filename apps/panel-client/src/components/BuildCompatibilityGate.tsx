@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from '@/components/ui/card'
 import {
   assessBuildCompatibility,
   compiledBuildMetadata,
@@ -16,7 +19,13 @@ export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: false,
   })
 
-  if (!demoMode && isPending) {
+  // Block only until the first answer. The login screen shares this query and
+  // refetches it, and an errored query with no data goes back to pending.
+  // Unmounting the app then would remount it on every failed health check.
+  const answered = useRef(false)
+  if (!isPending) answered.current = true
+
+  if (!demoMode && isPending && !answered.current) {
     return <main className="min-h-screen bg-background" aria-label="Checking panel compatibility" />
   }
   if (demoMode || isError || !backend) return <>{children}</>
@@ -26,21 +35,33 @@ export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
     const frontend = compiledBuildMetadata()
     const backendVersion = backend.panelVersion || backend.version || 'unknown'
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
-        <section className="w-full max-w-xl rounded-lg border border-destructive/40 bg-card p-6 shadow-lg">
-          <p className="text-sm font-semibold uppercase tracking-wide text-destructive">Update recovery required</p>
-          <h1 className="mt-2 text-2xl font-bold">Frontend and backend versions do not match</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            The panel stopped before authentication and live connections were initialized. Restart with Start.bat to let the updater finish or roll back the incomplete bundle.
-          </p>
-          <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt>Frontend</dt><dd className="font-mono">{frontend.panelVersion} ({frontend.buildSha.slice(0, 12)})</dd>
-            <dt>Backend</dt><dd className="font-mono">{backendVersion} ({String(backend.buildSha || 'unknown').slice(0, 12)})</dd>
-          </dl>
-          <button className="mt-6 rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => window.location.reload()}>
-            Check again
-          </button>
-        </section>
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4 text-foreground">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="size-5 text-destructive" />
+              The panel's two halves don't match
+            </CardTitle>
+            <CardDescription>
+              The web page and the panel service come from different versions, usually because an update stopped partway. The panel paused before sign-in so nothing runs on a mixed install. Restart the panel so the updater can finish or roll back.
+            </CardDescription>
+          </CardHeader>
+          <CardPanel className="grid gap-4">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Web page</dt>
+              <dd className="font-mono text-xs leading-5">
+                {frontend.panelVersion} ({frontend.buildSha.slice(0, 12)})
+              </dd>
+              <dt className="text-muted-foreground">Panel service</dt>
+              <dd className="font-mono text-xs leading-5">
+                {backendVersion} ({String(backend.buildSha || 'unknown').slice(0, 12)})
+              </dd>
+            </dl>
+            <Button className="justify-self-start" onClick={() => window.location.reload()}>
+              Check again
+            </Button>
+          </CardPanel>
+        </Card>
       </main>
     )
   }

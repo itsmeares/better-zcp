@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, retainSearchParams, useSearch } from '@tanstack/react-router'
 import { BuildCompatibilityGate } from '../components/BuildCompatibilityGate'
-import { PageSkeleton } from '../components/PageSkeleton'
+import { PageLoading } from '../components/PageLoading'
 import AppShell from '../AppShell'
 import { NotFoundRoute } from '../components/NotFoundRoute'
 import { queryClientFor } from '../lib/queryClient'
@@ -14,15 +14,7 @@ export const Route = createRootRoute({
   search: { middlewares: [retainSearchParams(['server'])] },
   component: PanelRoot,
   notFoundComponent: NotFoundRoute,
-  pendingComponent: () => (
-    <PageSkeleton
-      title="Loading"
-      description="Opening panel route."
-      eyebrow="// ROUTE"
-      variant="default"
-      metrics={['route']}
-    />
-  ),
+  pendingComponent: PageLoading,
 })
 
 function PanelRoot() {

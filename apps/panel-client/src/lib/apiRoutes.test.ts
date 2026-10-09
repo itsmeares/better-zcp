@@ -113,3 +113,17 @@ it('keeps profile scope, refreshed bearer auth, and abort through an SSE replay'
   controller.abort()
   await expect(pendingRead).rejects.toMatchObject({ name: 'AbortError' })
 })
+
+it('times out reads but lets long writes such as a backup finish', async () => {
+  const signals: Record<string, AbortSignal | null | undefined> = {}
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, options?: RequestInit) => {
+    signals[options?.method || 'GET'] = options?.signal
+    return Response.json({ success: true })
+  }))
+
+  await backupApi.getStatus()
+  await backupApi.createBackup()
+
+  expect(signals.GET).toBeInstanceOf(AbortSignal)
+  expect(signals.POST).toBeUndefined()
+})

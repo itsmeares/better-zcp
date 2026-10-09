@@ -1,7 +1,7 @@
 import { serversApi } from "./lib/api";
 import { getSelectedServerId, selectServer } from "./lib/serverSelection";
-import { Outlet, useLocation, useSearch } from "@tanstack/react-router";
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { Outlet, useSearch } from "@tanstack/react-router";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import type { Socket } from "socket.io-client";
 import Layout from "./components/Layout";
 import {
@@ -12,121 +12,14 @@ import {
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { useAuth } from "./contexts/AuthContext";
 import { isDemoMode } from "./lib/demo";
-import { useToast } from "./components/ui/use-toast";
-import { PageSkeleton } from "./components/PageSkeleton";
+import { toastManager } from "./components/ui/toast";
+import { PageLoading } from "./components/PageLoading";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { getUserErrorMessage } from "./lib/errorMessage";
 import { createSocketAuthProvider } from "./lib/socketAuth";
 import { registerReconnectRecovery } from "./lib/socketRecovery";
-
-type RouteLoaderMeta = {
-  title: string;
-  description: string;
-  eyebrow: string;
-  variant: "dashboard" | "list" | "form" | "console" | "map" | "default";
-  metrics: string[];
-};
-
-const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
-  "/": {
-    title: "Dashboard",
-    description:
-      "Loading live server state, players, actions, and maintenance telemetry.",
-    eyebrow: "// LIVE · OVERVIEW",
-    variant: "dashboard",
-    metrics: ["status", "players", "rcon"],
-  },
-  "/players": {
-    title: "Online Players",
-    description:
-      "Preparing player rows, admin actions, notes, and session details.",
-    eyebrow: "// LIVE · PLAYERS",
-    variant: "list",
-    metrics: ["roster", "actions", "notes"],
-  },
-  "/console": {
-    title: "Server Console",
-    description: "Opening command history, RCON state, and live output stream.",
-    eyebrow: "// LIVE · CONSOLE",
-    variant: "console",
-    metrics: ["rcon", "history", "stream"],
-  },
-  "/world-map": {
-    title: "World Map",
-    description: "Loading map tiles, marker tools, and player/world overlays.",
-    eyebrow: "// WORLD · MAP",
-    variant: "map",
-    metrics: ["tiles", "markers", "layers"],
-  },
-  "/server-config": {
-    title: "Server Configuration",
-    description:
-      "Loading INI sections, validation, and server-safe edit controls.",
-    eyebrow: "// CONFIG · INI",
-    variant: "form",
-    metrics: ["ini", "validate", "save"],
-  },
-  "/mods": {
-    title: "Mod Manager",
-    description:
-      "Loading Workshop status, active mod IDs, conflicts, and update state.",
-    eyebrow: "// CONFIG · WORKSHOP",
-    variant: "list",
-    metrics: ["workshop", "mods", "conflicts"],
-  },
-  "/scheduler": {
-    title: "Scheduled Tasks",
-    description: "Preparing task rules, run history, and automation controls.",
-    eyebrow: "// MAINTAIN · SCHEDULE",
-    variant: "list",
-    metrics: ["tasks", "history", "cron"],
-  },
-  "/backups": {
-    title: "World Backups",
-    description:
-      "Loading backup inventory, restore controls, and storage status.",
-    eyebrow: "// MAINTAIN · BACKUPS",
-    variant: "list",
-    metrics: ["files", "storage", "restore"],
-  },
-  "/servers": {
-    title: "My Servers",
-    description:
-      "Loading server profiles, active target, and connection details.",
-    eyebrow: "// SERVERS · PROFILES",
-    variant: "list",
-    metrics: ["profiles", "active", "paths"],
-  },
-  "/server-setup": {
-    title: "Server Setup",
-    description: "Preparing install choices, paths, ports, and launch checks.",
-    eyebrow: "// SERVERS · SETUP",
-    variant: "form",
-    metrics: ["install", "ports", "start"],
-  },
-  "/settings": {
-    title: "Panel Settings",
-    description:
-      "Loading access, paths, network, and panel preference controls.",
-    eyebrow: "// SYSTEM · SETTINGS",
-    variant: "form",
-    metrics: ["auth", "paths", "network"],
-  },
-  "/debug": {
-    title: "Debug Logs",
-    description:
-      "Preparing diagnostics, probes, logs, and support bundle tools.",
-    eyebrow: "// SYSTEM · DIAGNOSTICS",
-    variant: "console",
-    metrics: ["logs", "probes", "bundle"],
-  },
-};
-
-function PageLoader() {
-  const { pathname } = useLocation();
-  const meta = ROUTE_LOADERS[pathname] || ROUTE_LOADERS["/"];
-  return <PageSkeleton {...meta} />;
-}
 
 function AppContent({
   onServersChanged,
@@ -142,16 +35,11 @@ function AppContent({
     reconnectAttempt: 0,
     error: null,
   });
-  const { toast } = useToast();
   const { getToken } = useAuth();
 
   const handleReconnectSuccess = useCallback(() => {
-    toast({
-      title: "Reconnected",
-      description: "Connection to server restored",
-      variant: "success" as const,
-    });
-  }, [toast]);
+    toastManager.add({ title: "Reconnected", description: "The connection to the panel is back.", type: "success" });
+  }, []);
 
   useEffect(() => {
     if (demoMode) return;
@@ -241,11 +129,11 @@ function AppContent({
           reconnectAttempt: 0,
           error: "Failed to reconnect after multiple attempts",
         });
-        toast({
-          title: "Connection Lost",
-          description:
-            "Unable to reconnect automatically. Reconnecting once this tab is visible or your network is back — or use Retry in the connection status indicator.",
-          variant: "destructive",
+        toastManager.add({
+          title: "Connection lost",
+          description: "The panel stopped retrying. It tries again when this tab is visible or the network is back, or use Retry in the connection status.",
+          type: "error",
+          timeout: 15000,
         });
 
         disposeRecovery?.();
@@ -263,7 +151,6 @@ function AppContent({
       createdSocket?.close();
     };
   }, [
-    toast,
     handleReconnectSuccess,
     getToken,
     demoMode,
@@ -276,7 +163,7 @@ function AppContent({
       <SocketContext.Provider value={socket}>
         <Layout>
           <ScrollToTop />
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<PageLoading />}>
             <Outlet />
           </Suspense>
         </Layout>
@@ -289,18 +176,22 @@ function ServerGate() {
   const { server: serverId } = useSearch({ from: "__root__" });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadedRef = useRef(false);
   const validateSelection = useCallback(async () => {
     try {
       const { servers } = await serversApi.getAll();
       if (getSelectedServerId() !== (serverId ?? null)) return;
-      const next = servers.some((server) => String(server.id) === serverId)
-        ? serverId
-        : (servers[0]?.id ?? null);
+      // Pick the first server on load, or when the selected one is gone. Once
+      // the app runs without a selection, a new server doesn't take over: the
+      // switch would remount the page, such as the add-server flow mid-finish.
+      const keep = serverId ? servers.some((server) => String(server.id) === serverId) : loadedRef.current;
+      const next = keep ? (serverId ?? null) : (servers[0]?.id ?? null);
       if ((next ?? null) !== (serverId ?? null)) {
         await selectServer(next ?? null);
         return;
       }
       setError(null);
+      loadedRef.current = true;
       setReady(true);
     } catch (error) {
       setError(getUserErrorMessage(error, "Could not load servers"));
@@ -311,12 +202,24 @@ function ServerGate() {
   }, [validateSelection]);
   if (error)
     return (
-      <div role="alert" className="p-6">
-        {error}
-        <button onClick={() => window.location.reload()}>Retry</button>
+      <div className="mx-auto max-w-lg p-6">
+        <Alert variant="error">
+          <AlertTitle>Could not load your servers</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+          <AlertAction>
+            <Button size="xs" variant="outline" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </AlertAction>
+        </Alert>
       </div>
     );
-  if (!ready) return <PageLoader />;
+  if (!ready)
+    return (
+      <div className="mx-auto max-w-7xl p-6">
+        <PageLoading />
+      </div>
+    );
   return (
     <ConfirmProvider>
       <AppContent onServersChanged={validateSelection} />

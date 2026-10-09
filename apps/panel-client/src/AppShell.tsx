@@ -1,11 +1,9 @@
 import { lazy, Suspense } from 'react'
-import { DirectionProvider } from '@radix-ui/react-direction'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AuthScreenLoader } from './components/AuthScreenLoader'
-import { TooltipProvider } from './components/ui/tooltip'
-import { Toaster } from './components/ui/toaster'
+import { ToastProvider } from './components/ui/toast'
 
 const App = lazy(() => import('./App'))
 const Login = lazy(() => import('./pages/Login'))
@@ -18,7 +16,6 @@ function AuthGate() {
   return (
     <Suspense fallback={<AuthScreenLoader />}>
       {needsSetup ? <Setup /> : authEnabled && !isAuthenticated ? <Login /> : <App />}
-      <Toaster />
     </Suspense>
   )
 }
@@ -26,15 +23,13 @@ function AuthGate() {
 export default function AppShell() {
   return (
     <ErrorBoundary>
-      <DirectionProvider dir="ltr">
-        <ThemeProvider>
-          <TooltipProvider>
-            <AuthProvider>
-              <AuthGate />
-            </AuthProvider>
-          </TooltipProvider>
-        </ThemeProvider>
-      </DirectionProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

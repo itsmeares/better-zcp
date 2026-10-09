@@ -1,0 +1,34 @@
+/* Utilities Tailwind has no built-in class for. */
+
+/* A nav item's icon tile: the icon in its hue on a soft tint of the same
+   hue. Set --hue on the element. Stronger inside an active menu button. */
+@utility nav-tile {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  color: var(--hue);
+  background-color: color-mix(in srgb, var(--hue) 12%, transparent);
+
+  [data-active='true'] > & {
+    background-color: color-mix(in srgb, var(--hue) 18%, transparent);
+  }
+
+  .dark & {
+    color: color-mix(in srgb, var(--hue) 72%, white);
+    background-color: color-mix(in srgb, var(--hue) 18%, transparent);
+  }
+
+  .dark [data-active='true'] > & {
+    background-color: color-mix(in srgb, var(--hue) 26%, transparent);
+  }
+}
+
+/* Floating controls over the map. The map tiles stay dark in both themes,
+   so its controls do too. */
+@utility map-glass {
+  background: rgb(22 20 17 / 0.84);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(10px);
+}

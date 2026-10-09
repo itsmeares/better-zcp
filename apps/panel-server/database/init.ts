@@ -141,7 +141,7 @@ function recoverDatabase(file: string, error: unknown): boolean {
   if (!fs.existsSync(directory)) return false;
   for (const name of fs
     .readdirSync(directory)
-    .filter((name) => /^panel-.*\.sqlite$/.test(name))
+    .filter((name) => DATABASE_BACKUP_PATTERN.test(name))
     .sort()
     .reverse()) {
     const candidate = path.join(directory, name);
@@ -281,6 +281,9 @@ function historyLimit(
   return parseClampedInteger(value, fallback, 1, RETENTION[collection]);
 }
 
+/** File names of the panel's database backups in data/backups. */
+export const DATABASE_BACKUP_PATTERN = /^panel-.*\.sqlite$/;
+
 function backup(label: string): string {
   const dir = path.join(getDataPaths().dataDir, "backups");
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -293,7 +296,7 @@ function backup(label: string): string {
   if (process.platform !== "win32") fs.chmodSync(file, 0o600);
   const files = fs
     .readdirSync(dir)
-    .filter((name) => /^panel-.*\.sqlite$/.test(name))
+    .filter((name) => DATABASE_BACKUP_PATTERN.test(name))
     .sort()
     .reverse();
   for (const name of files.slice(5)) fs.unlinkSync(path.join(dir, name));
@@ -348,7 +351,7 @@ export async function getDatabaseStats() {
     fileSizeBytes: fileSize,
     fileSizeKB: Math.round(fileSize / 102.4) / 10,
     backupCount: fs.existsSync(dir)
-      ? fs.readdirSync(dir).filter((name) => /^panel-.*\.sqlite$/.test(name))
+      ? fs.readdirSync(dir).filter((name) => DATABASE_BACKUP_PATTERN.test(name))
           .length
       : 0,
     collections,

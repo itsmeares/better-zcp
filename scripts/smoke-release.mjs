@@ -104,6 +104,15 @@ async function waitForHealth(baseUrl, child, output) {
   );
 }
 
+// Stable hooks so restyling the shell cannot break the smoke run.
+const APP_SHELL = '[data-app-shell]';
+
+async function signOut(page) {
+  const button = page.locator('[data-action="sign-out"]');
+  if (!(await button.isVisible())) await page.locator('[data-action="user-menu"]').click();
+  await button.click();
+}
+
 async function waitForVisible(page, selector, label) {
   try {
     await page.locator(selector).waitFor({ state: 'visible', timeout: 15_000 });
@@ -148,7 +157,7 @@ async function reloadWithRefresh(page, refreshUrl, label) {
   if (!response.ok()) {
     throw new Error(`Packaged auth smoke refresh failed: ${response.status()}`);
   }
-  await waitForVisible(page, 'button[title="Sign out"]', label);
+  await waitForVisible(page, APP_SHELL, label);
 }
 
 async function checkUpdateResultReload(page, baseUrl) {
@@ -186,7 +195,7 @@ async function checkUpdateResultReload(page, baseUrl) {
       committed = true;
       await reloaded;
       assert.equal(navigations, 1, `The ${outcome} apply result must reload the UI`);
-      await waitForVisible(page, 'button[title="Sign out"]', 'authenticated panel after update result');
+      await waitForVisible(page, APP_SHELL, 'authenticated panel after update result');
     } finally {
       page.off('request', onNavigation);
       await page.unroute('**/api/panel/update-status', statusRoute);
@@ -215,7 +224,7 @@ async function runAuthSmoke(baseUrl, setupToken) {
     await page.locator('#password').fill(password);
     await page.locator('#confirmPassword').fill(password);
     await page.getByRole('button', { name: 'Create account & continue' }).click();
-    await waitForVisible(page, 'button[title="Sign out"]', 'authenticated dashboard after setup');
+    await waitForVisible(page, APP_SHELL, 'authenticated dashboard after setup');
 
     await assertRememberMeCookie(context, baseUrl);
 
@@ -235,7 +244,7 @@ async function runAuthSmoke(baseUrl, setupToken) {
 
     await checkUpdateResultReload(page, baseUrl);
 
-    await page.locator('button[title="Sign out"]').click();
+    await signOut(page);
     await waitForVisible(page, '#login-form', 'login screen after dashboard logout');
     await assertNoRefreshCookie(context, baseUrl);
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -249,12 +258,9 @@ async function runAuthSmoke(baseUrl, setupToken) {
       await waitForVisible(noRememberPage, '#login-form', 'login screen');
       await noRememberPage.locator('#username').fill(username);
       await noRememberPage.locator('#password').fill(password);
-      const rememberMe = noRememberPage.locator('#rememberMe');
-      if ((await rememberMe.getAttribute('aria-checked')) === 'true') {
-        await rememberMe.click();
-      }
+      await noRememberPage.getByRole('checkbox', { name: 'Keep me signed in' }).uncheck();
       await noRememberPage.getByRole('button', { name: 'Sign in' }).click();
-      await waitForVisible(noRememberPage, 'button[title="Sign out"]', 'dashboard after non-persistent login');
+      await waitForVisible(noRememberPage, APP_SHELL, 'dashboard after non-persistent login');
       await assertNoRefreshCookie(noRememberContext, baseUrl);
       await noRememberPage.reload({ waitUntil: 'domcontentloaded' });
       await waitForVisible(noRememberPage, '#login-form', 'login after non-persistent hard reload');

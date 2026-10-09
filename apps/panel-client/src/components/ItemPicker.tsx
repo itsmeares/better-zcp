@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { gameIntegrationApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import { useToast } from '@/components/ui/use-toast'
+import { toastManager } from '@/components/ui/toast'
 
 export interface CatalogItem {
   id: string
@@ -204,7 +204,6 @@ export function ItemPicker({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [dropUp, setDropUp] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -254,24 +253,19 @@ export function ItemPicker({
       const data = await gameIntegrationApi.refreshCatalogItems()
       setItems(data.items || [])
       setScannedAt(data.scannedAt)
-      toast({
-        title: 'Item catalog updated',
-        description: 'Found ' + String(data.count || 0) + ' items',
-      })
+      toastManager.add({ title: 'Item catalog updated', description: `Found ${data.count || 0} items`, type: 'success' })
     } catch (err: unknown) {
       const msg = getUserErrorMessage(err, 'Scan failed')
       setScanError(msg)
-      toast({
+      toastManager.add({
         title: 'Item scan failed',
-        description: msg.includes('not connected')
-          ? 'The game server must be online with game integration active.'
-          : msg,
-        variant: 'destructive',
+        description: msg.includes('not connected') ? 'The game server must be online with game integration active.' : msg,
+        type: 'error',
       })
     } finally {
       setScanning(false)
     }
-  }, [scanning, toast])
+  }, [scanning])
 
   const nonVehicleItems = useMemo(
     () => items.filter((item) => !VEHICLE_CATEGORIES.has(item.category)),
@@ -517,7 +511,7 @@ export function ItemPicker({
         className={cn(
           'flex items-center gap-2 h-11 sm:h-9 rounded-md border border-input bg-background px-3 text-sm cursor-pointer',
           'motion-safe:transition-colors duration-150',
-          'hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          'hover:border-primary/40 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring',
           open && 'border-primary/60 ring-1 ring-primary/20',
           disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         )}
@@ -552,7 +546,7 @@ export function ItemPicker({
               e.stopPropagation()
               handleClear()
             }}
-            className="-me-1 flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0 motion-safe:transition-colors"
+            className="-me-1 flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring shrink-0 motion-safe:transition-colors"
             aria-label={'Clear selection'}
           >
             <X className="w-3.5 h-3.5" />
@@ -588,7 +582,7 @@ export function ItemPicker({
                 String(nonVehicleItems.length.toLocaleString('en')) +
                 ' items…'
               }
-              className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+              className="flex-1 min-w-0 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/60"
               aria-label={'Filter items'}
               autoFocus
             />
@@ -604,13 +598,13 @@ export function ItemPicker({
             )}
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={(e) => {
                 e.stopPropagation()
                 handleScan()
               }}
               disabled={scanning}
-              className="h-8 w-8 p-0 shrink-0"
+              className="shrink-0"
               // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; disables only while a scan is already in flight (the spinner is the self-evident why). Triaged 2026-08-27.
               title={'Re-scan server items'}
               aria-label={'Re-scan server items'}
@@ -678,7 +672,7 @@ export function ItemPicker({
               id="itempicker-listbox"
               aria-label={'Item list'}
             >
-              <div className="sticky top-0 z-10 flex items-center gap-2.5 px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border/30">
+              <div className="sticky top-0 z-10 flex items-center gap-2.5 px-4 py-2 bg-muted/80 backdrop-blur-xs border-b border-border/30">
                 <ActiveIcon className="w-3.5 h-3.5 text-muted-foreground/70" />
                 <span className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">
                   {activeCategoryLabel}
@@ -725,7 +719,7 @@ export function ItemPicker({
                           'motion-safe:transition-colors duration-75',
                           'hover:bg-accent/10',
                           item.id === value && 'bg-primary/10',
-                          idx === highlightIndex && 'bg-accent/15 outline-none',
+                          idx === highlightIndex && 'bg-accent/15 outline-hidden',
                         )}
                       >
                         {!activeCategory && (

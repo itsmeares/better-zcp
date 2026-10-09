@@ -1,29 +1,32 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react'
 
-export type ThemeName = 'survival' | 'light'
+export type ThemeName = 'light' | 'dark' | 'system'
 
+// Shared with the boot script in index.html, which applies the class before paint.
 const STORAGE_KEY = 'pz-panel-theme'
-const THEME_CLASSES: ThemeName[] = ['survival', 'light'] as const
+
+// Before 3.0 the dark theme was stored as "survival".
+function parseTheme(value: string | null): ThemeName {
+  if (value === 'light' || value === 'dark' || value === 'system') return value
+  if (value === 'survival') return 'dark'
+  return 'system'
+}
 
 function getStoredTheme(): ThemeName {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored && THEME_CLASSES.includes(stored as ThemeName)) return stored as ThemeName
-  } catch { /* localStorage may be unavailable */ }
-  return 'survival'
+    return parseTheme(localStorage.getItem(STORAGE_KEY))
+  } catch {
+    return 'system'
+  }
 }
 
-function applyThemeClass(theme: ThemeName) {
+const systemDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches
+
+function applyTheme(theme: ThemeName) {
+  const dark = theme === 'dark' || (theme === 'system' && systemDark())
   const root = document.documentElement
-  for (const cls of THEME_CLASSES) root.classList.remove(`theme-${cls}`)
-  root.classList.remove('dark')
-  root.classList.add(`theme-${theme}`)
-  if (theme === 'light') {
-    root.style.colorScheme = 'light'
-  } else {
-    root.classList.add('dark')
-    root.style.colorScheme = 'dark'
-  }
+  root.classList.toggle('dark', dark)
+  root.classList.toggle('light', !dark)
 }
 
 interface ThemeContextValue {
@@ -32,7 +35,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'survival',
+  theme: 'system',
   setTheme: () => {},
 })
 
@@ -41,13 +44,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = useCallback((t: ThemeName) => {
     setThemeState(t)
-    try { localStorage.setItem(STORAGE_KEY, t) } catch { /* ok */ }
-    applyThemeClass(t)
+    try { localStorage.setItem(STORAGE_KEY, t) } catch { /* storage may be unavailable */ }
   }, [])
 
   useEffect(() => {
-    applyThemeClass(theme)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    applyTheme(theme)
+    if (theme !== 'system') return
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system')
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [theme])
 
   const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme])
 

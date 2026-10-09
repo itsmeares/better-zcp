@@ -141,8 +141,8 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Maximum allowed number of players.',
     type: 'number',
     min: 1,
-    max: 100,
-    default: 16,
+    max: 254,
+    default: 32,
     category: 'general'
   },
   {
@@ -175,7 +175,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Auto-save world every X minutes. 0 = never.',
     type: 'number',
     min: 0,
-    max: 60,
+    max: 2147483647,
     default: 0,
     category: 'general'
   },
@@ -219,11 +219,11 @@ export const INI_SCHEMA: IniSetting[] = [
   {
     key: 'PingLimit',
     label: 'Ping Limit',
-    description: 'Ping limit before being kicked (milliseconds). 100 to disable.',
+    description: 'Kick players whose ping goes over this many milliseconds. 0 turns it off.',
     type: 'number',
-    min: 100,
-    max: 1000,
-    default: 250,
+    min: 0,
+    max: 2147483647,
+    default: 0,
     category: 'network'
   },
   {
@@ -240,7 +240,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Maximum movement speed allowed.',
     type: 'number',
     min: 10,
-    max: 200,
+    max: 150,
     default: 70,
     category: 'network'
   },
@@ -257,8 +257,8 @@ export const INI_SCHEMA: IniSetting[] = [
     label: 'Max Packets Per Second',
     description: 'Cap on packets per second sent to a connected client. Higher values increase bandwidth use; lower values may cause stutter under load.',
     type: 'number',
-    min: 50,
-    max: 2000,
+    min: 100,
+    max: 1000,
     default: 300,
     category: 'network'
   },
@@ -293,7 +293,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Time in seconds to switch between PvP on and off.',
     type: 'number',
     min: 0,
-    max: 60,
+    max: 1000,
     default: 2,
     category: 'pvp'
   },
@@ -303,7 +303,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Time in seconds before you can toggle safety again.',
     type: 'number',
     min: 0,
-    max: 60,
+    max: 1000,
     default: 3,
     category: 'pvp'
   },
@@ -415,7 +415,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Limit accounts per Steam user. 0 = unlimited.',
     type: 'number',
     min: 0,
-    max: 10,
+    max: 2147483647,
     default: 0,
     category: 'players'
   },
@@ -545,7 +545,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Days a player must survive before claiming a safehouse.',
     type: 'number',
     min: 0,
-    max: 365,
+    max: 2147483647,
     default: 0,
     category: 'safehouse'
   },
@@ -555,7 +555,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Real-time hours of inactivity before removal from safehouse.',
     type: 'number',
     min: 0,
-    max: 720,
+    max: 2147483647,
     default: 144,
     category: 'safehouse'
   },
@@ -574,7 +574,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Max items per container. 0 = unlimited.',
     type: 'number',
     min: 0,
-    max: 1000,
+    max: 9000,
     default: 0,
     category: 'loot'
   },
@@ -625,7 +625,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Days a player must survive to create a faction.',
     type: 'number',
     min: 0,
-    max: 365,
+    max: 2147483647,
     default: 0,
     category: 'players'
   },
@@ -635,7 +635,7 @@ export const INI_SCHEMA: IniSetting[] = [
     description: 'Players required in faction to show tag.',
     type: 'number',
     min: 1,
-    max: 50,
+    max: 2147483647,
     default: 1,
     category: 'players'
   },
@@ -736,8 +736,8 @@ export const INI_SCHEMA: IniSetting[] = [
     label: 'Voice Min Distance',
     description: 'Minimum voice distance.',
     type: 'number',
-    min: 1,
-    max: 100,
+    min: 0,
+    max: 100000,
     default: 10,
     category: 'voice'
   },
@@ -746,9 +746,9 @@ export const INI_SCHEMA: IniSetting[] = [
     label: 'Voice Max Distance',
     description: 'Maximum voice distance.',
     type: 'number',
-    min: 10,
-    max: 1000,
-    default: 300,
+    min: 0,
+    max: 100000,
+    default: 100,
     category: 'voice'
   },
 
@@ -1188,7 +1188,7 @@ export const INI_SCHEMA: IniSetting[] = [
     type: 'number',
     min: 0,
     max: 1500,
-    default: 60,
+    default: 0,
     category: 'backups'
   },
 

@@ -10,6 +10,7 @@ import {
 import { getAccessToken } from '@/lib/authToken'
 import { ApiError } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
+import { formatBytes } from '@/lib/utils'
 
 interface DiffLine {
   type: 'context' | 'add' | 'remove'
@@ -76,11 +77,6 @@ interface FileDiffViewerProps {
   } | null
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function overlapKindLabel(
   kind:
@@ -301,7 +297,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
       </button>
 
       {expanded && (
-        <div className="diff-panel-enter ms-5 me-2 mt-1.5 mb-2.5 rounded-md border border-border/50 overflow-hidden bg-background/50">
+        <div className="ms-5 me-2 mt-1.5 mb-2.5 rounded-md border border-border/50 overflow-hidden bg-background/50">
           {overlap &&
             overlap.total > 0 &&
             overlap.kind !== 'lua-shadow' &&
@@ -359,7 +355,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
           )}
           {error && (
             <div className="p-3 text-xs text-destructive flex items-center gap-2">
-              <span className="flex-1 min-w-0 break-words" dir="auto">
+              <span className="flex-1 min-w-0 wrap-break-word" dir="auto">
                 {error}
               </span>
               <button
@@ -367,7 +363,7 @@ export const FileDiffViewer = memo(function FileDiffViewer({
                   e.stopPropagation()
                   fetchDiff()
                 }}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring rounded-sm outline-none"
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-1 focus-visible:ring-ring rounded-sm outline-hidden"
                 title={'Retry'}
                 aria-label={'Retry file comparison'}
               >
@@ -444,7 +440,7 @@ function TextDiffView({
         </span>
       </div>
 
-      <div className="diff-code overflow-x-auto text-[11px] font-mono leading-[1.6] max-h-[250px] sm:max-h-[400px] overflow-y-auto">
+      <div className="overflow-x-auto [tab-size:4] [font-variant-ligatures:none] text-[11px] font-mono leading-[1.6] max-h-[250px] sm:max-h-[400px] overflow-y-auto">
         {diff.hunks.slice(0, maxHunks).map((hunk, hIdx) => (
           <div key={hIdx}>
             {hIdx > 0 && (
@@ -455,15 +451,15 @@ function TextDiffView({
             {hunk.lines.map((line, lIdx) => (
               <div
                 key={`${hIdx}-${lIdx}`}
-                className={`diff-line flex ${
+                className={`flex min-h-[1.6em] ${
                   line.type === 'add'
-                    ? 'bg-success/8 diff-line-add'
+                    ? 'border-s-2 border-success/35 bg-success/8'
                     : line.type === 'remove'
-                      ? 'bg-destructive/8 diff-line-remove'
+                      ? 'border-s-2 border-destructive/30 bg-destructive/8'
                       : ''
                 }`}
               >
-                <span className="diff-gutter w-8 sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
+                <span className="w-8 tabular-nums sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
                   {line.type === 'remove' && line.lineA != null
                     ? line.lineA
                     : ''}
@@ -471,7 +467,7 @@ function TextDiffView({
                     ? line.lineA
                     : ''}
                 </span>
-                <span className="diff-gutter w-8 sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
+                <span className="w-8 tabular-nums sm:w-[52px] shrink-0 text-end pe-2 text-muted-foreground/40 select-none border-e border-border/20">
                   {line.type === 'add' && line.lineB != null ? line.lineB : ''}
                   {line.type === 'context' && line.lineB != null
                     ? line.lineB
@@ -504,7 +500,7 @@ function TextDiffView({
           <button
             onClick={() => setShowFull(true)}
             aria-expanded={showFull}
-            className="w-full text-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/20 focus-visible:ring-1 focus-visible:ring-ring outline-none"
+            className="w-full text-center py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/20 focus-visible:ring-1 focus-visible:ring-ring outline-hidden"
           >
             {Number(diff.hunks.length - MAX_VISIBLE_HUNKS) === 1
               ? 'Show ' +
@@ -540,14 +536,14 @@ function ImageDiffView({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground truncate">
-            {modAName} ({formatSize(diff.modA.size)})
+            {modAName} ({formatBytes(diff.modA.size)})
           </p>
           {diff.modA.base64 ? (
             <img
               src={`data:image/${diff.ext.replace('.', '')};base64,${diff.modA.base64}`}
               alt={`${modAName} version of ${file}`}
               loading="lazy"
-              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-[length:12px_12px]"
+              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-size-[12px_12px]"
               onError={(e) => {
                 ;(e.target as HTMLImageElement).style.display = 'none'
               }}
@@ -560,14 +556,14 @@ function ImageDiffView({
         </div>
         <div className="space-y-1">
           <p className="text-[11px] text-muted-foreground truncate">
-            {modBName} ({formatSize(diff.modB.size)})
+            {modBName} ({formatBytes(diff.modB.size)})
           </p>
           {diff.modB.base64 ? (
             <img
               src={`data:image/${diff.ext.replace('.', '')};base64,${diff.modB.base64}`}
               alt={`${modBName} version of ${file}`}
               loading="lazy"
-              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-[length:12px_12px]"
+              className="max-h-32 rounded border border-border/30 bg-[repeating-conic-gradient(rgba(128,128,128,0.1)_0%_25%,transparent_0%_50%)] bg-size-[12px_12px]"
               onError={(e) => {
                 ;(e.target as HTMLImageElement).style.display = 'none'
               }}
@@ -604,14 +600,14 @@ function BinaryDiffView({
         <div>
           <p className="font-medium text-foreground/80">{modAName}</p>
           <p>
-            {formatSize(diff.modA.size)}
+            {formatBytes(diff.modA.size)}
             {diff.modA.hash && ` · ${diff.modA.hash.slice(0, 8)}…`}
           </p>
         </div>
         <div>
           <p className="font-medium text-foreground/80">{modBName}</p>
           <p>
-            {formatSize(diff.modB.size)}
+            {formatBytes(diff.modB.size)}
             {diff.modB.hash && ` · ${diff.modB.hash.slice(0, 8)}…`}
           </p>
         </div>

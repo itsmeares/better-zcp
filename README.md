@@ -20,7 +20,7 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 
 <br />
 
-![Dashboard](docs/assets/screenshots/screenshot-dashboard-v2.png)
+![Overview](docs/assets/screenshots/screenshot-overview-v3.png)
 
 > **At a glance** — server status, RCON and game integration state, live player activity, host telemetry, disk headroom, the next scheduled maintenance action, console error count, backup readiness, and quick actions. One screen covers 80% of routine admin work.
 
@@ -30,10 +30,10 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 <tr>
 <td colspan="2" valign="top">
 
-### 🗺️ Live World Map
+### 🗺️ Live map
 Live player positions, every floor including basements, zombie density, coordinate teleport, and search for towns, streets, building types and rooms. The map is drawn from your server's own game files: the map image and building outlines, street names, town labels, and room layouts per floor. Mod maps in the server's `Map=` order are drawn with the same priority the game uses. Nothing is sent to an outside service.
 
-<img src="docs/assets/screenshots/screenshot-worldmap-v2.png" alt="World Map" />
+<img src="docs/assets/screenshots/screenshot-map-v3.png" alt="Map" />
 
 </td>
 </tr>
@@ -43,7 +43,7 @@ Live player positions, every floor including basements, zombie density, coordina
 ### 👥 Player Management
 Roster with online / offline / banned tabs. Per-player details with moderation, item delivery, XP, invisibility, noclip, god mode, teleport, heal and kill, live status, recent sessions, and lifelong playtime and deaths. Voice ban, SteamID ban, manual targeting.
 
-<img src="docs/assets/screenshots/screenshot-players-v2.png" alt="Players" />
+<img src="docs/assets/screenshots/screenshot-players-v3.png" alt="Players" />
 
 </td>
 <td width="50%" valign="top">
@@ -51,7 +51,7 @@ Roster with online / offline / banned tabs. Per-player details with moderation, 
 ### 🧩 Mod Manager
 Tracks every Workshop mod on your server and flags updates through the Steam API. Import a Steam collection and drive server membership from it — adding a mod writes `WorkshopItems=`, resolves its internal mod ID into `Mods=`, and picks up map folders on its own.
 
-<img src="docs/assets/screenshots/screenshot-mods-v2.png" alt="Mod Manager" />
+<img src="docs/assets/screenshots/screenshot-mods-v3.png" alt="Mod Manager" />
 
 </td>
 </tr>
@@ -61,7 +61,7 @@ Tracks every Workshop mod on your server and flags updates through the Steam API
 ### ⚠️ Mod Conflicts & Load Order
 Scans your mod list for known incompatibilities, missing dependencies, and load-order issues. Severity-tinted findings so you see real problems before you boot the server. Load order can auto-sort from each mod's declared `require=`, with a preview of every move before anything is written.
 
-<img src="docs/assets/screenshots/screenshot-mods-conflicts.png" alt="Mod Conflicts" />
+<img src="docs/assets/screenshots/screenshot-mods-conflicts-v3.png" alt="Mod Conflicts" />
 
 </td>
 <td width="50%" valign="top">
@@ -69,7 +69,7 @@ Scans your mod list for known incompatibilities, missing dependencies, and load-
 ### ⚙️ Server Configuration
 Full in-browser INI editor for sandbox options, spawn regions, mod settings, and server flags. Searchable, structured view + raw view for power users. No more notepad-and-restart. Mod settings edits apply live through game integration while the server is running and save to disk.
 
-<img src="docs/assets/screenshots/screenshot-config-v2.png" alt="Server Configuration" />
+<img src="docs/assets/screenshots/screenshot-config-v3.png" alt="Server Configuration" />
 
 </td>
 </tr>
@@ -79,7 +79,7 @@ Full in-browser INI editor for sandbox options, spawn regions, mod settings, and
 ### 🆕 Server Setup Wizard
 Spin up a fresh PZ server in minutes. SteamCMD install, port config, RCON setup, admin account — all stepped through with sensible defaults.
 
-<img src="docs/assets/screenshots/screenshot-server-setup.png" alt="Server Setup" />
+<img src="docs/assets/screenshots/screenshot-server-setup-v3.png" alt="Server Setup" />
 
 </td>
 </tr>
@@ -87,17 +87,17 @@ Spin up a fresh PZ server in minutes. SteamCMD install, port config, RCON setup,
 <td width="50%" valign="top">
 
 ### 📊 Performance Telemetry
-Host RAM and CPU graphs, PZ process memory, player count history. The last 24 hours remain available for inspection. Catch slow leaks and load spikes before players notice.
+CPU, memory and player count on the Overview, for the last hour, 6 hours or 24 hours. Catch slow leaks and load spikes before players notice.
 
-<img src="docs/assets/screenshots/screenshot-debug-performance.png" alt="Performance" />
+<img src="docs/assets/screenshots/screenshot-performance-v3.png" alt="Performance" />
 
 </td>
 <td width="50%" valign="top">
 
 ### 🐛 Crash Logs & Diagnostics
-Text crash and error logs with full-file downloads, plus a support bundle containing logs and diagnostics. The bundle masks known secrets and excludes saves, full databases and binary crash dumps. Health, environment and activity tabs include panel, game server and map-provider status.
+Text crash and error logs with full-file downloads, plus a support bundle containing logs and diagnostics. The bundle masks known secrets and excludes saves, full databases and binary crash dumps. Diagnostics also runs checks on services, paths, storage and the map, and shows recent activity and the panel's own log.
 
-<img src="docs/assets/screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
+<img src="docs/assets/screenshots/screenshot-diagnostics-v3.png" alt="Diagnostics" />
 
 </td>
 </tr>

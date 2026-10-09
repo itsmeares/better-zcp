@@ -290,6 +290,18 @@ function normalizePathForCompare(value: unknown, exactLinuxArgv = false) {
   return isWindows ? withoutTrailingSlash.toLowerCase() : withoutTrailingSlash;
 }
 
+/**
+ * The port the game listens on. When the panel writes the start script it
+ * passes the profile's port as -port, which beats DefaultPort in the .ini.
+ */
+export function effectiveGamePort(server: AnyRecord | null, iniDefaultPort: unknown): number | null {
+  const profilePort = Number(server?.serverPort);
+  const panelWritesLaunch = Boolean(server) && !server?.startCommand && resolveLaunchMode(server).mode === "managed";
+  if (panelWritesLaunch && Number.isInteger(profilePort) && profilePort > 0 && profilePort !== 16261) return profilePort;
+  const iniPort = parseInt(String(iniDefaultPort ?? ""), 10);
+  return Number.isInteger(iniPort) && iniPort > 0 ? iniPort : null;
+}
+
 export function resolveLaunchMode(server: AnyRecord | null): LaunchMode {
   const raw = server?.serverPath || server?.installPath;
   if (!raw || typeof raw !== "string") {
@@ -1184,7 +1196,8 @@ export class ServerManager {
           this.serverProcess = null;
         });
 
-        this.serverProcess.unref();
+        const child = this.serverProcess;
+        child.unref();
         this.isRunning = true;
         this.startTime = new Date();
 
@@ -1199,7 +1212,7 @@ export class ServerManager {
 
         await (logServerEvent as any)("server_start", "Server started via manager");
         log.info("Server start command executed");
-        this._writePidFile(this.serverProcess.pid);
+        this._writePidFile(child.pid);
 
         return { success: true, message: "Server start command executed" };
       }
@@ -1260,7 +1273,10 @@ export class ServerManager {
         this.serverProcess = null;
       });
 
-      this.serverProcess.unref();
+      // A status poll can clear this.serverProcess while the script is still
+      // starting the game, so keep our own handle to the child.
+      const child = this.serverProcess;
+      child.unref();
       this.isRunning = true;
       this.startTime = new Date();
 
@@ -1275,7 +1291,7 @@ export class ServerManager {
 
       await (logServerEvent as any)("server_start", "Server started via manager");
       log.info("Server start command executed");
-      this._writePidFile(this.serverProcess.pid);
+      this._writePidFile(child.pid);
 
       return { success: true, message: "Server start command executed" };
     } finally {
@@ -1747,7 +1763,8 @@ export class ServerManager {
 
     const processDetails = await this.getServerProcessDetails();
     const isRunning = processDetails.running;
-    if (!isRunning && !processDetails.scanFailed) {
+    // Mid-start the game process may not show up in a scan yet.
+    if (!isRunning && !processDetails.scanFailed && !this._starting) {
       this._clearRunState();
     }
     if (isRunning && !this.startTime) {
@@ -1803,9 +1820,7 @@ export class ServerManager {
   async loadGamePort() {
     try {
       const config = await this.getServerConfig();
-      if (config && config.DefaultPort) {
-        this.gamePort = parseInt(config.DefaultPort, 10);
-      }
+      this.gamePort = effectiveGamePort(this._serverRecord, config?.DefaultPort) ?? this.gamePort;
     } catch (e: any) {
       // ignore
     }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Package, Trash2 } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogDescription, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import { NumberInput } from '@/components/NumberInput'
 import { ItemPicker } from './ItemPicker'
 
@@ -66,68 +68,57 @@ export function SpawnBrowser({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(560px,95vw)] max-w-[min(560px,95vw)]">
-        <div className="flex items-center gap-3">
-          <Package className="h-5 w-5 text-primary" />
-          <div>
-            <DialogTitle>Give items</DialogTitle>
-            <DialogDescription>Giving to {playerName || 'a selected player'}</DialogDescription>
+      <DialogPopup className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Give items</DialogTitle>
+          <DialogDescription>Items go straight into {playerName || 'the selected player'}'s inventory. Give as many as you like.</DialogDescription>
+        </DialogHeader>
+        <DialogPanel className="grid gap-4">
+          <ItemPicker value={itemId} onChange={setItemId} disabled={spawning} />
+          <div className="flex items-center gap-3">
+            <Label htmlFor="spawn-qty">Quantity</Label>
+            <NumberInput
+              id="spawn-qty"
+              value={qty}
+              onChange={(n) => { if (Number.isFinite(n)) setQty(n) }}
+              clamp={(n) => Math.max(1, Math.min(100, n))}
+              min={1}
+              max={100}
+              disabled={spawning}
+              className="w-20"
+            />
+            <Button className="ms-auto" disabled={!itemId || !playerName || spawning} onClick={() => void give(itemId, qty)}>
+              {spawning && <Spinner />}
+              Give
+            </Button>
           </div>
-        </div>
-        <ItemPicker value={itemId} onChange={setItemId} disabled={spawning} />
-        <div className="flex items-center gap-3">
-          <label htmlFor="spawn-qty" className="text-sm">Quantity</label>
-          <NumberInput
-            id="spawn-qty"
-            value={qty}
-            onChange={(n) => { if (Number.isFinite(n)) setQty(n) }}
-            clamp={(n) => Math.max(1, Math.min(100, n))}
-            min={1}
-            max={100}
-            disabled={spawning}
-            className="w-20"
-          />
-          <Button
-            className="ms-auto"
-            disabled={!itemId || !playerName || spawning}
-            onClick={() => void give(itemId, qty)}
-          >
-            {spawning && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-            Give
-          </Button>
-        </div>
-        {recent.length > 0 && (
-          <div className="border-t border-border pt-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Recent items</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Clear recent items"
-                onClick={() => {
-                  setRecent([])
-                  try { localStorage.removeItem(RECENT_KEY) } catch { /* storage disabled */ }
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {recent.map((item) => (
+          {recent.length > 0 && (
+            <div className="grid gap-2 border-t pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Recent items</span>
                 <Button
-                  key={item.id}
-                  variant="outline"
-                  size="sm"
-                  disabled={spawning || !playerName}
-                  onClick={() => void give(item.id, item.qty)}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Clear recent items"
+                  onClick={() => {
+                    setRecent([])
+                    try { localStorage.removeItem(RECENT_KEY) } catch { /* storage disabled */ }
+                  }}
                 >
-                  {item.id} × {item.qty}
+                  <Trash2 />
                 </Button>
-              ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recent.map((item) => (
+                  <Button key={item.id} variant="outline" size="sm" disabled={spawning || !playerName} onClick={() => void give(item.id, item.qty)}>
+                    {item.id} × {item.qty}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </DialogContent>
+          )}
+        </DialogPanel>
+      </DialogPopup>
     </Dialog>
   )
 }

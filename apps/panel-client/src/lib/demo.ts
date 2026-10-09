@@ -354,10 +354,10 @@ function demoServer() {
     serverConfigPath: '/home/pz/Zomboid/Server',
     rconHost: '127.0.0.1',
     rconPort: 27015,
-    rconPassword: '',
+    rconPassword: '••••••••',
     serverPort: 16261,
-    minMemory: 2048,
-    maxMemory: 4096,
+    minMemory: 2,
+    maxMemory: 4,
     useNoSteam: false,
     useDebug: false,
     isActive: true,
@@ -398,16 +398,22 @@ function demoStorageHealth() {
   }
 }
 
+const DEMO_UPTIME_SECONDS = 3 * 3600 + 12 * 60
+const DEMO_PLAYERS = ['Kate', 'Baldspot', 'nightowl_92', 'Marisol']
+
 function demoServerStatus() {
   return {
-    running: false,
-    startTime: null,
-    uptime: 0,
+    running: true,
+    state: 'ready',
+    startTime: new Date(Date.now() - DEMO_UPTIME_SECONDS * 1000).toISOString(),
+    uptime: DEMO_UPTIME_SECONDS,
     serverPath: '/opt/pz',
+    serverPathConfigured: true,
     configured: true,
-    localIp: '127.0.0.1',
+    localIp: '192.168.1.20',
+    publicIp: '203.0.113.24',
     port: 16261,
-    rcon: { host: '127.0.0.1', port: 27015, connected: false },
+    rcon: { host: '127.0.0.1', port: 27015, connected: true },
   }
 }
 
@@ -415,10 +421,204 @@ function demoComposedStatus() {
   return {
     provider: 'native',
     selected: true,
-    host: { status: 'stopped', label: 'Stopped', detail: null },
-    server: { status: 'disconnected', label: 'Disconnected', detail: null },
-    gameIntegration: { status: 'offline', label: 'Offline', detail: null },
-    summary: 'Demo server is offline',
+    state: 'ready',
+    host: { status: 'running', label: 'Process', detail: null },
+    server: { status: 'connected', label: 'RCON', detail: null },
+    gameIntegration: { status: 'active', label: 'Game integration', detail: null },
+    summary: 'Demo server is running',
+  }
+}
+
+/** One sample a minute, like the real panel, with a smooth daily curve. */
+function demoPerformanceHistory(limit: number) {
+  const now = Date.now()
+  const GB = 1024 ** 3
+  return Array.from({ length: limit }, (_, index) => {
+    const minutesAgo = limit - 1 - index
+    const wave = Math.sin((now / 60_000 - minutesAgo) / 90)
+    const players = Math.max(0, Math.round(3 + wave * 3 + Math.sin(minutesAgo / 7)))
+    return {
+      timestamp: new Date(now - minutesAgo * 60_000).toISOString(),
+      playerCount: players,
+      cpuUsage: 18 + players * 4 + Math.abs(Math.sin(minutesAgo / 3)) * 6,
+      pzMemUsed: (2.2 + players * 0.18 + wave * 0.1) * GB,
+      memoryUsed: 180 * 1024 ** 2,
+      hostMemUsed: (9.4 + players * 0.2) * GB,
+      hostMemTotal: 16 * GB,
+      hostDiskUsed: 182 * GB,
+      hostDiskTotal: 256 * GB,
+      hostSwapUsed: 0.2 * GB,
+      hostSwapTotal: 2 * GB,
+    }
+  })
+}
+
+function demoActivity() {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  return [
+    { id: 8, player_name: 'Marisol', action: 'connect', details: null, logged_at: at(4) },
+    { id: 7, player_name: 'Baldspot', action: 'death', details: null, logged_at: at(19) },
+    { id: 6, player_name: 'nightowl_92', action: 'connect', details: null, logged_at: at(41) },
+    { id: 5, player_name: 'Rook', action: 'disconnect', details: null, logged_at: at(58) },
+    { id: 4, player_name: 'Baldspot', action: 'connect', details: null, logged_at: at(96) },
+    { id: 3, player_name: 'GrieferJoe', action: 'kick', details: 'Spawn camping', logged_at: at(130) },
+    { id: 2, player_name: 'Kate', action: 'connect', details: null, logged_at: at(171) },
+  ]
+}
+
+function demoConsoleLog() {
+  const t = (minutesAgo: number) => Date.now() - minutesAgo * 60_000
+  return [
+    `LOG  : General      f:0, t:${t(192)}> Loading world DoomerZDemo`,
+    `LOG  : Network      f:0, t:${t(191)}> RCON: listening on port 27015`,
+    `LOG  : General      f:0, t:${t(190)}> *** SERVER STARTED ****`,
+    `LOG  : General      f:0, t:${t(171)}> ConnectionManager: [fully-connected] "Kate"`,
+    `LOG  : General      f:0, t:${t(140)}> moveZombie: There are no zombies in the cell`,
+    `WARN : Mod          f:0, t:${t(131)}> Brita: missing translation for item Base.M4A1`,
+    `LOG  : General      f:0, t:${t(130)}> kicked user GrieferJoe (Spawn camping)`,
+    `LOG  : General      f:0, t:${t(96)}> ConnectionManager: [fully-connected] "Baldspot"`,
+    `ERROR: General      f:0, t:${t(62)}> java.lang.NullPointerException: Cannot invoke "zombie.inventory.InventoryItem.getType()"`,
+    '    at zombie.inventory.ItemContainer.getItemCount(ItemContainer.java:1203)',
+    `LOG  : General      f:0, t:${t(41)}> ConnectionManager: [fully-connected] "nightowl_92"`,
+    `LOG  : General      f:0, t:${t(30)}> Saving world... done in 812 ms`,
+    `LOG  : General      f:0, t:${t(4)}> ConnectionManager: [fully-connected] "Marisol"`,
+  ]
+}
+
+function demoPlayerDetails(username: string, index: number) {
+  return {
+    username,
+    displayName: username,
+    x: 10580 + index * 37,
+    y: 9720 - index * 21,
+    z: index === 2 ? 1 : 0,
+    accessLevel: index === 0 ? 'admin' : 'none',
+    isAlive: true,
+    isAsleep: false,
+    isSneaking: index === 3,
+    isRunning: index === 1,
+    godMod: index === 0,
+    invisible: false,
+    noclip: false,
+    stats: { hunger: 0.18 + index * 0.1, thirst: 0.3, fatigue: 0.12 * index, stress: 0.05, boredom: 0.2, unhappiness: 0.1, pain: 0, endurance: 0.92 },
+    health: { overallBodyHealth: [100, 74, 41, 88][index] ?? 90, isInfected: index === 2, isBleeding: false, temperature: 36.8 },
+  }
+}
+
+function demoPlayerStats() {
+  const day = 86_400_000
+  const stat = (name: string, hours: number, sessions: number, lastSeenDaysAgo: number, deaths: number) => ({
+    player_name: name,
+    total_playtime_seconds: hours * 3600,
+    session_count: sessions,
+    first_seen: new Date(Date.now() - 40 * day).toISOString(),
+    last_seen: new Date(Date.now() - lastSeenDaysAgo * day).toISOString(),
+    deaths,
+    sessions: Array.from({ length: Math.min(4, sessions) }, (_, index) => {
+      const start = Date.now() - (lastSeenDaysAgo + index * 2) * day - 3 * 3600_000
+      return { start: new Date(start).toISOString(), end: new Date(start + 2.5 * 3600_000).toISOString(), duration_seconds: 9000 }
+    }),
+  })
+  return [
+    stat('Kate', 212, 64, 0, 3),
+    stat('Baldspot', 96, 41, 0, 9),
+    stat('nightowl_92', 51, 22, 0, 2),
+    stat('Marisol', 18, 7, 0, 1),
+    stat('Rook', 140, 55, 0.04, 6),
+    stat('GrieferJoe', 4, 3, 0.1, 0),
+    stat('Tamsin', 77, 30, 3, 4),
+    stat('old_hank', 230, 90, 12, 11),
+  ]
+}
+
+function demoDiagnostics(path: string) {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  const summary = (checks: Array<{ status: string }>) => ({
+    ok: checks.filter((c) => c.status === 'ok').length,
+    warn: checks.filter((c) => c.status === 'warn').length,
+    fail: checks.filter((c) => c.status === 'fail').length,
+    info: checks.filter((c) => c.status === 'info').length,
+    skip: checks.filter((c) => c.status === 'skip').length,
+  })
+  if (path === '/api/debug/diagnostics') {
+    const checks = [
+      { id: 'rcon', category: 'services', status: 'ok', label: 'RCON', message: 'Connected to 127.0.0.1:27015.' },
+      { id: 'integration', category: 'services', status: 'ok', label: 'Game integration', message: 'Argus 1.4.0 answered in 38 ms.' },
+      { id: 'install', category: 'paths', status: 'ok', label: 'Install folder', message: '/opt/pz found, Build 42.12.' },
+      { id: 'zomboid', category: 'paths', status: 'ok', label: 'Zomboid data folder', message: '/home/pz/Zomboid is writable.' },
+      { id: 'disk', category: 'storage', status: 'warn', label: 'Free disk space', message: '9.8 GB free on /home, 88% used.', hint: 'Delete old backups or move them to another disk.' },
+      { id: 'backups', category: 'storage', status: 'ok', label: 'Backups', message: 'Last backup 2 hours ago.' },
+      { id: 'steamcmd', category: 'updates', status: 'skip', label: 'SteamCMD', message: 'Not needed for this server.' },
+      { id: 'mods', category: 'updates', status: 'info', label: 'Workshop updates', message: '2 mods have updates.' },
+    ]
+    return {
+      timestamp: at(0), overall: 'warn', durationMs: 214, summary: summary(checks), checks,
+      categories: { services: { label: 'Services', order: 1 }, paths: { label: 'Paths', order: 2 }, storage: { label: 'Storage', order: 3 }, updates: { label: 'Updates', order: 4 } },
+    }
+  }
+  if (path === '/api/debug/worldmap') {
+    const checks = [
+      { id: 'tiles', category: 'map', status: 'ok', label: 'Map image', message: 'Muldraugh, KY has a map image.' },
+      { id: 'positions', category: 'map', status: 'ok', label: 'Player positions', message: 'The game integration reports positions.' },
+    ]
+    return {
+      timestamp: at(0), overall: 'ok', durationMs: 61, summary: summary(checks), checks,
+      map: { available: true, folders: [{ id: 1, name: 'Muldraugh, KY', source: 'vanilla', image: {} }], floors: { min: -1, max: 7 }, warnings: [] },
+      save: { zomboidDataPath: '/home/pz/Zomboid', activeSaveName: 'DoomerZDemo', activeSavePath: '/home/pz/Zomboid/Saves/Multiplayer/DoomerZDemo', saveCount: 1, build: 'b42' },
+    }
+  }
+  if (path === '/api/debug/health') {
+    return {
+      status: 'ok', timestamp: at(0), uptime: DEMO_UPTIME_SECONDS,
+      services: { rcon: { connected: true, host: '127.0.0.1' }, server: { running: true, scanFailed: false }, modChecker: { running: true, interval: 1_800_000 } },
+      memory: { heapUsed: 96_000_000, heapTotal: 128_000_000, heapLimit: 4_345_000_000, rss: 210_000_000 },
+    }
+  }
+  if (path === '/api/debug/system') {
+    return { nodeVersion: 'v24.4.0', platform: 'linux', dbPath: '.../data/panel.db', logsPath: '.../data/logs' }
+  }
+  if (path === '/api/debug/logs') {
+    return {
+      logs: [
+        { level: 'info', source: 'server', message: 'Server started.', timestamp: at(190) },
+        { level: 'info', source: 'rcon', message: 'Connected to 127.0.0.1:27015.', timestamp: at(189) },
+        { level: 'warn', source: 'mods', message: 'Workshop item 2392709985 has an update.', timestamp: at(60) },
+        { level: 'debug', source: 'scheduler', message: 'Next run: Daily restart at 04:00.', timestamp: at(30) },
+        { level: 'error', source: 'backup', message: 'Backup took 41 s, longer than the 30 s warning limit.', timestamp: at(12) },
+        { level: 'info', source: 'players', message: 'Marisol joined.', timestamp: at(4) },
+      ],
+    }
+  }
+  if (path === '/api/debug/logs/files') {
+    return { files: [{ name: 'panel.log', size: 412_000, modified: at(1) }, { name: 'panel.1.log', size: 1_048_576, modified: at(1440) }] }
+  }
+  if (path === '/api/debug/crash-logs') {
+    return { crashLogs: [{ name: 'hs_err_pid48211.log', size: 88_000, modified: at(300) }, { name: 'hs_err_pid30117.log', size: 91_000, modified: at(4000) }], totalCount: 2 }
+  }
+  if (path.startsWith('/api/debug/crash-logs/')) {
+    return { content: '#\n# A fatal error has been detected by the Java Runtime Environment:\n#\n#  SIGSEGV (0xb) at pc=0x00007f3c, pid=48211\n#\n# JRE version: OpenJDK Runtime Environment (17.0.6)\n', truncated: false }
+  }
+  if (path === '/api/debug/activity') {
+    return {
+      entries: [
+        { id: 1, source: 'rcon', action: 'servermsg "Restart in 15 minutes"', detail: '', success: true, timestamp: at(3) },
+        { id: 8, source: 'player', action: 'connect', detail: 'Marisol', success: true, timestamp: at(4) },
+        { id: 2, source: 'rcon', action: 'kickuser GrieferJoe', detail: 'User not found', success: false, timestamp: at(20) },
+        { id: 3, source: 'server', action: 'backup', detail: 'Backup finished in 41 s.', success: true, timestamp: at(12) },
+        { id: 7, source: 'player', action: 'death', detail: 'Baldspot', success: true, timestamp: at(19) },
+        { id: 4, source: 'server', action: 'start', detail: 'Server started.', success: true, timestamp: at(190) },
+      ].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    }
+  }
+  return null
+}
+
+function queryParam(input: RequestInfo | URL, name: string): string | null {
+  const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  try {
+    return new URL(rawUrl, window.location.origin).searchParams.get(name)
+  } catch {
+    return null
   }
 }
 
@@ -470,20 +670,119 @@ export function installDemoFetchShim(): void {
       return jsonResponse(demoComposedStatus())
     }
     if (path === '/api/players') {
-      return jsonResponse({ players: [] })
+      return jsonResponse({ players: DEMO_PLAYERS.map((name) => ({ name, online: true })) })
+    }
+    if (path === '/api/server/console-log') {
+      return jsonResponse({ lines: demoConsoleLog(), size: 4096, exists: true, path: '/home/pz/Zomboid/server-console.txt' })
+    }
+    if (path === '/api/server/console-log/stream') {
+      return jsonResponse({ newLines: [], currentSize: 4096, rotated: false })
+    }
+    if (path === '/api/config/test-rcon') {
+      return jsonResponse({ success: true, connected: true })
+    }
+    if (path === '/api/rcon/history') {
+      return jsonResponse({
+        history: [
+          { id: 3, command: 'players', response: 'Players connected (4): -Kate -Baldspot -nightowl_92 -Marisol', success: 1, executed_at: new Date(Date.now() - 300_000).toISOString() },
+          { id: 2, command: 'save', response: 'World saved', success: 1, executed_at: new Date(Date.now() - 1_800_000).toISOString() },
+          { id: 1, command: 'kickuser GrieferJoe', response: 'User GrieferJoe kicked.', success: 1, executed_at: new Date(Date.now() - 7_800_000).toISOString() },
+        ],
+      })
+    }
+    if (path === '/api/map/manifest') {
+      return jsonResponse({ key: 'demo', folders: [], bounds: null, floors: { min: 0, max: 0 }, warnings: ['The demo has no map files. On a real server the map renders here.'] })
+    }
+    if (path === '/api/game-integration/players') {
+      return jsonResponse({ success: true, data: { players: DEMO_PLAYERS.map(demoPlayerDetails) } })
+    }
+    if (path.startsWith('/api/game-integration/players/')) {
+      const name = decodeURIComponent(path.split('/').pop() || '')
+      const index = DEMO_PLAYERS.indexOf(name)
+      return jsonResponse(index >= 0 ? { success: true, data: demoPlayerDetails(name, index) } : { success: false, error: 'Player is not online.' })
+    }
+    if (path === '/api/players/stats') {
+      return jsonResponse({ stats: demoPlayerStats() })
+    }
+    if (path === '/api/players/steamid-bans') {
+      return jsonResponse({ bans: [{ steamId: '76561198000000042', banned_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), reason: 'Duping' }] })
+    }
+    if (path === '/api/players/whitelist') {
+      return jsonResponse({
+        success: true,
+        available: true,
+        accounts: ['Kate', 'Baldspot', 'nightowl_92', 'Marisol', 'Rook', 'Tamsin'].map((username, id) => ({
+          id: id + 1,
+          username,
+          lastConnection: new Date(Date.now() - id * 86_400_000).toISOString(),
+          role: id === 0 ? 'admin' : 'user',
+          authType: 1,
+          steamId: `7656119800000${String(1000 + id)}`,
+          ownerId: null,
+          displayName: username,
+        })),
+        allowedSteamIds: ['76561198000009001'],
+      })
+    }
+    if (path === '/api/players/perks') {
+      return jsonResponse({
+        catalog: [
+          { id: 'Aiming', label: 'Aiming', category: 'Firearm' },
+          { id: 'Reloading', label: 'Reloading', category: 'Firearm' },
+          { id: 'Woodwork', label: 'Carpentry', category: 'Crafting' },
+          { id: 'Cooking', label: 'Cooking', category: 'Crafting' },
+          { id: 'Sprinting', label: 'Sprinting', category: 'Agility' },
+        ],
+      })
+    }
+    if (path === '/api/players/access-levels') {
+      return jsonResponse({ levels: ['admin', 'moderator', 'gm', 'observer', 'user', 'none'] })
+    }
+    if (path === '/api/players/activity') {
+      return jsonResponse({ logs: demoActivity() })
+    }
+    if (path.startsWith('/api/debug/') && path !== '/api/debug/performance-history') {
+      const payload = demoDiagnostics(path)
+      if (payload) return jsonResponse(payload)
+    }
+    if (path === '/api/debug/performance-history') {
+      const limit = Math.min(1440, Math.max(1, Number(queryParam(input, 'limit')) || 60))
+      return jsonResponse({ history: demoPerformanceHistory(limit) })
+    }
+    if (path === '/api/game-integration/world/stats') {
+      return jsonResponse({ success: true, data: { serverName: 'DoomerZDemo', map: 'Muldraugh, KY', zombiesInCell: 214 } })
+    }
+    if (path === '/api/server/console-log/error-count') {
+      return jsonResponse({ exists: true, count: 3, sinceStart: true })
+    }
+    if (path === '/api/scheduler/status') {
+      return jsonResponse({
+        maintenance: null,
+        activeTasks: 2,
+        autoRestartEnabled: true,
+        nextRun: { label: 'Daily restart', at: new Date(Date.now() + (2 * 60 + 40) * 60_000).toISOString() },
+        timezone: 'Europe/Istanbul',
+      })
     }
     if (path === '/api/game-integration/status') {
       return jsonResponse({
         configured: true,
-        isRunning: false,
-        modConnected: false,
-        path: null,
-        modStatus: null,
+        isRunning: true,
+        modConnected: true,
+        path: '/opt/pz/argus',
+        modStatus: {
+          alive: true,
+          version: '1.4.0',
+          serverName: 'DoomerZDemo',
+          playerCount: DEMO_PLAYERS.length,
+          players: DEMO_PLAYERS,
+          timestamp: Date.now(),
+        },
         connection: {
-          healthy: false,
-          canSendCommands: false,
+          healthy: true,
+          canSendCommands: true,
           issues: [],
-          summary: 'Game integration is offline in demo mode.',
+          summary: 'Connected.',
         },
         localInstall: {
           installed: false,
@@ -551,11 +850,13 @@ export function installDemoFetchShim(): void {
     if (path === '/api/server-files/sandbox') {
       return jsonResponse({
         sandbox: {
+          VERSION: 4,
+          settings: { DayLength: 3, StartYear: 1, StartMonth: 7, StartDay: 9, StartTime: 2, WaterShut: 2, ElecShut: 2, Zombies: 4 },
           ZombieLore: { Speed: 2, Strength: 2 },
-          World: { WaterShut: 2, ElecShut: 2 },
-          StartYear: 1,
-          StartMonth: 7,
-          StartDay: 9,
+          ZombieConfig: {},
+          MultiplierConfig: {},
+          Map: {},
+          Basement: {},
         },
         path: '/home/pz/Zomboid/Server/DoomerZDemo_SandboxVars.lua',
       })

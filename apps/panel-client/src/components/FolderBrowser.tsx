@@ -4,21 +4,12 @@ import {
   HardDrive,
   ChevronRight,
   ArrowUp,
-  Loader2,
-  FolderOpen,
   AlertCircle,
 } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { serverApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
@@ -122,139 +113,67 @@ export function FolderBrowser({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border/50">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <FolderOpen className="w-4 h-4 text-primary" />
-            {resolvedTitle}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            {'Browse server filesystem and select a folder'}
-          </DialogDescription>
+      <DialogPopup className="gap-0 sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{resolvedTitle}</DialogTitle>
+          <DialogDescription>Folders on the machine the panel runs on. Double-click to open one.</DialogDescription>
         </DialogHeader>
-
-        <form
-          onSubmit={handlePathSubmit}
-          className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-muted/30"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={handleGoUp}
-            disabled={isDriveList || loading}
-            aria-label={'Go to parent directory'}
-          >
-            <ArrowUp className="w-3.5 h-3.5" />
+        <form onSubmit={handlePathSubmit} className="flex items-center gap-2 border-y bg-muted/40 px-4 py-2">
+          <Button type="button" variant="ghost" size="icon-sm" onClick={handleGoUp} disabled={isDriveList || loading} aria-label="Go up a folder">
+            <ArrowUp />
           </Button>
-          <Input
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            placeholder={isDriveList ? 'This PC' : 'Enter path...'}
-            className="h-7 text-xs font-mono bg-background/60 border-border/50"
-          />
-          <Button
-            type="submit"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs shrink-0"
-            disabled={loading}
-          >
-            {'Go'}
+          <Input value={pathInput} onChange={(e) => setPathInput(e.target.value)} placeholder={isDriveList ? 'This PC' : 'Type a path'} className="font-mono" aria-label="Path" />
+          <Button type="submit" variant="ghost" size="sm" disabled={loading}>
+            Go
           </Button>
         </form>
-
-        <ScrollArea className="h-[340px]">
+        <div className="h-80 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-full py-20">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <div className="grid h-full place-items-center">
+              <Spinner />
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center h-full py-16 gap-2 text-muted-foreground">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-              <p className="text-sm">{error}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => loadDirectory(undefined)}
-                className="text-xs mt-1"
-              >
-                {'Back to drives'}
+            <div className="grid h-full place-content-center justify-items-center gap-2 text-sm text-muted-foreground">
+              <AlertCircle className="size-5 text-destructive-foreground" />
+              <p>{error}</p>
+              <Button variant="ghost" size="sm" onClick={() => loadDirectory(undefined)}>
+                Back to drives
               </Button>
             </div>
           ) : entries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-16 gap-1 text-muted-foreground">
-              <Folder className="w-5 h-5" />
-              <p className="text-sm">{'Empty folder'}</p>
+            <div className="grid h-full place-content-center justify-items-center gap-1 text-sm text-muted-foreground">
+              <Folder className="size-5" />
+              Empty folder
             </div>
           ) : (
             <div className="py-1">
               {entries.map((entry) => (
                 <button
                   key={entry.path}
-                  className={cn(
-                    'flex items-center gap-3 w-full px-3 py-1.5 text-start text-sm transition-colors hover:bg-muted/60',
-                    selectedPath === entry.path && 'bg-primary/12 text-primary',
-                  )}
+                  type="button"
+                  className={cn('flex w-full items-center gap-3 px-4 py-1.5 text-start text-sm hover:bg-accent', selectedPath === entry.path && 'bg-accent')}
                   onClick={() => handleSelect(entry)}
                   onDoubleClick={() => handleDoubleClick(entry)}
                 >
-                  {entry.isDrive ? (
-                    <HardDrive className="w-4 h-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <Folder
-                      className={cn(
-                        'w-4 h-4 shrink-0',
-                        selectedPath === entry.path
-                          ? 'text-primary'
-                          : 'text-amber-600/80',
-                      )}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-[13px]">
-                      {entry.name}
-                    </p>
-                    {entry.label && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {entry.label}
-                      </p>
-                    )}
-                  </div>
-                  {!entry.isDrive && (
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />
-                  )}
+                  {entry.isDrive ? <HardDrive className="size-4 shrink-0 text-muted-foreground" /> : <Folder className="size-4 shrink-0 text-muted-foreground" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{entry.name}</span>
+                    {entry.label && <span className="block truncate text-xs text-muted-foreground">{entry.label}</span>}
+                  </span>
+                  {!entry.isDrive && <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />}
                 </button>
               ))}
             </div>
           )}
-        </ScrollArea>
-
-        <DialogFooter className="px-4 py-3 border-t border-border/50 bg-muted/20">
-          <div className="flex items-center justify-between w-full gap-3">
-            <p className="text-xs text-muted-foreground truncate min-w-0 flex-1 font-mono">
-              {selectedPath || currentPath || 'No folder selected'}
-            </p>
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-              >
-                {'Cancel'}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleConfirm}
-                disabled={!selectedPath && !currentPath}
-              >
-                {'Select Folder'}
-              </Button>
-            </div>
-          </div>
+        </div>
+        <DialogFooter className="items-center border-t">
+          <p className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{selectedPath || currentPath || 'No folder picked'}</p>
+          <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
+          <Button onClick={handleConfirm} disabled={!selectedPath && !currentPath}>
+            Use this folder
+          </Button>
         </DialogFooter>
-      </DialogContent>
+      </DialogPopup>
     </Dialog>
   )
 }

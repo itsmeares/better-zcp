@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, lazyPlugins } from 'vite-plus'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { readFileSync } from 'fs'
 import { execFileSync } from 'child_process'
@@ -39,6 +40,7 @@ export default defineConfig(({ mode }) => {
     plugins: lazyPlugins(() => [
       tanstackRouter({ target: 'react', autoCodeSplitting: true }),
       react(),
+      tailwindcss(),
       {
         name: 'panel-build-info',
         generateBundle() {
