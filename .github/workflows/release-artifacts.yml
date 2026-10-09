@@ -179,6 +179,9 @@ jobs:
           release_tag="${GITHUB_REF_NAME}"
           if gh release view "$release_tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release $release_tag already exists; uploading assets."
+            gh release edit "$release_tag" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "$release_tag"
             if [[ "$release_tag" == *-* ]]; then
               gh release edit "$release_tag" \
                 --repo "${GITHUB_REPOSITORY}" \
@@ -187,7 +190,7 @@ jobs:
           else
             release_args=(
               --repo "${GITHUB_REPOSITORY}"
-              --title "Release $release_tag"
+              --title "$release_tag"
               --notes-file "docs/releases/${release_tag#v}.md"
             )
             if [[ "$release_tag" == *-* ]]; then

@@ -30,8 +30,8 @@ where you trust the panel administrator with Docker access.
 
 ### Install
 
-For `v3.0.0-rc1`, use the exact commands in the
-[RC notes](../releases/3.0.0-rc1.md). A prerelease must be selected explicitly.
+For `v3.0.0-rc2`, use the exact commands in the
+[RC notes](../releases/3.0.0-rc2.md). A prerelease must be selected explicitly.
 
 1. On an amd64 Linux Docker host, install Docker Engine, the Docker Compose
    plugin, `curl`, and `tar`. Check `docker compose version` before proceeding.
@@ -41,7 +41,7 @@ For `v3.0.0-rc1`, use the exact commands in the
    curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
    ```
 
-   To select a release, add a version after `sh -s --`, such as `3.0.0-rc1`.
+   To select a release, add a version after `sh -s --`, such as `3.0.0-rc2`.
    The script downloads that release's source, pulls its exact image tag when
    available, and otherwise builds from source. It keeps named volumes for
    panel state, logs, the PZ install, and saves. It waits for the panel health

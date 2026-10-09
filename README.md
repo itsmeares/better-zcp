@@ -168,8 +168,8 @@ The packaged binary includes its own runtime — no Node.js, Python, or Java ins
 
 ## Quick Start
 
-The rebuilt panel is being tested as `v3.0.0-rc1`. Use the
-[RC installation and test notes](docs/releases/3.0.0-rc1.md) for its exact
+The rebuilt panel is being tested as `v3.0.0-rc2`. Use the
+[RC installation and test notes](docs/releases/3.0.0-rc2.md) for its exact
 packages and Docker tags. The RC is a prerelease, and older panel databases
 are not imported.
 
