@@ -1013,7 +1013,7 @@ export class ServerManager {
     try {
       if (serverId !== this._serverId) await this.reloadConfig(serverId);
       await this.loadConfig(serverId);
-      if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") {
+      if (process.env.PANEL_MANAGED_GAMES === "true") {
         throw new Error("This Docker stack starts game servers in separate containers. Check the server profile's data path and Docker container mapping.");
       }
 

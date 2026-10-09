@@ -1,29 +1,43 @@
+# Managed stack: the panel installs Project Zomboid and runs each server profile
+# in its own game container. The Docker socket gives the panel host-level Docker
+# control, so use this only where you trust everyone with panel admin access.
+# Updating: docker compose up -d --pull always --no-deps panel
+name: better-zcp
+
 services:
   panel:
-    image: ghcr.io/itsmeares/better-zcp:latest
-    build:
-      context: .
-      args:
-        UID: ${PUID:-1000}
-        GID: ${PGID:-1000}
+    image: ghcr.io/itsmeares/better-zcp:${BETTER_ZCP_VERSION:-latest}
     container_name: zomboid-panel
     restart: unless-stopped
     ports:
       - "3001:3001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: production
+      # Game containers run as 1000:1000, so the panel does too.
+      PUID: "1000"
+      PGID: "1000"
+      PANEL_MANAGED_GAMES: "true"
+      PANEL_DOCKER_CONTROL_ENABLED: "true"
+      PANEL_IMAGE_TAG: ${BETTER_ZCP_VERSION:-latest}
+      PZ_SERVER_PATH: /pz-server
+      PZ_SAVE_PATH: /zomboid
+      PZ_SERVER_BAT: start-server.sh
+      RCON_HOST: 127.0.0.1
+      RCON_PORT: 27015
+      # Only needed when the browser reaches the panel through a public hostname.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      PANEL_LAN_IP: ${PANEL_LAN_IP:-}
+      PANEL_WAN_IP: ${PANEL_WAN_IP:-}
     volumes:
       - panel-data:/app/data
       - panel-logs:/app/logs
-
-    environment:
-      - NODE_ENV=production
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
-      - PANEL_DOCKER_CONTROL_ENABLED=${PANEL_DOCKER_CONTROL_ENABLED:-false}
-      - TRUST_PROXY=${TRUST_PROXY:-false}
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - pz-server:/pz-server
+      - zomboid-data:/zomboid
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   panel-data:
   panel-logs:
+  pz-server:
+  zomboid-data:

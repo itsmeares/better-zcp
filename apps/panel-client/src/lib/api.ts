@@ -1958,7 +1958,8 @@ export interface PanelUpdateStatus {
   lastError: string | null;
   updateMode?: "binary" | "docker";
   updateCommand?: string | null;
-  dockerInstallKind?: "aio" | "split" | null;
+  dockerManagedGames?: boolean;
+  dockerImagePinned?: boolean;
   stagedUpdate: { version: string | null; path: string } | null;
   lastApplyResult: PanelUpdateApplyResult | null;
 }

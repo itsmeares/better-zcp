@@ -15,8 +15,8 @@ don't need to read the others first.
 - **[managed-game-services.md](managed-game-services.md)** — Optional
   per-server systemd or OpenRC isolation so panel restarts and updates do not
   own the game-server process.
-- **[docker.md](docker.md)** — Docker or Unraid: a panel with separate game
-  containers, a panel bound to an existing PZ install, or Unraid specifically.
+- **[docker.md](docker.md)** — Docker: a panel with separate game containers,
+  or a panel bound to an existing PZ install.
 - **[troubleshooting.md](troubleshooting.md)** — Something didn't work.
   Organized by what's actually on your screen, not by which guide you
   followed or which subsystem you suspect — start here regardless of which

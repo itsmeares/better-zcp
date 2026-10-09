@@ -323,7 +323,7 @@ export async function createServerProfile(
   if (dockerContainerName && !isValidDockerContainerRef(dockerContainerName)) {
     fail("Invalid Docker container name");
   }
-  if (process.env.PANEL_DOCKER_INSTALL_KIND === "split" && !dockerContainerName &&
+  if (process.env.PANEL_MANAGED_GAMES === "true" && !dockerContainerName &&
       (config.installPath !== "/pz-server" || config.zomboidDataPath !== "/zomboid" || config.startCommand)) {
     fail("Managed Docker stack profiles must use the shared /pz-server and /zomboid volumes and the generated launcher");
   }
@@ -530,7 +530,7 @@ export async function updateServerProfile(
       fail("At least one field is required");
     }
 
-    const current = process.env.PANEL_DOCKER_INSTALL_KIND === "split" ? await getServer(serverId) : null;
+    const current = process.env.PANEL_MANAGED_GAMES === "true" ? await getServer(serverId) : null;
     if (current && isBundledGameProfile(current) && (
       (updates.installPath !== undefined && updates.installPath !== "/pz-server") ||
       (updates.zomboidDataPath !== undefined && updates.zomboidDataPath !== "/zomboid") ||
@@ -679,7 +679,7 @@ export async function deleteServerProfile(
     if (serverId === null) fail("Invalid server ID");
 
     const targetServer = await getServer(serverId);
-    if (targetServer && process.env.PANEL_DOCKER_INSTALL_KIND === "split") {
+    if (targetServer && process.env.PANEL_MANAGED_GAMES === "true") {
       try {
         await removeBundledGameContainer(targetServer);
       } catch (error) {

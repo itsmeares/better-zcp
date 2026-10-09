@@ -11,7 +11,8 @@ const { PanelUpdateChecker, getDockerUpgradeInstruction } = await import(
 );
 
 afterEach(() => {
-  delete process.env.PANEL_DOCKER_INSTALL_KIND;
+  delete process.env.PANEL_MANAGED_GAMES;
+  delete process.env.PANEL_IMAGE_TAG;
   isContainerized.mockReturnValue(true);
 });
 
@@ -40,21 +41,30 @@ describe("Docker panel updates", () => {
     expect(rconService.quit).not.toHaveBeenCalled();
   });
 
-  it("offers a host command for the deployment kind", () => {
-    process.env.PANEL_DOCKER_INSTALL_KIND = "aio";
-    expect(getDockerUpgradeInstruction("v2.0.1")).toContain("bootstrap.sh | sh -s -- 2.0.1");
-    expect(getDockerUpgradeInstruction("v2.0.1-rc5")).toContain("/v2.0.1-rc5/infra/docker/all-in-one/bootstrap.sh");
-    expect(getDockerUpgradeInstruction("v2.0.1; rm -rf /oops")).toBe("");
+  it("offers one compose command for a floating image tag", () => {
+    for (const imageTag of [undefined, "latest", "stable"]) {
+      if (imageTag) process.env.PANEL_IMAGE_TAG = imageTag;
+      else delete process.env.PANEL_IMAGE_TAG;
+      expect(getDockerUpgradeInstruction("v3.0.1")).toBe("docker compose up -d --pull always --no-deps panel");
+    }
+    process.env.PANEL_MANAGED_GAMES = "true";
     const checker = new PanelUpdateChecker();
-    checker.latestRelease = { tag: "v2.0.1-rc5", version: "2.0.1" } as typeof checker.latestRelease;
+    checker.latestRelease = { tag: "v3.0.1", version: "3.0.1" } as typeof checker.latestRelease;
     const status = checker.getStatus();
     expect(status.updateMode).toBe("docker");
-    expect(status.dockerInstallKind).toBe("aio");
-    expect(status.updateCommand).toContain("/v2.0.1-rc5/infra/docker/all-in-one/bootstrap.sh");
+    expect(status.dockerManagedGames).toBe(true);
+    expect(status.dockerImagePinned).toBe(false);
+    expect(status.updateCommand).toBe("docker compose up -d --pull always --no-deps panel");
+  });
 
-    delete process.env.PANEL_DOCKER_INSTALL_KIND;
-    expect(getDockerUpgradeInstruction("v2.0.1")).toBe(
-      "docker compose pull panel && docker compose up -d --no-deps panel",
+  it("selects the new version when the compose file pins the image tag", () => {
+    process.env.PANEL_IMAGE_TAG = "3.0.0-rc2";
+    expect(getDockerUpgradeInstruction("v3.0.0-rc3")).toBe(
+      "BETTER_ZCP_VERSION=3.0.0-rc3 docker compose up -d --pull always --no-deps panel",
     );
+    expect(getDockerUpgradeInstruction("v3.0.1; rm -rf /oops")).toBe("");
+    const checker = new PanelUpdateChecker();
+    checker.latestRelease = { tag: "v3.0.0-rc3", version: "3.0.0-rc3" } as typeof checker.latestRelease;
+    expect(checker.getStatus().dockerImagePinned).toBe(true);
   });
 });

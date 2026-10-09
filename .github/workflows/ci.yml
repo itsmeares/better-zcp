@@ -213,3 +213,44 @@ jobs:
           if ($buildInfo.panelVersion -ne $manifest.version) { throw "Frontend/backend version mismatch" }
           if ($buildInfo.buildSha -ne $manifest.buildSha) { throw "Frontend/backend build SHA mismatch" }
           if ($buildInfo.apiContractVersion -ne $manifest.apiContractVersion) { throw "Frontend/backend API contract mismatch" }
+
+  docker-image:
+    name: Docker image (build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+
+      - name: Build amd64 image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          load: true
+          tags: better-zcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the panel image
+        run: |
+          docker run -d --name panel-ci -p 3001:3001 better-zcp:ci
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs panel-ci
+          exit 1
+
+      - name: Check steamcmd for managed games
+        run: docker run --rm --entrypoint test better-zcp:ci -x /home/steam/steamcmd/steamcmd.sh
+
+      - name: Build arm64 image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          platforms: linux/arm64
+          cache-from: type=gha

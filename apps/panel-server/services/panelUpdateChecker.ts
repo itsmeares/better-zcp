@@ -26,12 +26,17 @@ export function getPanelFolderPermissionGuidance(platform: string, detail: unkno
 export function getDevModeUpgradeInstruction(containerized = isContainerized()) {
   return containerized ? "Run the host update command shown in Settings." : "Pull the latest code with git, rebuild, and restart the panel.";
 }
+const FLOATING_IMAGE_TAGS = ["latest", "stable"];
+/** Compose passes the tag it pulled as PANEL_IMAGE_TAG. Anything but a floating tag stays put until the user changes it. */
+export function isImageTagPinned(): boolean {
+  const imageTag = process.env.PANEL_IMAGE_TAG;
+  return Boolean(imageTag) && !FLOATING_IMAGE_TAGS.includes(imageTag as string);
+}
 export function getDockerUpgradeInstruction(tag: string | null | undefined): string {
-  if (["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "")) {
-    const version = tag?.match(/^v(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/)?.[1];
-    return version ? `curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/${tag}/infra/docker/all-in-one/bootstrap.sh | sh -s -- ${version}` : "";
-  }
-  return "docker compose pull panel && docker compose up -d --no-deps panel";
+  const update = "docker compose up -d --pull always --no-deps panel";
+  if (!isImageTagPinned()) return update;
+  const version = tag?.match(/^v(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)$/)?.[1];
+  return version ? `BETTER_ZCP_VERSION=${version} ${update}` : "";
 }
 export function validateReleaseManifest(manifest: Record<string, any> | null, version: unknown, artifactName: string | null, hash: string | null) {
   if (!manifest || typeof manifest !== "object") return "Release archive does not contain a valid release manifest.";
@@ -189,7 +194,7 @@ export class PanelUpdateChecker {
       releaseUrl: this.latestRelease?.htmlUrl || null, releaseNotes: this.latestRelease?.body || null, publishedAt: this.latestRelease?.publishedAt || null,
       isChecking: this.isChecking, isDownloading: this.isDownloading, isApplying: this.isApplying, downloadProgress: this.downloadProgress, lastCheck: this.lastCheck, lastError: this.lastError,
       updateMode: isContainerized() ? "docker" : "binary", updateCommand: isContainerized() ? getDockerUpgradeInstruction(this.latestRelease?.tag) || null : null,
-      dockerInstallKind: isContainerized() && ["aio", "split"].includes(process.env.PANEL_DOCKER_INSTALL_KIND || "") ? process.env.PANEL_DOCKER_INSTALL_KIND : null,
+      dockerManagedGames: isContainerized() && process.env.PANEL_MANAGED_GAMES === "true", dockerImagePinned: isContainerized() && isImageTagPinned(),
       stagedUpdate: staged ? { version: staged.version, path: staged.stagedPath } : null, lastApplyResult };
   }
   async preflight() {

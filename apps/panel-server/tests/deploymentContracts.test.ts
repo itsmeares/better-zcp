@@ -43,34 +43,39 @@ describe("Deployment contracts", () => {
     }
   });
 
-  it("keeps the panel's game data mounts and Docker control while game ports belong to game containers", () => {
-    const compose = readRepoFile("infra/docker/all-in-one/docker-compose.yml");
+  it("keeps the managed stack's game data mounts and Docker control while game ports belong to game containers", () => {
+    const compose = readRepoFile("docker-compose.yml");
     expect(compose).toContain("pz-server:/pz-server");
     expect(compose).toContain("zomboid-data:/zomboid");
     expect(compose).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(compose).not.toContain('"16261:16261/udp"');
+    expect(compose).toContain('PANEL_MANAGED_GAMES: "true"');
+    expect(compose).not.toContain("16261:16261/udp");
   });
 
-  it("pulls immutable release images before falling back to local builds", () => {
-    const bootstrap = readRepoFile("infra/docker/all-in-one/bootstrap.sh");
-
-    expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:aio-$VERSION");
-    expect(bootstrap).toContain('docker pull "$published_image"');
-    expect(bootstrap).toContain('docker build -t "$local_image"');
-    expect(bootstrap).toContain("up -d --no-deps --no-build --remove-orphans panel");
-    expect(bootstrap).toContain('if [ "$health" = "healthy" ]');
-    expect(bootstrap).toContain("Panel installation is ready.");
-    expect(bootstrap).toContain("Save and stop it from the panel before splitting the containers.");
-    expect(bootstrap).toContain("--remove-orphans");
+  it("selects the image with BETTER_ZCP_VERSION and reports it to the panel in both compose files", () => {
+    for (const file of ["docker-compose.yml", "docker-compose.panel-only.yml"]) {
+      const compose = readRepoFile(file);
+      expect(compose).toContain("name: better-zcp");
+      expect(compose).toContain("image: ghcr.io/itsmeares/better-zcp:${BETTER_ZCP_VERSION:-latest}");
+      expect(compose).toContain("PANEL_IMAGE_TAG: ${BETTER_ZCP_VERSION:-latest}");
+    }
   });
 
-  it("publishes a versioned panel image from release tags", () => {
-    const workflow = readRepoFile(".github/workflows/docker-aio-build.yml");
+  it("builds one image and publishes it only from a release tag after the release build", () => {
+    const workflow = readRepoFile(".github/workflows/release-artifacts.yml");
+    const dockerfile = readRepoFile("Dockerfile");
 
-    expect(workflow).toMatch(/- [\"']v\*[\"']/);
-    expect(workflow).toContain("type=semver,pattern={{version}},prefix=aio-");
+    expect(dockerfile).toContain("/home/steam/steamcmd");
+    expect(workflow).toContain("type=semver,pattern={{version}}");
+    expect(workflow).toContain("type=semver,pattern={{major}}.{{minor}}");
     expect(workflow.match(/flavor: latest=false/g) || []).toHaveLength(1);
-    expect(workflow).not.toContain("updater/Dockerfile");
+    expect(workflow).toMatch(/image:\n\s+if: github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)\n\s+needs: build/);
+    expect(workflow).toContain("needs: [build, image]");
+    expect(workflow).toMatch(/latest:\n[\s\S]*needs: publish/);
+    expect(workflow).toContain('if [[ "$version" != *-* ]]');
+    expect(workflow).toContain('--tag "$image:stable"');
+    expect(workflow).not.toContain("Dockerfile \\");
+    expect(workflow).not.toContain("docker-compose.install.yml");
   });
 
   it("uploads the Linux archive from the release tree created by scripts/release/build.mjs", () => {
@@ -129,8 +134,8 @@ describe("Deployment contracts", () => {
     expect(releaseBuild).toContain('"scripts/check-client-boundary.mjs"');
   });
 
-  it("keeps the generic installer free of PZ game ports", () => {
-    const compose = readRepoFile("docker-compose.install.yml");
+  it("keeps the panel-only compose file free of PZ game ports", () => {
+    const compose = readRepoFile("docker-compose.panel-only.yml");
 
     expect(compose).not.toContain("16261:16261/udp");
     expect(compose).not.toContain("16262:16262/udp");

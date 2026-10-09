@@ -2,7 +2,7 @@
 
 This guide is for running the panel directly on a Linux machine — your own
 server, a home box, or a rented VPS — without Docker. If you'd rather use
-Docker, see the Docker section of the main [README](../../README.md#docker-and-unraid)
+Docker, see the Docker section of the main [README](../../README.md#docker)
 instead; it's simpler and skips most of the OS-level setup below.
 
 Written for a first PZ server install. Each phase ends with a way to check

@@ -128,9 +128,9 @@ export async function startServerAction(
 
     const { scriptBackupWarnings } = await refreshLaunchTargetBeforeStart(
       activeServer,
-      { managedHandled: Boolean(activeServer.dockerContainerName) && !(process.env.PANEL_DOCKER_INSTALL_KIND === "split" && isBundledGameProfile(activeServer)) },
+      { managedHandled: Boolean(activeServer.dockerContainerName) && !(process.env.PANEL_MANAGED_GAMES === "true" && isBundledGameProfile(activeServer)) },
     );
-    if (process.env.PANEL_DOCKER_INSTALL_KIND === "split") await ensureBundledGameContainer(activeServer);
+    if (process.env.PANEL_MANAGED_GAMES === "true") await ensureBundledGameContainer(activeServer);
     const serverState = activeServer.dockerContainerName || activeServer.dockerContainerId
       ? await resolveDockerHostSignal(activeServer, getDockerClient())
       : await runtime.serverManager.getServerProcessDetails();
