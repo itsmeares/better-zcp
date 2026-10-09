@@ -44,10 +44,8 @@ export function GameIntegrationSection() {
     if (!socket) return
     const onChange = () => void refresh()
     socket.on('gameIntegration:status', onChange)
-    socket.on('gameIntegration:modStatus', onChange)
     return () => {
       socket.off('gameIntegration:status', onChange)
-      socket.off('gameIntegration:modStatus', onChange)
     }
   }, [socket, refresh])
 

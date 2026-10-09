@@ -156,8 +156,8 @@ export function useShellStatus() {
 
     socket.on('players:update', onPlayers)
     socket.on('server:status', onStatus)
+    // Only connection changes. gameIntegration:modStatus fires on every game heartbeat, about once a second.
     socket.on('gameIntegration:status', refreshComposed)
-    socket.on('gameIntegration:modStatus', refreshComposed)
     socket.on('servers:changed', onServersChanged)
     socket.on('scheduler:action_result', onActionResult)
     socket.on('server:updateAvailable', onUpdateAvailable)
@@ -166,7 +166,6 @@ export function useShellStatus() {
       socket.off('players:update', onPlayers)
       socket.off('server:status', onStatus)
       socket.off('gameIntegration:status', refreshComposed)
-      socket.off('gameIntegration:modStatus', refreshComposed)
       socket.off('servers:changed', onServersChanged)
       socket.off('scheduler:action_result', onActionResult)
       socket.off('server:updateAvailable', onUpdateAvailable)

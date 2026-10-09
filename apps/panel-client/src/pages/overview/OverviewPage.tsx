@@ -210,10 +210,8 @@ export default function OverviewPage() {
     if (!socket) return
     const refreshIntegration = () => void queryClient.invalidateQueries({ queryKey: ['game-integration'] })
     socket.on('gameIntegration:status', refreshIntegration)
-    socket.on('gameIntegration:modStatus', refreshIntegration)
     return () => {
       socket.off('gameIntegration:status', refreshIntegration)
-      socket.off('gameIntegration:modStatus', refreshIntegration)
     }
   }, [socket, queryClient])
 
