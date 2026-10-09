@@ -72,7 +72,9 @@ describe("Deployment contracts", () => {
     expect(workflow).toMatch(/image:\n\s+if: github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)\n\s+needs: build/);
     expect(workflow).toContain("needs: [build, image]");
     expect(workflow).toMatch(/latest:\n[\s\S]*needs: publish/);
-    expect(workflow).toContain('if [[ "$version" != *-* ]]');
+    expect(workflow).toContain('if [[ "$version" == "$newest" ]]');
+    expect(workflow).toContain('if [[ "$version" != *-* && "$version" == "$newest_stable" ]]');
+    expect(workflow).toContain("versionsort.suffix=-");
     expect(workflow).toContain('--tag "$image:stable"');
     expect(workflow).not.toContain("Dockerfile \\");
     expect(workflow).not.toContain("docker-compose.install.yml");

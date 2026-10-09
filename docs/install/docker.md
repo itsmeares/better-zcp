@@ -109,7 +109,10 @@ volumes until you copy it, and the copy never changes or removes them.
 
    The script refuses to start while any container still uses an old volume,
    refuses to write into a new volume that already has files, and compares
-   every copied volume with its source. Wait for `OK` on all four.
+   every copied volume with its source, hashing every file, so a large game
+   install takes a few minutes. Wait for `OK` on all four. If a run stops
+   partway, fix what it reported and run it again: volumes that already match
+   are skipped.
 5. Start the new stack with `docker compose up -d`, then start your games from
    the panel. Profiles and settings come from the copied panel database.
 6. Remove the old `ctx_*` volumes yourself once the new stack has run well. The
@@ -175,7 +178,8 @@ over every container on that host.
    labels:
      zomboid-panel.managed: "true"
    ```
-   For an existing container: `docker update --label-add zomboid-panel.managed=true <pz-container>`.
+   For a container started with `docker run`, add `--label zomboid-panel.managed=true`
+   and recreate it. `docker update` cannot add labels to an existing container.
 4. In **Servers**, put the PZ container's name or ID in **Docker container** on
    the server profile. Use the Compose service name when the panel and PZ share
    a Docker network.

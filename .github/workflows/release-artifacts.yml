@@ -293,8 +293,19 @@ jobs:
           set -euo pipefail
           image=ghcr.io/itsmeares/better-zcp
           version="${GITHUB_REF_NAME#v}"
-          tags=(--tag "$image:latest")
-          if [[ "$version" != *-* ]]; then
+          # Newest first, with a release candidate sorting before its final release.
+          versions="$(git -c versionsort.suffix=- ls-remote --sort=-v:refname --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'refs/tags/v*' | sed 's#.*refs/tags/v##')"
+          newest="$(head -n 1 <<<"$versions")"
+          newest_stable="$(grep -v -- '-' <<<"$versions" | head -n 1 || true)"
+          tags=()
+          if [[ "$version" == "$newest" ]]; then
+            tags+=(--tag "$image:latest")
+          else
+            echo "v$newest is newer; leaving latest alone."
+          fi
+          if [[ "$version" != *-* && "$version" == "$newest_stable" ]]; then
             tags+=(--tag "$image:stable")
           fi
-          docker buildx imagetools create "${tags[@]}" "$image:$version"
+          if (( ${#tags[@]} )); then
+            docker buildx imagetools create "${tags[@]}" "$image:$version"
+          fi

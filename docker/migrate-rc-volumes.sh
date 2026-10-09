@@ -25,22 +25,31 @@ done
 Run 'docker volume ls' to find your RC volumes. If they use another prefix, rerun with OLD_VOLUME_PREFIX=<prefix>."
 [ -z "$busy" ] || fail "Stop and remove these containers first (docker compose down on the old stack, then docker rm the zomboid-game-* containers):$(printf "$busy")"
 
-# Mount point /v is the volume root, so hidden files count too.
+# Mount point /v is the volume root, so hidden files count too. The fingerprint
+# covers paths, sizes, owners and modes, and the bytes of every file.
 fingerprint() {
   docker run --rm --entrypoint sh -v "$1:/v:ro" "$IMAGE" -c \
-    "cd /v && find . -printf '%P %s %U:%G %m\n' | sort | cksum"
+    "cd /v && find . -printf '%P %s %U:%G %m\n' | sort | cksum && find . -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum"
 }
 
+todo=""
 for name in $VOLUMES; do
   old="${OLD_PREFIX}_${name}"
   new="${NEW_PREFIX}_${name}"
+  has_files=""
   if docker volume inspect "$new" >/dev/null 2>&1; then
-    in_use="$(docker run --rm --entrypoint sh -v "$new:/v:ro" "$IMAGE" -c 'ls -A /v | head -n 1')"
-    [ -z "$in_use" ] || fail "$new already has files. Nothing was copied. Remove it with 'docker volume rm $new' only if you are sure it holds nothing you need."
+    has_files="$(docker run --rm --entrypoint sh -v "$new:/v:ro" "$IMAGE" -c 'ls -A /v | head -n 1')"
+  fi
+  if [ -z "$has_files" ]; then
+    todo="$todo $name"
+  elif [ "$(fingerprint "$old")" = "$(fingerprint "$new")" ]; then
+    echo "$new already holds an identical copy of $old; skipping it."
+  else
+    fail "$new already has files that differ from $old. Nothing was copied. Remove it with 'docker volume rm $new' only if you are sure it holds nothing you need."
   fi
 done
 
-for name in $VOLUMES; do
+for name in $todo; do
   old="${OLD_PREFIX}_${name}"
   new="${NEW_PREFIX}_${name}"
   docker volume inspect "$new" >/dev/null 2>&1 || docker volume create \
@@ -51,7 +60,7 @@ for name in $VOLUMES; do
   if [ "$(fingerprint "$old")" = "$(fingerprint "$new")" ]; then
     echo "  OK: $new matches $old."
   else
-    fail "  FAILED: $new does not match $old. Remove $new with 'docker volume rm $new' and run this script again. The old volume is untouched."
+    fail "  FAILED: $new does not match $old. Remove $new with 'docker volume rm $new' and run this script again; volumes that already match are skipped. The old volume is untouched."
   fi
 done
 
