@@ -409,13 +409,13 @@ server to start.
 
 ---
 
-### Blank or partial World Map
+### Blank or partial map
 
 The map is drawn from the game files of each entry in the server's `Map=`
 setting, read from the server install path and its Workshop mods.
 
 **What you see:**
-- **"The map could not be shown"** — no map folder was found. The message
+- **"The map can't be shown"** — no map folder was found. The message
   says why: usually the server install path is not set, or a `Map=` entry
   names a folder that is not installed.
 - **A map warning button in the corner** — some `Map=` entries were skipped
@@ -424,7 +424,7 @@ setting, read from the server install path and its Workshop mods.
 - **No players on the map** — player positions need game integration
   connected (see the section above). The map itself works without it.
 
-**What to do:** open **Debug > World Map**. It lists each map folder that was
+**What to do:** open **Diagnostics > Map**. It lists each map folder that was
 found, which ones have a map image, the floor range, and every warning.
 
 ---
