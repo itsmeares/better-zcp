@@ -2,6 +2,9 @@
 
 # 🧟 Better Zomboid Control Panel
 
+> [!WARNING]
+> The README is out of date! It will be updated soon.
+
 ### The complete admin cockpit for Project Zomboid dedicated servers
 
 [![Latest Release](https://img.shields.io/github/v/release/itsmeares/better-zcp?include_prereleases&style=for-the-badge&logo=github&color=8a9a5b)](https://github.com/itsmeares/better-zcp/releases)
