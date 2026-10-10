@@ -1,9 +1,9 @@
+> [!WARNING]
+> The README is out of date! It will be updated soon.
+
 <div align="center">
 
 # 🧟 Better Zomboid Control Panel
-
-> [!WARNING]
-> The README is out of date! It will be updated soon.
 
 ### The complete admin cockpit for Project Zomboid dedicated servers
 
